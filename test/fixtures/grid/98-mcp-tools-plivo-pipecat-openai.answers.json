@@ -1,0 +1,13 @@
+{
+  "language": "english",
+  "barge_in": "required",
+  "latency": "balanced",
+  "business_logic": "support",
+  "tools": "mcp",
+  "deployment": "railway",
+  "surface": "inbound_pstn",
+  "architecture": "realtime_s2s",
+  "telephony": "plivo",
+  "orchestration": "pipecat",
+  "realtime_model": "openai_realtime"
+}

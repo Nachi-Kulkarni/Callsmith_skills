@@ -66,6 +66,41 @@ fixtures['80-plivo-pipecat-assemblyai-cartesia'] = cas('plivo', 'pipecat', 'asse
 fixtures['81-telnyx-custom-assemblyai-sarvam'] = cas('telnyx', 'custom_fastapi', 'assemblyai', 'sarvam');
 fixtures['82-vonage-pipecat-deepgram-cartesia'] = cas('vonage', 'pipecat', 'deepgram', 'cartesia');
 
+// Hybrid architecture (realtime + cascaded fallback)
+fixtures['90-hybrid-twilio-pipecat-deepgram-gemini'] = {
+  ...BASE, surface: 'inbound_pstn', architecture: 'hybrid',
+  telephony: 'twilio', orchestration: 'pipecat',
+  realtime_model: 'gemini_live', stt: 'deepgram', tts: 'elevenlabs', llm: 'gpt_4o',
+};
+
+// Outbound with different telephony
+fixtures['91-outbound-exotel-livekit-gemini'] = rt('exotel', 'livekit', 'gemini_live', { surface: 'outbound_pstn' });
+fixtures['92-outbound-plivo-pipecat-openai'] = rt('plivo', 'pipecat', 'openai_realtime', { surface: 'outbound_pstn' });
+
+// Web voice surface (no telephony)
+fixtures['93-webvoice-pipecat-deepgram-elevenlabs'] = {
+  ...BASE, surface: 'web_voice', architecture: 'cascaded',
+  orchestration: 'pipecat', stt: 'deepgram', tts: 'elevenlabs', llm: 'gpt_4o',
+};
+
+// Half-duplex (no barge-in)
+fixtures['94-no-bargein-twilio-livekit-gemini'] = rt('twilio', 'livekit', 'gemini_live', { barge_in: 'disabled' });
+
+// Ultra-low latency priority
+fixtures['95-ultra-latency-exotel-livekit-openai'] = rt('exotel', 'livekit', 'openai_realtime', { latency: 'ultra' });
+
+// Vonage PCM bridge — only resample, not full mulaw bridge
+fixtures['96-vonage-custom-gemini'] = rt('vonage', 'custom_fastapi', 'gemini_live');
+
+// Hinglish language
+fixtures['97-hinglish-twilio-pipecat-deepgram-cartesia'] = cas('twilio', 'pipecat', 'deepgram', 'cartesia', { language: 'hinglish' });
+
+// MCP tools
+fixtures['98-mcp-tools-plivo-pipecat-openai'] = rt('plivo', 'pipecat', 'openai_realtime', { tools: 'mcp' });
+
+// No tools (conversational only)
+fixtures['99-no-tools-telnyx-livekit-gemini'] = rt('telnyx', 'livekit', 'gemini_live', { tools: 'none' });
+
 fs.mkdirSync(OUT, { recursive: true });
 let count = 0;
 for (const [name, answers] of Object.entries(fixtures)) {

@@ -61,3 +61,18 @@ test('all provider model names are pinned — staleness guard', () => {
       `${id} model name drifted — verify against live docs and update`);
   }
 });
+
+test('telephony audio contracts match verified docs — staleness guard', () => {
+  const providers = loadProviders();
+  // μ-law 8kHz providers (verified via Context7 + live docs)
+  const mulawProviders = ['exotel', 'twilio', 'plivo', 'telnyx'];
+  for (const id of mulawProviders) {
+    assert.equal(providers[id].egress.format, 'mulaw', `${id} egress must be mulaw`);
+    assert.equal(providers[id].egress.sample_rate, 8000, `${id} egress must be 8kHz`);
+    assert.equal(providers[id].ingest.format, 'mulaw', `${id} ingest must be mulaw`);
+  }
+  // Vonage streams raw L16 PCM, NOT μ-law (verified via developer.vonage.com)
+  assert.equal(providers['vonage'].egress.format, 'pcm', 'Vonage egress must be pcm (L16), not mulaw');
+  assert.equal(providers['vonage'].egress.sample_rate, 16000, 'Vonage default rate must be 16kHz');
+  assert.equal(providers['vonage'].ingest.format, 'pcm', 'Vonage ingest must be pcm (L16), not mulaw');
+});

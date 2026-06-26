@@ -6,27 +6,28 @@
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
   "ingest": {
-    "format": "mulaw",
-    "sample_rate": 8000,
+    "format": "pcm",
+    "sample_rate": 16000,
     "channels": 1,
-    "bit_depth": 8,
-    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz."
+    "bit_depth": 16,
+    "note": "Audio sent to Vonage for playback must be raw L16 PCM. Rate is set via NCCO content-type (audio/l16;rate=8000|16000|24000). 16 kHz is recommended for speech recognition."
   },
   "egress": {
-    "format": "mulaw",
-    "sample_rate": 8000,
+    "format": "pcm",
+    "sample_rate": 16000,
     "channels": 1,
-    "bit_depth": 8,
-    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the Voice API media stream WebSocket."
+    "bit_depth": 16,
+    "note": "Inbound caller audio arrives as raw L16 PCM (16-bit signed LE). Rate matches the NCCO content-type. Packets are ~20ms slices."
   },
   "lifecycle": [
-    "call_answered", "media_stream_connected", "media_frame", "dtmf", "media_stream_closed", "call_hangup"
+    "call_answered", "websocket_connected", "binary_audio_in", "binary_audio_out", "dtmf", "websocket_cleared", "websocket_disconnected", "call_hangup"
   ],
   "potholes": [
-    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model." },
-    { "id": "ncco_websocket", "severity": "warning", "note": "The media stream connects via an NCCO WebSocket endpoint; ensure the answer URL returns the correct NCCO before streaming." }
+    { "id": "pcm_not_mulaw", "severity": "warning", "note": "Vonage streams raw L16 PCM, not μ-law. This is closer to model-native format — usually only a resample is needed, not a full μ-law decode/encode bridge." },
+    { "id": "ncco_websocket", "severity": "warning", "note": "The media stream connects via an NCCO connect action with a WebSocket endpoint; ensure the answer URL returns the correct NCCO with content-type before streaming." },
+    { "id": "buffer_clear", "severity": "warning", "note": "Vonage buffers outbound audio (3072 packets ≈ 60s). Send {\"action\":\"clear\"} to flush for barge-in." }
   ],
   "env_keys": ["VONAGE_API_KEY", "VONAGE_API_SECRET", "VONAGE_APPLICATION_ID"],
   "doc_urls": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"],
-  "context7": { "library_id": null, "topics": ["voice-api", "websockets", "ncco"] }
+  "context7": { "library_id": "/websites/developer_vonage_en_api", "topics": ["voice-api", "websockets", "ncco"] }
 }

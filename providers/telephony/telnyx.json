@@ -28,5 +28,5 @@
   ],
   "env_keys": ["TELNYX_API_KEY"],
   "doc_urls": ["https://developers.telnyx.com/docs/voice"],
-  "context7": { "library_id": null, "topics": ["call-control", "media-stream"] }
+  "context7": { "library_id": "/websites/developers_telnyx", "topics": ["call-control", "media-stream"] }
 }

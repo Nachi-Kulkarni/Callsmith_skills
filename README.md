@@ -101,8 +101,8 @@ data/menu.json               the MCQ intake tree (single source of truth)
 providers/                   15 provider packs (verified audio contracts + potholes)
   _schema.json               pack shape (required: id, kind, transport, ingest, egress, directions, native_capabilities)
 scripts/gen-fixtures.mjs     generates the grid fixture matrix
-test/                        75 tests (data integrity, resolver, registry, CLI contract, grid, scaffold)
-  fixtures/grid/             30 generated answer files
+test/                        97 tests (data integrity, resolver, registry, CLI contract, docs, grid, scaffold)
+  fixtures/grid/             40 generated answer files
   fixtures/registry/         test packs for local registry lookup
 SKILL.md                     the agent skill
 product_decisions.md         source-of-truth for all product decisions
@@ -110,7 +110,7 @@ product_decisions.md         source-of-truth for all product decisions
 
 ## Status
 
-v1.0. **15 provider packs** (verified audio contracts + model names), impossibility detection (missing leg + direction mismatch), **unknown-provider online resolution** (registry lookup → dynamic synthesis with UNVERIFIED stamp), byte-deterministic lock, schema validation gate, 30-fixture grid (all forge green), scaffolded repos pass pytest, agent-skill recipe consistency. 75-test suite, CI via GitHub Actions.
+v1.0. **15 provider packs** (verified audio contracts + model names), impossibility detection (missing leg + direction mismatch), **unknown-provider online resolution** (registry lookup → dynamic synthesis with UNVERIFIED stamp), byte-deterministic lock, schema validation gate, 40-fixture grid (all forge green), scaffolded repos pass pytest, agent-skill recipe consistency, doc stub verification. 97-test suite, CI via GitHub Actions.
 
 ## License
 
