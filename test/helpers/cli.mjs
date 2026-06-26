@@ -36,8 +36,9 @@ export function runCli(args, opts = {}) {
   const out = mkdtempSync(join(tmpdir(), 'cs-test-'));
   const fullArgs = [BIN, ...args];
   if (opts.out !== false) fullArgs.push('--out', out);
+  const env = { ...process.env, ...opts.env };
   try {
-    const stdout = execFileSync('node', fullArgs, { encoding: 'utf8', stdio: 'pipe' });
+    const stdout = execFileSync('node', fullArgs, { encoding: 'utf8', stdio: 'pipe', env });
     return { exitCode: 0, stdout, stderr: '', outDir: out };
   } catch (e) {
     return {

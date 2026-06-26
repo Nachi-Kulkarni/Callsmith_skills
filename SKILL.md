@@ -106,11 +106,19 @@ Voice agents fail at the audio boundary. The recurring traps callsmith encodes:
 
 callsmith refuses to forge stacks that are genuinely impossible. `forge` exits non-zero and produces no recipe if:
 
-- **Unknown provider** — a selected provider has no installed pack.
 - **Missing mandatory leg** — e.g. cascaded architecture with no STT, or realtime with no model.
 - **Surface/direction mismatch** — e.g. outbound job with an inbound-only telephony provider.
 
 A stack that is *hard but possible* (e.g. needs 4 audio transforms with a custom FastAPI bridge) still forges with `[BLOCKER]` warnings. Only true impossibilities are refused.
+
+## Unknown provider resolution (P3)
+
+When answers reference a provider not in the installed packs, callsmith resolves it online:
+
+1. **Registry lookup** — fetches from a community pack registry (`CALLSMITH_REGISTRY` env, default GitHub raw URL). Registry packs are validated and marked `verified: true`.
+2. **Dynamic synthesis fallback** — if no registry pack, callsmith builds a transient pack with sensible defaults + a blocker pothole. Synthesized packs are stamped **`UNVERIFIED PROVIDER — validate before shipping`** in the recipe header and lock `resolved_providers` array.
+
+`CALLSMITH_REGISTRY_SKIP=1` skips the registry and always synthesizes. `CALLSMITH_REGISTRY=/local/path` uses a local directory for testing.
 
 ## Determinism
 

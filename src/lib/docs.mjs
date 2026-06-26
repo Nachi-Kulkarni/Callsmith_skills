@@ -22,9 +22,9 @@ async function tryFetch(url) {
   }
 }
 
-export async function hydrate(rawAnswers, outDir) {
+export async function hydrate(rawAnswers, outDir, opts = {}) {
   const menu = loadMenu();
-  const providers = loadProviders();
+  const providers = opts.providers ?? loadProviders();
   const answers = expandAnswers(rawAnswers, menu);
   const result = resolve(answers, providers);
   const root = path.resolve(outDir);

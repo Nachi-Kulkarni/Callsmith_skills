@@ -26,9 +26,9 @@ const PY_DEPS = {
   'vonage': ['vonage>=3.0', 'websockets'],
 };
 
-export function scaffold(rawAnswers, outDir) {
+export function scaffold(rawAnswers, outDir, opts = {}) {
   const menu = loadMenu();
-  const providers = loadProviders();
+  const providers = opts.providers ?? loadProviders();
   const answers = expandAnswers(rawAnswers, menu);
   const result = resolve(answers, providers);
   const { flags, providers: sel } = answers;

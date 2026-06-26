@@ -44,7 +44,17 @@ export function expandAnswers(raw, menu) {
     if (!whenMatches(g.when, flags)) continue;
     const choice = raw[g.id] ?? g.default;
     const opt = g.options.find(o => o.id === choice);
-    if (!opt) continue;
+    if (!opt) {
+      // Custom provider: choice doesn't match any menu option, but this group
+      // maps to a provider kind. Treat the raw choice as a custom provider ID
+      // so resolveUnknowns can resolve it online (P3).
+      const kindHolder = g.options.find(o => o.maps?.kind);
+      if (kindHolder && typeof choice === 'string' && choice) {
+        providers[kindHolder.maps.kind] = { id: choice, selectedVia: g.id };
+        labels[g.id] = choice;
+      }
+      continue;
+    }
     labels[g.id] = opt.label;
     const maps = opt.maps || {};
     if (maps.provider) providers[maps.kind] = { id: maps.provider, selectedVia: g.id };

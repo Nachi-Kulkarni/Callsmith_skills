@@ -18,9 +18,20 @@ const BASE = {
   deployment: 'railway',
 };
 
-// B6 + unknown-provider — forge refuses when telephony is set to an invalid value
-test('forge refuses when a telephony value matches no menu option (missing mandatory leg)', () => {
+// P3 behavior change: unknown provider is now resolved online (synthesis), not refused
+test('forge resolves an unknown telephony provider via synthesis instead of refusing', () => {
   const f = writeAnswers({ ...BASE, telephony: 'acme_nonexistent' });
+  const result = runCli(['forge', '--answers', f], {
+    env: { CALLSMITH_REGISTRY_SKIP: '1' },
+  });
+  assert.equal(result.exitCode, 0, 'forge must succeed — synthesis resolves unknown provider');
+  assert.ok(existsSync(join(result.outDir, 'callsmith.recipe.md')),
+    'recipe must be produced for synthesized provider');
+});
+
+// Missing mandatory leg — when the telephony field is explicitly empty
+test('forge refuses when telephony is explicitly empty (missing mandatory leg)', () => {
+  const f = writeAnswers({ ...BASE, telephony: '' });
   const result = runCli(['forge', '--answers', f]);
   assert.notEqual(result.exitCode, 0, 'forge must refuse');
   assert.match(result.stderr + result.stdout, /telephony|missing.*leg|impossible/i,
@@ -29,8 +40,8 @@ test('forge refuses when a telephony value matches no menu option (missing manda
     'no recipe must be produced for an impossible stack');
 });
 
-// B6 — missing mandatory leg (invalid stt value → group skipped → no STT)
-test('forge refuses a cascaded stack missing its STT leg', () => {
+// P3 behavior change: unknown STT is resolved via synthesis, not refused
+test('forge resolves an unknown STT provider via synthesis instead of refusing', () => {
   const f = writeAnswers({
     ...BASE,
     architecture: 'cascaded',
@@ -40,10 +51,10 @@ test('forge refuses a cascaded stack missing its STT leg', () => {
     tts: 'elevenlabs',
     llm: 'gpt_4o',
   });
-  const result = runCli(['forge', '--answers', f]);
-  assert.notEqual(result.exitCode, 0, 'forge must refuse');
-  assert.match(result.stderr + result.stdout, /stt|missing.*leg|impossible/i,
-    'error must mention the missing STT');
+  const result = runCli(['forge', '--answers', f], {
+    env: { CALLSMITH_REGISTRY_SKIP: '1' },
+  });
+  assert.equal(result.exitCode, 0, 'forge must succeed — synthesis resolves unknown STT');
 });
 
 // B5 — direction mismatch (outbound job + inbound-only provider)

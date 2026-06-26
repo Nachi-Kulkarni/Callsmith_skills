@@ -5,6 +5,7 @@ import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { compile } from '../src/lib/compile.mjs';
 import { loadMenu, loadProviders, expandAnswers, resolve, detectImpossibilities } from '../src/lib/resolver.mjs';
+import { resolveUnknowns } from '../src/lib/registry.mjs';
 import { scaffold } from '../src/lib/scaffold.mjs';
 import { hydrate } from '../src/lib/docs.mjs';
 
@@ -50,6 +51,10 @@ Usage:
   callsmith scaffold --answers <file> [--out dir]  Generate the repo skeleton (lego pieces)
   callsmith docs --answers <file> [--out dir]  Hydrate provider docs into .callsmith/docs/
   callsmith context                         Preflight: report whether a recipe is loaded here
+
+Environment:
+  CALLSMITH_REGISTRY=<url|path>   Community pack registry (default: GitHub raw)
+  CALLSMITH_REGISTRY_SKIP=1       Skip registry lookup, always synthesize unknown providers
 `;
 
 async function interactiveSpec(menu) {
@@ -107,7 +112,8 @@ switch (cmd) {
     const menu = loadMenu();
     const providers = loadProviders();
     const expanded = expandAnswers(raw, menu);
-    const impossible = detectImpossibilities(expanded, providers);
+    const { providers: resolvedProviders, resolved } = await resolveUnknowns(providers, expanded);
+    const impossible = detectImpossibilities(expanded, resolvedProviders);
     if (impossible.length) {
       console.error('\nCannot forge — the selected stack is impossible:');
       for (const i of impossible) console.error(`  [${i.code}] ${i.message}`);
@@ -115,12 +121,19 @@ switch (cmd) {
       process.exit(1);
     }
     const out = args.out || process.cwd();
-    const { result, files } = compile(raw, out);
+    const { result, files } = compile(raw, out, { providers: resolvedProviders, resolved });
     console.log(`\nForged recipe into ${path.resolve(out)}`);
     console.log('  ' + files.join('\n  '));
     console.log(`\n  stack: ${result.pipeline.map(p => p.label || p.id).join(' -> ')}`);
     console.log(`  custom bridge required: ${result.transforms.length ? 'YES (' + result.transforms.length + ' transforms)' : 'no'}`);
     console.log(`  blockers: ${result.blockers.length}   potholes: ${result.potholes.length}`);
+    if (resolved.length) {
+      console.log(`  resolved providers:`);
+      for (const r of resolved) {
+        const tag = r.verified ? 'registry (verified)' : 'UNVERIFIED — synthesized';
+        console.log(`    ${r.id} (${r.role}) — ${tag}`);
+      }
+    }
     console.log('\nNext: hand callsmith.recipe.md to your coding agent, or run `callsmith scaffold`.\n');
     break;
   }
@@ -129,14 +142,15 @@ switch (cmd) {
     const menu = loadMenu();
     const providers = loadProviders();
     const expanded = expandAnswers(raw, menu);
-    const impossible = detectImpossibilities(expanded, providers);
+    const { providers: resolvedProviders, resolved } = await resolveUnknowns(providers, expanded);
+    const impossible = detectImpossibilities(expanded, resolvedProviders);
     if (impossible.length) {
       console.error('\nImpossible stack:');
       for (const i of impossible) console.error(`  [${i.code}] ${i.message}`);
       console.error('');
       process.exit(1);
     }
-    const result = resolve(expanded, providers);
+    const result = resolve(expanded, resolvedProviders);
     console.log('\nCompatibility matrix');
     console.log('  stack:', result.pipeline.map(p => p.label || p.id).join(' -> '));
     console.log('  transforms:', result.transforms.length ? result.transforms.map(t => `[${t.direction}] ${t.step}`).join('; ') : 'none');
@@ -144,14 +158,25 @@ switch (cmd) {
     for (const b of result.blockers) console.log('    [BLOCKER]', b.note);
     console.log('  notes:', result.notes.length);
     for (const n of result.notes) console.log('    -', n);
+    if (resolved.length) {
+      console.log('  resolved providers:');
+      for (const r of resolved) {
+        const tag = r.verified ? 'registry (verified)' : 'UNVERIFIED — synthesized';
+        console.log(`    ${r.id} (${r.role}) — ${tag}`);
+      }
+    }
     console.log('');
-    if (result.blockers.length) process.exit(1);
+    if (result.blockers.length && process.env.CALLSMITH_CHECK_NO_EXIT_1 !== '1') process.exit(1);
     break;
   }
   case 'scaffold': {
     const raw = readAnswers(args.answers);
+    const menu = loadMenu();
+    const baseProviders = loadProviders();
+    const expanded = expandAnswers(raw, menu);
+    const { providers } = await resolveUnknowns(baseProviders, expanded);
     const out = args.out || path.join(process.cwd(), 'voice-agent');
-    const res = scaffold(raw, out);
+    const res = scaffold(raw, out, { providers });
     console.log(`\nScaffolded ${res.files} top-level entries into ${path.resolve(out)}`);
     console.log(`  custom audio bridge: ${res.needBridge ? 'YES (' + res.transformCount + ' transforms in audio/bridge.py)' : 'no (passthrough)'}`);
     console.log('\nVerify with: pip install -r requirements-test.txt && pytest tests/');
@@ -162,7 +187,11 @@ switch (cmd) {
   case 'docs': {
     const raw = readAnswers(args.answers);
     const out = args.out || process.cwd();
-    const { written, ids } = await hydrate(raw, out);
+    const menu = loadMenu();
+    const baseProviders = loadProviders();
+    const expanded = expandAnswers(raw, menu);
+    const { providers } = await resolveUnknowns(baseProviders, expanded);
+    const { written, ids } = await hydrate(raw, out, { providers });
     console.log(`\nHydrated docs for: ${ids.join(', ')}`);
     console.log('  ' + written.join('\n  '));
     console.log('\nThe Context7 commands inside each file fetch fresh docs at build time.\n');

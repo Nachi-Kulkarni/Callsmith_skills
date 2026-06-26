@@ -52,7 +52,7 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 |---|---|---|
 | P1 | **All major providers** | v1.0 ships ~15 verified packs, not golden-path-only. |
 | P2 | **Confirmed list** | See §4 below. |
-| P3 | **Unknown provider → online resolution (two-tier)** | When answers reference a provider with no installed pack: **(1) registry lookup** — search an online pack registry (GitHub dir / skills.sh hub), download a verified community pack if it exists; **(2) dynamic synthesis fallback** — if no registry pack, use webfetch/Context7 to research the provider's audio contract and build a transient pack. Synthesized packs are stamped **`UNVERIFIED PROVIDER — validate before shipping`** in the recipe. This two-tier resolution preserves the verified-contract guarantee for the common path while remaining extensible. |
+| P3 | **Unknown provider → online resolution (two-tier)** ✅ | **Implemented.** When answers reference a provider with no installed pack: **(1) registry lookup** — fetch from a community pack registry (`CALLSMITH_REGISTRY` env, default GitHub raw URL; supports `file://`/local paths for testing); **(2) dynamic synthesis fallback** — build a transient pack with sensible defaults + blocker pothole. Registry packs pass validation and are `verified: true`. Synthesized packs are stamped **`UNVERIFIED PROVIDER — validate before shipping`** in the recipe (prominent header) + lock `resolved_providers` array. `CALLSMITH_REGISTRY_SKIP=1` forces synthesis for testing. |
 
 ### Artifacts & determinism
 
