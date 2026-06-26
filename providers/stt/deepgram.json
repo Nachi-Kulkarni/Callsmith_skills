@@ -1,0 +1,65 @@
+{
+  "id": "deepgram",
+  "kind": "stt",
+  "label": "Deepgram (Nova-3 / Flux)",
+  "model": "nova-3",
+  "transport": "websocket",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Streaming endpoint (wss://api.deepgram.com/v1/listen) wants linear16 (16-bit PCM) at the declared sample_rate; 16 kHz mono is the accuracy target. Declare encoding=linear16&sample_rate=16000."
+  },
+  "egress": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Emits partial + final transcripts as JSON, not audio."
+  },
+  "lifecycle": [
+    "Open",
+    "SpeechStarted",
+    "Results (partial)",
+    "Results (final/speech_final)",
+    "UtteranceEnd",
+    "Close"
+  ],
+  "potholes": [
+    {
+      "id": "nova3_vs_nova2_vs_flux",
+      "severity": "blocker",
+      "note": "Current models: Nova-3 (highest-accuracy general ASR, no native turn detection), Nova-2 (legacy, for languages Nova-3 lacks + filler words), and Flux (newest streaming model WITH native turn detection, built for voice agents). For a cascaded agent, prefer Flux for built-in turn-taking; use Nova-3 when you drive endpointing yourself."
+    },
+    {
+      "id": "endpointing_speech_final",
+      "severity": "warning",
+      "note": "With Nova-3, turn detection relies on endpointing + utterance_end_ms + vad_events. Tune endpointing (ms) vs VAD; too aggressive cuts callers off, too loose adds latency. Flux handles this natively."
+    },
+    {
+      "id": "mulaw_supported_but_lossy",
+      "severity": "note",
+      "note": "Deepgram accepts μ-law directly over the socket, but feeding 16 kHz linear16 after resampling gives materially better accuracy. Prefer PCM."
+    }
+  ],
+  "env_keys": [
+    "DEEPGRAM_API_KEY"
+  ],
+  "doc_urls": [
+    "https://developers.deepgram.com/docs/streaming",
+    "https://developers.deepgram.com/docs/models-languages-overview"
+  ],
+  "context7": {
+    "library_id": "/websites/developers_deepgram",
+    "topics": [
+      "streaming-stt",
+      "endpointing",
+      "nova-3"
+    ]
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": []
+}

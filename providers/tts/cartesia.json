@@ -1,0 +1,32 @@
+{
+  "id": "cartesia",
+  "kind": "tts",
+  "label": "Cartesia",
+  "model": "sonic-latest",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": ["emit_mulaw_8000"],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Accepts text via the streaming WebSocket with voice + language params."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output format is configurable: pcm_s16le, pcm_f32le, pcm_mulaw, pcm_alaw at 8000/16000/22050/24000/44100/48000 Hz. Default 24kHz PCM. Can emit μ-law 8kHz directly for telephony."
+  },
+  "lifecycle": [
+    "session_start", "audio_chunk", "session_end"
+  ],
+  "potholes": [
+    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Cartesia defaults to 24 kHz PCM. For telephony, request output_format={encoding: pcm_mulaw, sample_rate: 8000} to skip your own encode stage, or resample + encode yourself." },
+    { "id": "websocket_chunking", "severity": "warning", "note": "Audio arrives as variable-size PCM chunks over WebSocket. Buffer and chunk-align before resampling for the telephony leg." }
+  ],
+  "env_keys": ["CARTESIA_API_KEY"],
+  "doc_urls": ["https://docs.cartesia.ai", "https://docs.cartesia.ai/api-reference/tts/websocket"],
+  "context7": { "library_id": "/websites/cartesia_ai", "topics": ["streaming-tts", "sonic-latest", "output-format"] }
+}

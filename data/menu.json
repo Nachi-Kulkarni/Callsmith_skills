@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "name": "callsmith.menu",
+  "description": "The intake question tree. Each group is one MCQ step. Options carry a `maps` block the resolver reads to resolve providers and flags. A group with a `when` predicate only runs when the predicate holds against earlier answers. This file is the single source of truth for `callsmith spec`.",
+  "groups": [
+    {
+      "id": "surface",
+      "title": "Where does the conversation happen?",
+      "help": "Pick the channel the caller uses to reach the agent. This decides whether telephony is in the stack at all.",
+      "default": "inbound_pstn",
+      "options": [
+        { "id": "inbound_pstn",  "label": "Inbound phone call (PSTN)",  "blurb": "Customers call a number; the agent answers.", "maps": { "needs_telephony": true, "direction": "inbound" } },
+        { "id": "outbound_pstn", "label": "Outbound phone call (PSTN)", "blurb": "The agent dials out to a lead/customer.", "maps": { "needs_telephony": true, "direction": "outbound" } },
+        { "id": "web_voice",     "label": "Web voice chat (browser)",   "blurb": "In-browser mic/speaker over WebRTC or WebSocket.", "maps": { "needs_telephony": false, "transport": "webrtc" } },
+        { "id": "webrtc_app",    "label": "App-to-app voice",           "blurb": "Mobile/desktop app voice via a realtime room.", "maps": { "needs_telephony": false, "transport": "webrtc" } },
+        { "id": "whatsapp_voice","label": "WhatsApp voice notes",       "blurb": "Async voice messages transcribed and replied to.", "maps": { "needs_telephony": false, "transport": "http", "async": true } }
+      ]
+    },
+    {
+      "id": "architecture",
+      "title": "How should the agent generate speech?",
+      "help": "Realtime speech-to-speech is lowest latency but harder to control. Cascaded (STT -> LLM -> TTS) is easier to debug, cheaper, and lets you swap parts independently.",
+      "default": "realtime_s2s",
+      "options": [
+        { "id": "realtime_s2s", "label": "Realtime speech-to-speech", "blurb": "One model handles audio in and audio out. Lowest latency.", "maps": { "mode": "realtime" } },
+        { "id": "cascaded",     "label": "Cascaded STT -> LLM -> TTS", "blurb": "Separate transcription, reasoning, synthesis. Most flexible.", "maps": { "mode": "cascaded" } },
+        { "id": "hybrid",       "label": "Hybrid (realtime + fallback)", "blurb": "Realtime with a cascaded fallback path.", "maps": { "mode": "hybrid" } }
+      ]
+    },
+    {
+      "id": "telephony",
+      "title": "Which telephony provider carries the call?",
+      "when": { "needs_telephony": true },
+      "default": "exotel",
+      "options": [
+        { "id": "exotel", "label": "Exotel", "blurb": "India/SEA telephony, media-stream WebSocket.", "maps": { "provider": "exotel", "kind": "telephony" } },
+        { "id": "twilio", "label": "Twilio", "blurb": "Global telephony, Media Streams WebSocket.", "maps": { "provider": "twilio", "kind": "telephony" } },
+        { "id": "plivo",  "label": "Plivo",  "blurb": "Telephony with XML + media streaming.", "maps": { "provider": "plivo", "kind": "telephony" } },
+        { "id": "telnyx", "label": "Telnyx", "blurb": "Telephony with Call Control + media.", "maps": { "provider": "telnyx", "kind": "telephony" } },
+        { "id": "vonage", "label": "Vonage", "blurb": "Global telephony, Voice API media streaming.", "maps": { "provider": "vonage", "kind": "telephony" } }
+      ]
+    },
+    {
+      "id": "orchestration",
+      "title": "How should the pipeline be orchestrated?",
+      "help": "The orchestration layer owns audio frames, turn-taking, and interruption. LiveKit normalizes audio server-side; Pipecat is a frame pipeline you host; a custom bridge gives full control but full responsibility.",
+      "default": "livekit",
+      "options": [
+        { "id": "livekit",       "label": "LiveKit Agents",     "blurb": "Realtime room + SIP trunk; audio normalized to 16k PCM.", "maps": { "provider": "livekit", "kind": "orchestration" } },
+        { "id": "pipecat",       "label": "Pipecat",            "blurb": "Frame pipeline; transports decode telephony audio at the edge.", "maps": { "provider": "pipecat", "kind": "orchestration" } },
+        { "id": "custom_fastapi","label": "Custom FastAPI bridge","blurb": "You write the WebSocket bridge and audio path.", "maps": { "provider": "custom-fastapi", "kind": "orchestration" } }
+      ]
+    },
+    {
+      "id": "realtime_model",
+      "title": "Which realtime speech-to-speech model?",
+      "when": { "mode": ["realtime", "hybrid"] },
+      "default": "gemini_live",
+      "options": [
+        { "id": "gemini_live",    "label": "Gemini Live",     "blurb": "16k PCM in, 24k PCM out. Strong multilingual.", "maps": { "provider": "gemini-live", "kind": "realtime" } },
+        { "id": "openai_realtime","label": "OpenAI Realtime", "blurb": "24k PCM in/out (or μ-law 8k). Tool-calling native.", "maps": { "provider": "openai-realtime", "kind": "realtime" } }
+      ]
+    },
+    {
+      "id": "stt",
+      "title": "Which speech-to-text?",
+      "when": { "mode": ["cascaded", "hybrid"] },
+      "default": "deepgram",
+      "options": [
+        { "id": "deepgram",    "label": "Deepgram (Nova-2)", "blurb": "Streaming 16k PCM. Fast, accurate.", "maps": { "provider": "deepgram", "kind": "stt" } },
+        { "id": "assemblyai",  "label": "AssemblyAI",        "blurb": "Streaming + universal real-time.", "maps": { "provider": "assemblyai", "kind": "stt" } }
+      ]
+    },
+    {
+      "id": "llm",
+      "title": "Which reasoning model?",
+      "when": { "mode": ["cascaded", "hybrid"] },
+      "default": "gpt_4o",
+      "options": [
+        { "id": "gpt_4o",   "label": "GPT-4o / GPT-4.1", "blurb": "OpenAI, tool-calling.", "maps": { "provider": "openai", "kind": "llm" } },
+        { "id": "claude",   "label": "Claude",          "blurb": "Anthropic, strong reasoning.", "maps": { "provider": "anthropic", "kind": "llm" } },
+        { "id": "gemini_l", "label": "Gemini 2.x",      "blurb": "Google, good at Hinglish.", "maps": { "provider": "gemini", "kind": "llm" } }
+      ]
+    },
+    {
+      "id": "tts",
+      "title": "Which text-to-speech?",
+      "when": { "mode": ["cascaded", "hybrid"] },
+      "default": "elevenlabs",
+      "options": [
+        { "id": "elevenlabs", "label": "ElevenLabs",  "blurb": "Streaming MP3/PCM. Very natural.", "maps": { "provider": "elevenlabs", "kind": "tts" } },
+        { "id": "sarvam",     "label": "Sarvam",      "blurb": "Indian-language TTS, low latency.", "maps": { "provider": "sarvam", "kind": "tts" } },
+        { "id": "cartesia",   "label": "Cartesia",    "blurb": "Sub-200ms streaming.", "maps": { "provider": "cartesia", "kind": "tts" } }
+      ]
+    },
+    {
+      "id": "language",
+      "title": "Which language(s)?",
+      "default": "hinglish",
+      "options": [
+        { "id": "english",      "label": "English",        "maps": { "language": "en" } },
+        { "id": "hindi",        "label": "Hindi",          "maps": { "language": "hi" } },
+        { "id": "hinglish",     "label": "Hinglish (code-mixed)", "maps": { "language": "hi-en" } },
+        { "id": "tamil",        "label": "Tamil",          "maps": { "language": "ta" } },
+        { "id": "kannada",      "label": "Kannada",        "maps": { "language": "kn" } },
+        { "id": "multilingual", "label": "Multilingual (auto-detect)", "maps": { "language": "auto" } }
+      ]
+    },
+    {
+      "id": "barge_in",
+      "title": "Should callers be able to interrupt the agent?",
+      "default": "required",
+      "options": [
+        { "id": "required", "label": "Yes, required (full-duplex)", "blurb": "Caller speech cancels agent output.", "maps": { "barge_in": true } },
+        { "id": "optional", "label": "Optional (best-effort)",     "maps": { "barge_in": "optional" } },
+        { "id": "disabled", "label": "No (half-duplex)",           "maps": { "barge_in": false } }
+      ]
+    },
+    {
+      "id": "latency",
+      "title": "What is the priority?",
+      "default": "balanced",
+      "options": [
+        { "id": "ultra",     "label": "Lowest latency", "maps": { "latency": "ultra" } },
+        { "id": "balanced",  "label": "Balanced",       "maps": { "latency": "balanced" } },
+        { "id": "low_cost",  "label": "Lowest cost",    "maps": { "latency": "low_cost" } },
+        { "id": "reliability","label": "Highest reliability", "maps": { "latency": "reliability" } }
+      ]
+    },
+    {
+      "id": "business_logic",
+      "title": "What is the agent's job?",
+      "default": "support",
+      "options": [
+        { "id": "faq",         "label": "FAQ / info",            "maps": { "business_logic": "faq" } },
+        { "id": "support",     "label": "Customer support",      "maps": { "business_logic": "support" } },
+        { "id": "lead_qual",   "label": "Lead qualification",    "maps": { "business_logic": "lead_qual" } },
+        { "id": "booking",     "label": "Appointment booking",   "maps": { "business_logic": "booking" } },
+        { "id": "collections", "label": "Debt collections",      "maps": { "business_logic": "collections" } },
+        { "id": "interview",   "label": "Interview / screening", "maps": { "business_logic": "interview" } }
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "How does the agent reach your systems?",
+      "default": "webhook",
+      "options": [
+        { "id": "none",    "label": "No tools (conversational only)", "maps": { "tools": "none" } },
+        { "id": "webhook", "label": "Webhook(s)",          "maps": { "tools": "webhook" } },
+        { "id": "openapi", "label": "OpenAPI spec",        "maps": { "tools": "openapi" } },
+        { "id": "mcp",     "label": "MCP server",          "maps": { "tools": "mcp" } },
+        { "id": "db",      "label": "Database / Supabase", "maps": { "tools": "db" } }
+      ]
+    },
+    {
+      "id": "deployment",
+      "title": "Where will it run?",
+      "default": "railway",
+      "options": [
+        { "id": "local",   "label": "Local dev only", "maps": { "deployment": "local" } },
+        { "id": "railway", "label": "Railway",        "maps": { "deployment": "railway" } },
+        { "id": "render",  "label": "Render",         "maps": { "deployment": "render" } },
+        { "id": "fly",     "label": "Fly.io",         "maps": { "deployment": "fly" } },
+        { "id": "k8s",     "label": "Kubernetes",     "maps": { "deployment": "k8s" } }
+      ]
+    }
+  ]
+}

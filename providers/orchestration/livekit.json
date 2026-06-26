@@ -1,0 +1,64 @@
+{
+  "id": "livekit",
+  "kind": "orchestration",
+  "label": "LiveKit (Agents framework + SIP trunk)",
+  "transport": "webrtc",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "The Agent framework delivers normalized 16 kHz PCM frames to your worker regardless of the underlying transport."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Agent audio output is published as PCM and re-encoded to Opus for the WebRTC room; for PSTN it is re-encoded to μ-law by the SIP trunk."
+  },
+  "lifecycle": [
+    "participant_joined",
+    "track_subscribed",
+    "audio_frame",
+    "agent_speaking",
+    "interruption",
+    "participant_left"
+  ],
+  "potholes": [
+    {
+      "id": "sip_trunk_absorbs_mulaw",
+      "severity": "note",
+      "note": "When using LiveKit's SIP trunk / dialin, LiveKit performs the μ-law↔PCM and 8k↔16k conversion server-side, so your agent sees 16 kHz PCM. If you instead bridge a raw telephony websocket yourself, you own that conversion."
+    },
+    {
+      "id": "interruption_via_track",
+      "severity": "warning",
+      "note": "LiveKit interruption is detected from the input track; you must clear/republish the outbound stream segment to actually stop playback to the caller."
+    }
+  ],
+  "env_keys": [
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET"
+  ],
+  "doc_urls": [
+    "https://docs.livekit.io/agents/",
+    "https://docs.livekit.io/agents/pipelines/voice-pipeline/"
+  ],
+  "context7": {
+    "library_id": "/livekit/agents",
+    "topics": [
+      "voice-pipeline",
+      "sip-trunk",
+      "interruption"
+    ]
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [
+    "audio_normalization"
+  ]
+}

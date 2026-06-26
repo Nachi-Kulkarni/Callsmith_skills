@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.callsmith/
+callsmith.recipe.md
+callsmith.lock.json

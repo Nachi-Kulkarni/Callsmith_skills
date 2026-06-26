@@ -1,0 +1,32 @@
+{
+  "id": "vonage",
+  "kind": "telephony",
+  "label": "Vonage",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the Voice API media stream WebSocket."
+  },
+  "lifecycle": [
+    "call_answered", "media_stream_connected", "media_frame", "dtmf", "media_stream_closed", "call_hangup"
+  ],
+  "potholes": [
+    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model." },
+    { "id": "ncco_websocket", "severity": "warning", "note": "The media stream connects via an NCCO WebSocket endpoint; ensure the answer URL returns the correct NCCO before streaming." }
+  ],
+  "env_keys": ["VONAGE_API_KEY", "VONAGE_API_SECRET", "VONAGE_APPLICATION_ID"],
+  "doc_urls": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"],
+  "context7": { "library_id": null, "topics": ["voice-api", "websockets", "ncco"] }
+}

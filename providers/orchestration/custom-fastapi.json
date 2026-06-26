@@ -1,0 +1,31 @@
+{
+  "id": "custom-fastapi",
+  "kind": "orchestration",
+  "label": "Custom FastAPI bridge",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Your bridge code receives raw telephony audio. You must decode and resample before sending to the model."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Your bridge code must resample and encode model output back to telephony format."
+  },
+  "lifecycle": [
+    "websocket_connect", "audio_frame_in", "audio_frame_out", "websocket_disconnect"
+  ],
+  "potholes": [
+    { "id": "you_own_the_bridge", "severity": "blocker", "note": "With a custom FastAPI bridge, you are fully responsible for decoding, resampling, and encoding audio. No layer normalizes it for you." }
+  ],
+  "env_keys": [],
+  "doc_urls": ["https://fastapi.tiangolo.com/"],
+  "context7": { "library_id": "/encode/starlette", "topics": ["websockets", "fastapi"] }
+}

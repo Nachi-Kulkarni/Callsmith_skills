@@ -1,0 +1,63 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadProviders, loadMenu } from '../src/lib/resolver.mjs';
+
+test('every pack declares a non-empty directions array with valid values', () => {
+  for (const [id, pack] of Object.entries(loadProviders())) {
+    assert.ok(Array.isArray(pack.directions) && pack.directions.length > 0,
+      `${id} must declare a non-empty directions array`);
+    for (const d of pack.directions) {
+      assert.ok(['inbound', 'outbound'].includes(d),
+        `${id} has invalid direction "${d}" (must be inbound or outbound)`);
+    }
+  }
+});
+
+test('every pack declares a native_capabilities array (may be empty)', () => {
+  for (const [id, pack] of Object.entries(loadProviders())) {
+    assert.ok(Array.isArray(pack.native_capabilities),
+      `${id} must declare a native_capabilities array (use [] if none)`);
+  }
+});
+
+test('audio_normalization is expressed via native_capabilities, not a boolean flag', () => {
+  for (const [id, pack] of Object.entries(loadProviders())) {
+    assert.equal(pack.audio_normalization, undefined,
+      `${id} must not use the legacy audio_normalization boolean — move it to native_capabilities`);
+  }
+});
+
+test('every menu option that maps to a provider has an installed pack (no dangling refs)', () => {
+  const menu = loadMenu();
+  const providers = loadProviders();
+  const missing = [];
+  for (const g of menu.groups) {
+    for (const opt of g.options) {
+      const providerId = opt.maps?.provider;
+      const kind = opt.maps?.kind;
+      if (providerId && kind !== 'llm' && !providers[providerId]) {
+        missing.push(`${g.id}="${opt.id}" → provider "${providerId}"`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [],
+    'menu references providers without installed packs:\n' + missing.join('\n'));
+});
+
+test('all provider model names are pinned — staleness guard', () => {
+  const providers = loadProviders();
+  const pinned = {
+    'gemini-live': 'gemini-live-2.5-flash-preview',
+    'openai-realtime': 'gpt-realtime-2',
+    'deepgram': 'nova-3',
+    'assemblyai': 'universal-3-5-pro',
+    'elevenlabs': 'eleven_multilingual_v2',
+    'cartesia': 'sonic-latest',
+    'sarvam': 'bulbul:v3',
+  };
+  for (const [id, expectedModel] of Object.entries(pinned)) {
+    assert.ok(providers[id], `${id} pack must exist`);
+    assert.equal(providers[id].model, expectedModel,
+      `${id} model name drifted — verify against live docs and update`);
+  }
+});

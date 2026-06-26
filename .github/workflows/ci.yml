@@ -1,0 +1,33 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps for scaffold tests
+        run: pip install numpy scipy pytest
+
+      - name: Run callsmith test suite
+        run: node --test test/
+
+  validate-packs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate all provider packs against schema
+        run: node --input-type=module -e "import { validatePacks } from './src/lib/validate.mjs'; const e = validatePacks(); if (e.length) { console.error(e.join('\n')); process.exit(1); } console.log('All packs valid.');"

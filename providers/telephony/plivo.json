@@ -1,0 +1,32 @@
+{
+  "id": "plivo",
+  "kind": "telephony",
+  "label": "Plivo",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the media stream WebSocket."
+  },
+  "lifecycle": [
+    "call_answered", "media_stream_start", "media_frame", "dtmf", "media_stream_end", "call_hangup"
+  ],
+  "potholes": [
+    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model." },
+    { "id": "xml_element_stream", "severity": "warning", "note": "Plivo uses XML elements to start streaming; the WebSocket connects only after the XML element is processed. Handle the async bridge." }
+  ],
+  "env_keys": ["PLIVO_AUTH_ID", "PLIVO_AUTH_TOKEN"],
+  "doc_urls": ["https://www.plivo.com/docs/voice/stream"],
+  "context7": { "library_id": null, "topics": ["media-stream", "voice-xml"] }
+}

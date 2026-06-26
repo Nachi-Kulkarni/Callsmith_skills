@@ -1,0 +1,60 @@
+{
+  "id": "pipecat",
+  "kind": "orchestration",
+  "label": "Pipecat (frame-based pipeline)",
+  "transport": "websocket",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Pipecat pipelines move 16 kHz PCM mono frames through services by default. Audio is normalized at the transport ingress."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "TTS/realtime outputs are resampled to the pipeline rate before reaching the transport."
+  },
+  "lifecycle": [
+    "frame_in",
+    "transcript",
+    "ttS_start",
+    "tts_end",
+    "interruption",
+    "session_end"
+  ],
+  "potholes": [
+    {
+      "id": "transport_decodes_mulaw",
+      "severity": "note",
+      "note": "Pipecat transports (e.g. FastAPI websocket, Exotel, Twilio) decode μ-law to PCM at the edge. Verify the chosen transport handles your telephony codec; raw websocket transports may need a custom decoder."
+    },
+    {
+      "id": "endpointing_service",
+      "severity": "warning",
+      "note": "Turn endpointing uses a VAD/endpointing service separate from STT. Mis-tuning it causes false barge-in or long pauses."
+    }
+  ],
+  "env_keys": [],
+  "doc_urls": [
+    "https://docs.pipecat.ai/",
+    "https://docs.pipecat.ai/server/transports/"
+  ],
+  "context7": {
+    "library_id": "/pipecat-ai/pipecat",
+    "topics": [
+      "pipeline",
+      "transports",
+      "interruption"
+    ]
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [
+    "audio_normalization"
+  ]
+}

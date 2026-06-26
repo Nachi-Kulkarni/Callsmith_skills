@@ -1,0 +1,70 @@
+{
+  "id": "twilio",
+  "kind": "telephony",
+  "label": "Twilio (Voice + Media Streams)",
+  "transport": "websocket",
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio played back to the PSTN caller is G.711 μ-law 8 kHz. The bridge must hand Twilio μ-law 8 kHz."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Outbound Media Stream delivers G.711 μ-law 8 kHz mono. Narrowband. Add ?sampleRate=16000 to the stream for 16 kHz PCM instead."
+  },
+  "lifecycle": [
+    "streamStarted",
+    "media (inbound)",
+    "mark",
+    "clear",
+    "streamStopped",
+    "callEnded"
+  ],
+  "potholes": [
+    {
+      "id": "8khz_mulaw_narrowband",
+      "severity": "blocker",
+      "note": "Default Media Stream is μ-law 8 kHz. Decode + resample before any realtime model or STT."
+    },
+    {
+      "id": "sampleRate_param_for_pcm16k",
+      "severity": "note",
+      "note": "Requesting ?sampleRate=16000 yields raw 16-bit PCM at 16 kHz and skips the μ-law decode, but still needs resampling for 24 kHz models."
+    },
+    {
+      "id": "mark_clear_for_interruption",
+      "severity": "warning",
+      "note": "Barge-in is implemented with mark/clear events on the outbound stream. To interrupt TTS/queued audio, send clear on the mark id; do not rely on audio buffering alone."
+    },
+    {
+      "id": "dialcard_webhook_state",
+      "severity": "note",
+      "note": "Call + stream lifecycle are separate. The stream can start after connect and stop before hangup. Map both to a single session state machine."
+    }
+  ],
+  "env_keys": [
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_APP_SID"
+  ],
+  "doc_urls": [
+    "https://www.twilio.com/docs/voice/tutorials/how-carry-out-phone-conversations-media-streams"
+  ],
+  "context7": {
+    "library_id": "/twilio/twilio-python",
+    "topics": [
+      "media-streams",
+      "voice-webhooks"
+    ]
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": []
+}

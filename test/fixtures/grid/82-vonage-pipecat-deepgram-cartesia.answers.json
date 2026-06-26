@@ -1,0 +1,15 @@
+{
+  "language": "english",
+  "barge_in": "required",
+  "latency": "balanced",
+  "business_logic": "support",
+  "tools": "webhook",
+  "deployment": "railway",
+  "surface": "inbound_pstn",
+  "architecture": "cascaded",
+  "telephony": "vonage",
+  "orchestration": "pipecat",
+  "stt": "deepgram",
+  "tts": "cartesia",
+  "llm": "gpt_4o"
+}

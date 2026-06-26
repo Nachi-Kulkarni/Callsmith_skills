@@ -1,0 +1,32 @@
+{
+  "id": "sarvam",
+  "kind": "tts",
+  "label": "Sarvam",
+  "model": "bulbul:v3",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Accepts text (with language/speaker params) via WebSocket streaming or REST API."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output codec configurable: wav, mp3, aac. Sample rate configurable 8000-48000 Hz (default 24000). Optimized for Indian languages."
+  },
+  "lifecycle": [
+    "configure", "convert", "audio_chunk", "flush", "session_closed"
+  ],
+  "potholes": [
+    { "id": "streaming_latency", "severity": "warning", "note": "Sarvam TTS is optimized for Indian languages but may have higher latency than Cartesia/ElevenLabs for English. Use the WebSocket streaming API (not REST) for real-time." },
+    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Sarvam defaults to 24000 Hz output. Telephony leg needs 8000 Hz μ-law — set speech_sample_rate=8000 or resample + encode yourself." }
+  ],
+  "env_keys": ["SARVAM_API_KEY"],
+  "doc_urls": ["https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"],
+  "context7": { "library_id": "/llmstxt/sarvam_ai_llms_txt", "topics": ["tts", "bulbul", "indian-languages"] }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "callsmith",
+  "version": "0.1.0",
+  "description": "An agent skill + CLI that compiles a perfect implementation recipe for voice AI agents. Take the spec, forge the recipe, hand it off to a coding agent.",
+  "type": "module",
+  "bin": {
+    "callsmith": "bin/callsmith.mjs"
+  },
+  "main": "src/lib/index.mjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "callsmith": "node bin/callsmith.mjs",
+    "forge:demo": "node bin/callsmith.mjs forge --answers test/fixtures/exotel-gemini.answers.json --out /var/folders/9y/w73hl05d79g27kxyxqgb740r0000gn/T/opencode/callsmith-demo",
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "voice",
+    "voice-agent",
+    "telephony",
+    "exotel",
+    "twilio",
+    "livekit",
+    "pipecat",
+    "gemini-live",
+    "stt",
+    "tts",
+    "agent",
+    "recipe",
+    "scaffold",
+    "cli"
+  ],
+  "license": "MIT",
+  "files": [
+    "bin",
+    "src",
+    "data",
+    "providers"
+  ]
+}

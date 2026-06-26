@@ -1,0 +1,33 @@
+{
+  "id": "assemblyai",
+  "kind": "stt",
+  "label": "AssemblyAI",
+  "model": "universal-3-5-pro",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Streaming STT accepts 16 kHz 16-bit PCM via the real-time WebSocket."
+  },
+  "egress": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Outputs partial and final transcripts as JSON."
+  },
+  "lifecycle": [
+    "Begin", "Turn", "Termination"
+  ],
+  "potholes": [
+    { "id": "requires_16k_pcm", "severity": "blocker", "note": "AssemblyAI streaming requires 16 kHz 16-bit mono PCM. Telephony μ-law 8 kHz must be decoded + resampled first." },
+    { "id": "turn_vs_partial", "severity": "warning", "note": "Turn events have end_of_turn field; only act on finalized turns (end_of_turn: true) for tool-calling or database writes." },
+    { "id": "session_billing", "severity": "note", "note": "Streaming is billed per session duration, not audio sent. Always send a Terminate message when done to avoid 3-hour auto-close billing." }
+  ],
+  "env_keys": ["ASSEMBLYAI_API_KEY"],
+  "doc_urls": ["https://www.assemblyai.com/docs/Guides/real-time_streaming_transcription"],
+  "context7": { "library_id": null, "topics": ["streaming", "universal-3-5-pro", "turn-based"] }
+}

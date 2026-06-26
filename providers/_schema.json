@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Callsmith Provider Pack",
+  "description": "Each provider declares its real audio/transport/lifecycle contract plus known potholes. The resolver reconciles these across the selected stack to produce the compatibility matrix and audio bridge contract. This file documents the shape every providers/*/<id>.json must follow.",
+  "type": "object",
+  "required": ["id", "kind", "label", "transport", "ingest", "egress", "directions", "native_capabilities"],
+  "properties": {
+    "id": { "type": "string", "description": "Stable identifier, matches menu option id. Lowercase-kebab." },
+    "kind": { "type": "string", "enum": ["telephony", "orchestration", "realtime", "stt", "tts", "llm"] },
+    "label": { "type": "string" },
+    "transport": { "type": "string", "enum": ["websocket", "sip", "webrtc", "http", "grpc", "sdk"] },
+    "directions": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["inbound", "outbound"] },
+      "minItems": 1,
+      "description": "Which call directions this provider supports. Used for surface/direction impossibility detection."
+    },
+    "native_capabilities": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
+      "description": "Native capabilities that short-circuit the resolver (e.g. audio_normalization absorbs the decode/resample bridge)."
+    },
+    "ingest": {
+      "type": "object",
+      "description": "The audio format this component needs to RECEIVE on its input side (what the bridge must hand it).",
+      "required": ["format", "sample_rate", "channels"],
+      "properties": {
+        "format": { "type": "string", "examples": ["pcm", "mulaw", "opus"] },
+        "sample_rate": { "type": "integer", "examples": [8000, 16000, 24000] },
+        "channels": { "type": "integer", "examples": [1] },
+        "bit_depth": { "type": "integer", "examples": [8, 16] },
+        "note": { "type": "string" }
+      }
+    },
+    "egress": {
+      "type": "object",
+      "description": "The audio format this component PRODUCES on its output side (what the bridge receives from it).",
+      "required": ["format", "sample_rate", "channels"],
+      "properties": {
+        "format": { "type": "string" },
+        "sample_rate": { "type": "integer" },
+        "channels": { "type": "integer" },
+        "bit_depth": { "type": "integer" },
+        "note": { "type": "string" }
+      }
+    },
+    "lifecycle": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Session/call lifecycle events this provider emits or expects."
+    },
+    "potholes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "note"],
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "type": "string", "enum": ["blocker", "warning", "note"] },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "env_keys": { "type": "array", "items": { "type": "string" }, "description": "Required environment variables." },
+    "doc_urls": { "type": "array", "items": { "type": "string" } },
+    "context7": {
+      "type": "object",
+      "properties": {
+        "library_id": { "type": ["string", "null"] },
+        "topics": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

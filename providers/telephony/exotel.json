@@ -1,0 +1,73 @@
+{
+  "id": "exotel",
+  "kind": "telephony",
+  "label": "Exotel",
+  "transport": "websocket",
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz. This is what the bridge must hand Exotel."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the media-stream WebSocket. Narrowband."
+  },
+  "lifecycle": [
+    "call_initiated",
+    "call_answered",
+    "media_stream_connected",
+    "media_frame",
+    "dtmf",
+    "media_stream_closed",
+    "call_hangup"
+  ],
+  "potholes": [
+    {
+      "id": "8khz_mulaw_narrowband",
+      "severity": "blocker",
+      "note": "Telephony audio is narrowband μ-law 8 kHz. No realtime model or STT consumes this directly. A decode (μ-law→PCM) and resample (8k→16k/24k) stage is mandatory before any model."
+    },
+    {
+      "id": "websocket_close_without_hangup",
+      "severity": "warning",
+      "note": "The media-stream WebSocket can close before the hangup webhook fires. Treat WebSocket close AND explicit hangup as terminal; do not wait for one to confirm the other."
+    },
+    {
+      "id": "partial_frame_chunking",
+      "severity": "warning",
+      "note": "WebSocket frames may split or coalesce audio arbitrarily. Reassemble by byte budget, not by message boundary, before resampling."
+    },
+    {
+      "id": "dtmf_passthrough",
+      "severity": "note",
+      "note": "DTMF arrives as events, not in-band audio. Route it as a discrete signal; do not try to detect it from the audio stream."
+    }
+  ],
+  "env_keys": [
+    "EXOTEL_API_KEY",
+    "EXOTEL_ACCOUNT_SID",
+    "EXOTEL_SUBDOMAIN"
+  ],
+  "doc_urls": [
+    "https://developer.exotel.com/api/",
+    "https://support.exotel.com/support/solutions/folders/82318"
+  ],
+  "context7": {
+    "library_id": null,
+    "topics": [
+      "media-stream",
+      "call-flow",
+      "webhooks"
+    ]
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": []
+}

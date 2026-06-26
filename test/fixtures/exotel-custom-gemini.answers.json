@@ -1,0 +1,13 @@
+{
+  "surface": "inbound_pstn",
+  "architecture": "realtime_s2s",
+  "telephony": "exotel",
+  "orchestration": "custom_fastapi",
+  "realtime_model": "gemini_live",
+  "language": "hinglish",
+  "barge_in": "required",
+  "latency": "ultra",
+  "business_logic": "booking",
+  "tools": "webhook",
+  "deployment": "fly"
+}

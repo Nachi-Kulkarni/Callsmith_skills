@@ -1,0 +1,76 @@
+{
+  "id": "gemini-live",
+  "kind": "realtime",
+  "label": "Gemini Live (gemini-live-2.5-flash-preview)",
+  "model": "gemini-live-2.5-flash-preview",
+  "transport": "websocket",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Input audio must be sent as audio/pcm;rate=16000 (16 kHz 16-bit little-endian PCM mono). 8 kHz or μ-law is rejected or produces garbage."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output audio is 24 kHz 16-bit PCM mono (inline_data, audio/L16). Must be resampled to the telephony rate and encoded before sending back to a PSTN caller."
+  },
+  "lifecycle": [
+    "session_setup",
+    "send_realtime_input",
+    "server_content.model_turn",
+    "interruption_detected",
+    "turn_complete",
+    "session_closed"
+  ],
+  "potholes": [
+    {
+      "id": "input_rate_16k_only",
+      "severity": "blocker",
+      "note": "Gemini Live ingests 16 kHz PCM (audio/pcm;rate=16000). Feeding it 8 kHz μ-law telephony audio without decoding + resampling produces silent or corrupted turns."
+    },
+    {
+      "id": "output_rate_24k",
+      "severity": "blocker",
+      "note": "Output is 24 kHz PCM. Sending raw 24 kHz frames to an 8 kHz μ-law telephony leg without resample + encode corrupts playback."
+    },
+    {
+      "id": "vad_auto_response",
+      "severity": "warning",
+      "note": "send_realtime_input triggers model response automatically via server-side VAD; you do not manually commit turns in the optimized path. Coordinate turn logic with this."
+    },
+    {
+      "id": "interruption_requires_flush",
+      "severity": "blocker",
+      "note": "On barge-in, Gemini emits interruption_detected; stop playing queued output audio and flush the outbound buffer, else the caller hears overlapping speech."
+    },
+    {
+      "id": "asymmetric_sample_rates",
+      "severity": "warning",
+      "note": "Input and output sample rates differ (16k in, 24k out). Build two independent resamplers; do not reuse one for both directions."
+    }
+  ],
+  "env_keys": [
+    "GEMINI_API_KEY"
+  ],
+  "doc_urls": [
+    "https://ai.google.dev/gemini-api/docs/live",
+    "https://ai.google.dev/api/multimodal-live"
+  ],
+  "context7": {
+    "library_id": "/googleapis/python-genai",
+    "topics": [
+      "live-audio",
+      "session-lifecycle",
+      "interruption"
+    ]
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": []
+}

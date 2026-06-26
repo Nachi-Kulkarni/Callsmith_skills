@@ -1,0 +1,32 @@
+{
+  "id": "telnyx",
+  "kind": "telephony",
+  "label": "Telnyx",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the Call Control media stream."
+  },
+  "lifecycle": [
+    "call_initiated", "call_answered", "media_stream_connected", "media_frame", "dtmf", "media_stream_closed", "call_hangup"
+  ],
+  "potholes": [
+    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model." },
+    { "id": "call_control_id", "severity": "warning", "note": "Media streams are tied to a call_control_id; use it to correlate WebSocket frames with call lifecycle events." }
+  ],
+  "env_keys": ["TELNYX_API_KEY"],
+  "doc_urls": ["https://developers.telnyx.com/docs/voice"],
+  "context7": { "library_id": null, "topics": ["call-control", "media-stream"] }
+}
