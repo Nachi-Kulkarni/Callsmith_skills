@@ -9,5 +9,6 @@
   "architecture": "realtime_s2s",
   "telephony": "vonage",
   "orchestration": "livekit",
-  "realtime_model": "gemini_live"
+  "realtime_model": "gemini_live",
+  "vad": "silero"
 }

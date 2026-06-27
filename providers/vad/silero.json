@@ -1,0 +1,52 @@
+{
+  "id": "silero",
+  "kind": "vad",
+  "label": "Silero VAD",
+  "transport": "inline",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Analyzes 16kHz PCM frames in-process to detect speech segments."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Passes PCM through unchanged. Emits speech detection events alongside."
+  },
+  "latency_estimates": {
+    "processing_ms": 20
+  },
+  "interruption": {
+    "mechanism": "speech_detection",
+    "description": "Silero VAD detects user speech during agent output. When speech is detected and the agent is speaking, an interruption is triggered.",
+    "code_hint": "Pipecat: SileroVADAnalyzer in LLMUserAggregatorParams. LiveKit: silero.VAD.load() in AgentSession vad= parameter."
+  },
+  "lifecycle": [
+    "speech_start",
+    "speech_end",
+    "vad_reset"
+  ],
+  "potholes": [
+    {
+      "id": "min_speech_duration",
+      "severity": "warning",
+      "note": "Default min speech duration may cause false triggers from background noise. Tune confidence threshold (default 0.7) and min speech frames for your environment."
+    },
+    {
+      "id": "model_download",
+      "severity": "note",
+      "note": "Silero model (~2MB) is downloaded on first use. In production, pre-warm it at startup to avoid cold-start delay on the first call."
+    }
+  ],
+  "env_keys": [],
+  "doc_urls": [
+    "https://github.com/snakers4/silero-vad"
+  ],
+  "context7": null
+}

@@ -68,6 +68,14 @@
       "interruption"
     ]
   },
+  "latency_estimates": {
+    "response_start_ms": 500
+  },
+  "interruption": {
+    "mechanism": "server_vad_interrupt",
+    "description": "Gemini Live has built-in server-side VAD. On user interrupt, the server emits interruption_detected. Stop playing queued output and flush the outbound buffer immediately.",
+    "code_hint": "On 'interruption_detected' event: (1) stop audio playback, (2) flush outbound queue, (3) resume listening."
+  },
   "directions": [
     "inbound",
     "outbound"

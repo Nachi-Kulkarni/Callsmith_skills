@@ -11,5 +11,6 @@
   "orchestration": "custom_fastapi",
   "stt": "assemblyai",
   "tts": "sarvam",
-  "llm": "gpt_4o"
+  "llm": "gpt_4o",
+  "vad": "silero"
 }

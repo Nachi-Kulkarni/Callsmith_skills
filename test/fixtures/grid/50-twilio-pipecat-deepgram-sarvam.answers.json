@@ -11,5 +11,6 @@
   "orchestration": "pipecat",
   "stt": "deepgram",
   "tts": "sarvam",
-  "llm": "gpt_4o"
+  "llm": "gpt_4o",
+  "vad": "silero"
 }

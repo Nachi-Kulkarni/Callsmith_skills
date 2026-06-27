@@ -28,5 +28,11 @@
   ],
   "env_keys": ["SARVAM_API_KEY"],
   "doc_urls": ["https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"],
+  "latency_estimates": { "ttfa_ms": 200 },
+  "interruption": {
+    "mechanism": "stop_playback",
+    "description": "On interruption, stop the TTS streaming session. Discard buffered audio.",
+    "code_hint": "Close the WebSocket and clear output buffer."
+  },
   "context7": { "library_id": "/llmstxt/sarvam_ai_llms_txt", "topics": ["tts", "bulbul", "indian-languages"] }
 }

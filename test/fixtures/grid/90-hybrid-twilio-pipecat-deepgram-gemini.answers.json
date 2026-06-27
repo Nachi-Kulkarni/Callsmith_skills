@@ -12,5 +12,6 @@
   "realtime_model": "gemini_live",
   "stt": "deepgram",
   "tts": "elevenlabs",
-  "llm": "gpt_4o"
+  "llm": "gpt_4o",
+  "vad": "silero"
 }

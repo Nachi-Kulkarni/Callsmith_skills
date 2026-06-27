@@ -8,5 +8,6 @@
   "surface": "web_voice",
   "architecture": "realtime_s2s",
   "orchestration": "livekit",
-  "realtime_model": "gemini_live"
+  "realtime_model": "gemini_live",
+  "vad": "silero"
 }

@@ -42,12 +42,14 @@ callsmith docs
 ## What `forge` writes
 
 ```
-callsmith.recipe.md          the handoff packet (intent, stack, audio contract, build order)
-callsmith.lock.json          reproducible manifest (providers, models, compatibility flags)
+callsmith.recipe.md          the handoff packet (intent, stack, audio contract, interruption, latency, build order)
+callsmith.lock.json          reproducible manifest (providers, models, compatibility, latency)
 .env.example                 required keys for the selected stack
 .callsmith/context/
   architecture.md            pipeline + flags
   audio-contract.md          THE audio transforms (or "handled natively")
+  interruption.md            turn-taking + barge-in flow per provider
+  latency-budget.md          per-leg latency breakdown + optimization
   potholes.md                all blockers/warnings/notes from every provider
   build-order.md             implementation sequence
 ```
@@ -77,8 +79,9 @@ That difference — invisible in the model docs, fatal at runtime — is what ca
 | Orchestration | LiveKit, Pipecat, custom FastAPI bridge |
 | Realtime S2S | Gemini Live (`gemini-live-2.5-flash-preview`), OpenAI Realtime (`gpt-realtime-2`, native SIP) |
 | STT (cascaded) | Deepgram (Nova-3), AssemblyAI (`universal-3-5-pro`) |
+| LLM (cascaded) | OpenAI (`gpt-4o`), Anthropic (`claude-sonnet-4-20250514`), Google (`gemini-2.5-flash`) |
 | TTS (cascaded) | ElevenLabs (`eleven_multilingual_v2`), Cartesia (`sonic-latest`, μ-law native), Sarvam (`bulbul:v3`) |
-| LLM (cascaded) | OpenAI, Anthropic, Gemini |
+| VAD | Silero VAD, Deepgram Endpointing, WebRTC VAD |
 
 Each provider ships a pack (`providers/<kind>/<id>.json`) declaring its real ingest/egress audio contract, lifecycle events, potholes, and native capabilities. The resolver reconciles these across the stack. Add a provider by dropping in a pack — no code changes.
 
@@ -93,15 +96,15 @@ bin/callsmith.mjs            CLI entry (spec/forge/check/scaffold/docs/context)
 src/lib/
   resolver.mjs               provider loader + menu expander + compatibility resolver + impossibility detection
   compile.mjs                answers -> recipe + lock + context files (byte-deterministic)
-  scaffold.mjs               generates Python repo skeleton with contract-accurate audio bridge
+  scaffold.mjs               generates framework-native repo: LiveKit (AgentSession), Pipecat (Pipeline), or custom FastAPI (audio bridge + webhook)
   validate.mjs               schema validation gate for provider packs
   registry.mjs               two-tier unknown-provider resolution (registry + synthesis)
   docs.mjs                   per-provider doc hydration via Context7
 data/menu.json               the MCQ intake tree (single source of truth)
-providers/                   15 provider packs (verified audio contracts + potholes)
+providers/                   21 provider packs (telephony, orchestration, realtime, stt, llm, tts, vad)
   _schema.json               pack shape (required: id, kind, transport, ingest, egress, directions, native_capabilities)
 scripts/gen-fixtures.mjs     generates the grid fixture matrix
-test/                        97 tests (data integrity, resolver, registry, CLI contract, docs, grid, scaffold)
+test/                        117 tests (data integrity, resolver, registry, CLI contract, docs, grid, scaffold, tier1)
   fixtures/grid/             40 generated answer files
   fixtures/registry/         test packs for local registry lookup
 SKILL.md                     the agent skill
@@ -110,7 +113,7 @@ product_decisions.md         source-of-truth for all product decisions
 
 ## Status
 
-v1.0. **15 provider packs** (verified audio contracts + model names), impossibility detection (missing leg + direction mismatch), **unknown-provider online resolution** (registry lookup → dynamic synthesis with UNVERIFIED stamp), byte-deterministic lock, schema validation gate, 40-fixture grid (all forge green), scaffolded repos pass pytest, agent-skill recipe consistency, doc stub verification. 97-test suite, CI via GitHub Actions.
+v1.1. **21 provider packs** (verified audio contracts + model names + latency estimates + interruption metadata), **LLM + VAD as first-class pipeline citizens**, **interruption & turn-taking resolution** (concrete per-provider barge-in flow), **latency budget modeling** (per-leg breakdown with target + verdict), **framework-native scaffolds** (LiveKit AgentSession + Pipecat Pipeline + custom FastAPI webhook), impossibility detection, unknown-provider online resolution, byte-deterministic lock, schema validation gate, 40-fixture grid, 117-test suite, CI via GitHub Actions.
 
 ## License
 

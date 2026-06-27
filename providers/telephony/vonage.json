@@ -29,5 +29,11 @@
   ],
   "env_keys": ["VONAGE_API_KEY", "VONAGE_API_SECRET", "VONAGE_APPLICATION_ID"],
   "doc_urls": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"],
+  "latency_estimates": { "media_rtt_ms": 70 },
+  "interruption": {
+    "mechanism": "clear_action",
+    "description": "Send {\"action\":\"clear\"} JSON message to the WebSocket to flush all buffered outbound audio. Vonage supports this natively.",
+    "code_hint": "ws.send(json.dumps({\"action\":\"clear\"})) flushes the outbound buffer immediately on interruption."
+  },
   "context7": { "library_id": "/websites/developer_vonage_en_api", "topics": ["voice-api", "websockets", "ncco"] }
 }

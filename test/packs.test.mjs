@@ -35,7 +35,7 @@ test('every menu option that maps to a provider has an installed pack (no dangli
     for (const opt of g.options) {
       const providerId = opt.maps?.provider;
       const kind = opt.maps?.kind;
-      if (providerId && kind !== 'llm' && !providers[providerId]) {
+      if (providerId && !providers[providerId]) {
         missing.push(`${g.id}="${opt.id}" → provider "${providerId}"`);
       }
     }
@@ -54,6 +54,9 @@ test('all provider model names are pinned — staleness guard', () => {
     'elevenlabs': 'eleven_multilingual_v2',
     'cartesia': 'sonic-latest',
     'sarvam': 'bulbul:v3',
+    'openai': 'gpt-4o',
+    'anthropic': 'claude-sonnet-4-20250514',
+    'gemini': 'gemini-2.5-flash',
   };
   for (const [id, expectedModel] of Object.entries(pinned)) {
     assert.ok(providers[id], `${id} pack must exist`);

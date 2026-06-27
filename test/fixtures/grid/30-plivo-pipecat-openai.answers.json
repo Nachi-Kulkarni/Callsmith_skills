@@ -9,5 +9,6 @@
   "architecture": "realtime_s2s",
   "telephony": "plivo",
   "orchestration": "pipecat",
-  "realtime_model": "openai_realtime"
+  "realtime_model": "openai_realtime",
+  "vad": "silero"
 }

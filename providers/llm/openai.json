@@ -1,0 +1,61 @@
+{
+  "id": "openai",
+  "kind": "llm",
+  "label": "OpenAI (GPT-4o)",
+  "transport": "http",
+  "model": "gpt-4o",
+  "streaming": true,
+  "tool_calling": true,
+  "context_window": 128000,
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Receives transcribed text from STT. Streaming chat completions API."
+  },
+  "egress": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Streams text tokens to TTS. Use stream=True for low-latency first-token."
+  },
+  "latency_estimates": {
+    "ttft_ms": 400
+  },
+  "interruption": {
+    "mechanism": "stream_cancel",
+    "description": "On interruption, cancel the in-flight streaming completion. Discard buffered tokens that haven't reached TTS yet.",
+    "code_hint": "Pipecat: LLMContextAggregator handles this automatically via InterruptionFrame. LiveKit: session handles cancellation. Custom: call response.close() on the stream."
+  },
+  "lifecycle": [
+    "llm_start",
+    "token_streaming",
+    "tool_call",
+    "llm_end"
+  ],
+  "potholes": [
+    {
+      "id": "context_window_overflow",
+      "severity": "warning",
+      "note": "GPT-4o has a 128k context window. For long calls (>30 min), implement conversation summarization or sliding window to avoid truncation."
+    },
+    {
+      "id": "tool_call_latency",
+      "severity": "warning",
+      "note": "Tool calls pause audio output until the tool returns. Set a timeout (e.g. 5s) and respond with 'let me check that' if the tool is slow."
+    }
+  ],
+  "env_keys": [
+    "OPENAI_API_KEY"
+  ],
+  "doc_urls": [
+    "https://platform.openai.com/docs/api-reference/chat/streaming",
+    "https://platform.openai.com/docs/guides/function-calling"
+  ],
+  "context7": {
+    "library_id": "/openai/openai-python",
+    "topics": ["chat-completions", "streaming", "function-calling"]
+  }
+}

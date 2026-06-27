@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMenu, loadProviders, expandAnswers, resolve } from './resolver.mjs';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 function write(file, content) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -18,18 +18,17 @@ export function compile(rawAnswers, outDir, opts = {}) {
   const { flags, providers: sel, labels } = answers;
   const root = path.resolve(outDir);
 
-  // ---- context files ----
   write(path.join(root, '.callsmith/context/architecture.md'), renderArchitecture(result, flags, sel, labels));
   write(path.join(root, '.callsmith/context/audio-contract.md'), renderAudioContract(result));
   write(path.join(root, '.callsmith/context/potholes.md'), renderPotholes(result));
   write(path.join(root, '.callsmith/context/build-order.md'), renderBuildOrder(result, sel, flags));
+  write(path.join(root, '.callsmith/context/interruption.md'), renderInterruption(result));
+  write(path.join(root, '.callsmith/context/latency-budget.md'), renderLatencyBudget(result));
 
-  // ---- .env.example ----
   write(path.join(root, '.env.example'),
     '# Callsmith-generated environment template.\n' +
     result.envKeys.map(k => `${k}=`).join('\n') + '\n');
 
-  // ---- lock ----
   const lock = {
     callsmith_version: VERSION,
     architecture: { ...flags },
@@ -43,17 +42,18 @@ export function compile(rawAnswers, outDir, opts = {}) {
       transform_count: result.transforms.length,
       blockers: result.blockers.length,
     },
+    latency: result.latency,
     resolved_providers: resolved,
   };
   write(path.join(root, 'callsmith.lock.json'), JSON.stringify(lock, null, 2) + '\n');
 
-  // ---- recipe (the handoff packet) ----
   write(path.join(root, 'callsmith.recipe.md'), renderRecipe(result, flags, sel, labels, lock, resolved));
 
   return { lock, result, files: [
     'callsmith.recipe.md', 'callsmith.lock.json', '.env.example',
     '.callsmith/context/architecture.md', '.callsmith/context/audio-contract.md',
     '.callsmith/context/potholes.md', '.callsmith/context/build-order.md',
+    '.callsmith/context/interruption.md', '.callsmith/context/latency-budget.md',
   ] };
 }
 
@@ -107,6 +107,42 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = []) {
     for (const n of notes) lines.push(`- ${n}`);
   }
   lines.push('');
+  lines.push('## Interruption & turn-taking');
+  lines.push('');
+  if (result.interruption.enabled) {
+    lines.push(`Barge-in is **enabled**. ${result.interruption.steps.length} layers participate in interruption handling:`);
+    lines.push('');
+    for (const s of result.interruption.steps) {
+      lines.push(`### ${s.layer} (${s.provider})`);
+      lines.push(`- **Mechanism:** ${s.mechanism}`);
+      lines.push(`- **What happens:** ${s.detail}`);
+      if (s.code) lines.push(`- **Code:** \`${s.code}\``);
+      lines.push('');
+    }
+    lines.push('Full details: see [.callsmith/context/interruption.md](.callsmith/context/interruption.md).');
+  } else {
+    lines.push('Barge-in is **disabled** (half-duplex). The agent finishes speaking before accepting user input.');
+  }
+  lines.push('');
+  lines.push('## Latency budget');
+  lines.push('');
+  const lat = result.latency;
+  lines.push('| Leg | Latency (ms) |');
+  lines.push('|---|---|');
+  for (const leg of lat.legs) lines.push(`| ${leg.label} | ${leg.ms} |`);
+  lines.push(`| **Total estimated** | **${lat.total_ms}** |`);
+  lines.push(`| Target (${flags.latency}) | ${lat.target_ms} |`);
+  lines.push('');
+  if (lat.verdict === 'within target') {
+    lines.push(`> This stack is **within the latency target** (${lat.total_ms}ms vs ${lat.target_ms}ms target).`);
+  } else if (lat.verdict === 'borderline') {
+    lines.push(`> ⚠ This stack is **borderline** (${lat.total_ms}ms vs ${lat.target_ms}ms target). Consider optimizing the largest contributors.`);
+  } else {
+    lines.push(`> ⚠⚠ This stack **exceeds the latency target** (${lat.total_ms}ms vs ${lat.target_ms}ms target). Reduce latency or accept degraded UX.`);
+  }
+  lines.push('');
+  lines.push('Full breakdown: see [.callsmith/context/latency-budget.md](.callsmith/context/latency-budget.md).');
+  lines.push('');
   lines.push('## Blockers & potholes');
   lines.push('');
   if (blockers.length === 0 && potholes.filter(p => p.severity === 'blocker').length === 0) {
@@ -132,8 +168,10 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = []) {
   lines.push('Before writing code, read these files in order:');
   lines.push('1. `.callsmith/context/architecture.md`');
   lines.push('2. `.callsmith/context/audio-contract.md`');
-  lines.push('3. `.callsmith/context/potholes.md`');
-  lines.push('4. `.callsmith/context/build-order.md`');
+  lines.push('3. `.callsmith/context/interruption.md`');
+  lines.push('4. `.callsmith/context/latency-budget.md`');
+  lines.push('5. `.callsmith/context/potholes.md`');
+  lines.push('6. `.callsmith/context/build-order.md`');
   lines.push('');
   lines.push('Do not invent unsupported audio formats. Do not skip transcoding if the audio-contract requires it. Do not assume telephony frame boundaries align with model frames.');
   lines.push('');
@@ -200,9 +238,60 @@ function renderBuildOrder(result, sel, flags) {
   } else {
     L.push('3. **Audio wiring** — connect the native-normalized PCM streams; confirm frame format matches the model ingest contract.');
   }
-  L.push('4. **Model session** — connect realtime/STT+LLM+TTS; wire interruption handling.');
-  L.push('5. **Business logic & tools** — implement the job and tool calls.');
-  L.push('6. **Observability** — log inbound, post-transcode, model output, and outbound streams separately.');
-  L.push('7. **E2E test** — fake call simulator covering call lifecycle + barge-in.');
+  L.push('4. **VAD & interruption wiring** — configure the VAD provider from the recipe; wire interruption events to the turn manager. See `.callsmith/context/interruption.md`.');
+  L.push('5. **Model session** — connect realtime/STT+LLM+TTS; wire interruption handling and tool calling.');
+  L.push('6. **Business logic & tools** — implement the job and tool calls.');
+  L.push('7. **Observability** — log inbound, post-transcode, model output, and outbound streams separately.');
+  L.push('8. **E2E test** — fake call simulator covering call lifecycle + barge-in.');
+  return L.join('\n') + '\n';
+}
+
+function renderInterruption(result) {
+  const L = ['# Interruption & Turn-Taking', ''];
+  if (!result.interruption.enabled) {
+    L.push('Barge-in is **disabled**. The agent operates in half-duplex mode.');
+    return L.join('\n') + '\n';
+  }
+  L.push('Barge-in is **enabled**. When the user speaks during agent output, the following layers cooperate to interrupt playback and cancel in-flight work:');
+  L.push('');
+  for (const s of result.interruption.steps) {
+    L.push(`## ${s.layer} — ${s.provider}`);
+    L.push(`- **Mechanism:** \`${s.mechanism}\``);
+    L.push(`- **What happens:** ${s.detail}`);
+    if (s.code) {
+      L.push(`- **Implementation:**`);
+      L.push(`  \`${s.code}\``);
+    }
+    L.push('');
+  }
+  L.push('## End-to-end interruption flow');
+  L.push('');
+  L.push('1. VAD detects user speech during agent output');
+  L.push('2. Framework fires interruption event (InterruptionFrame in Pipecat, session interrupt in LiveKit)');
+  L.push('3. In-flight LLM stream is cancelled');
+  L.push('4. TTS output is stopped, buffered audio is discarded');
+  L.push('5. Telephony playback is stopped (clear/flush)');
+  L.push('6. Agent listens for the user\'s complete utterance');
+  L.push('7. New turn begins when STT reports a final transcript');
+  return L.join('\n') + '\n';
+}
+
+function renderLatencyBudget(result) {
+  const L = ['# Latency Budget', ''];
+  const lat = result.latency;
+  L.push('| Leg | Latency (ms) |');
+  L.push('|---|---|');
+  for (const leg of lat.legs) L.push(`| ${leg.label} | ${leg.ms} |`);
+  L.push(`| **Total** | **${lat.total_ms}** |`);
+  L.push(`| Target | ${lat.target_ms} |`);
+  L.push(`| Verdict | ${lat.verdict} |`);
+  L.push('');
+  L.push('## Optimization tips');
+  L.push('');
+  L.push('- **Realtime models** have the highest single contribution. Choose `ultra` latency priority if budget allows.');
+  L.push('- **LLM TTFT** dominates cascaded latency. Use streaming + short system prompts.');
+  L.push('- **TTS first-audio** varies by provider. Cartesia (~150ms) is fastest; ElevenLabs (~250ms) is average.');
+  L.push('- **VAD processing** is small but additive. WebRTC VAD (10ms) is fastest; Silero (20ms) is most accurate.');
+  L.push('- **Telephony media RTT** is fixed by the provider. Cannot be optimized in your code.');
   return L.join('\n') + '\n';
 }

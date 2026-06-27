@@ -65,6 +65,14 @@
       "webhooks"
     ]
   },
+  "latency_estimates": {
+    "media_rtt_ms": 80
+  },
+  "interruption": {
+    "mechanism": "stop_media_frames",
+    "description": "Stop sending audio frames to the media stream WebSocket. Buffered audio at the provider may play out — unavoidable unless you close and re-open the stream.",
+    "code_hint": "On interruption: stop writing to the WebSocket. Exotel does not support mark/clear like Twilio."
+  },
   "directions": [
     "inbound",
     "outbound"

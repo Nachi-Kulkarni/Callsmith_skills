@@ -28,5 +28,11 @@
   ],
   "env_keys": ["TELNYX_API_KEY"],
   "doc_urls": ["https://developers.telnyx.com/docs/voice"],
+  "latency_estimates": { "media_rtt_ms": 80 },
+  "interruption": {
+    "mechanism": "stop_media_frames",
+    "description": "Stop sending audio frames to the Call Control media stream. Telnyx media socket does not support explicit clear.",
+    "code_hint": "On interruption: stop writing to the WebSocket and flush your local outbound buffer."
+  },
   "context7": { "library_id": "/websites/developers_telnyx", "topics": ["call-control", "media-stream"] }
 }

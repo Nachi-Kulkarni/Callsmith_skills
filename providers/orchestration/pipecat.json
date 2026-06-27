@@ -50,6 +50,14 @@
       "interruption"
     ]
   },
+  "latency_estimates": {
+    "pipeline_overhead_ms": 30
+  },
+  "interruption": {
+    "mechanism": "interruption_frame",
+    "description": "Pipecat 1.0+ uses user_turn_strategies in LLMUserAggregatorParams. When the VAD detects user speech, an InterruptionFrame propagates through the pipeline, discarding pending output frames. The transport serializer handles provider-specific clearing.",
+    "code_hint": "LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()) — interruption is automatic. TwilioFrameSerializer sends clear automatically."
+  },
   "directions": [
     "inbound",
     "outbound"

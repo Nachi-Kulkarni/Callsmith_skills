@@ -54,6 +54,14 @@
       "interruption"
     ]
   },
+  "latency_estimates": {
+    "pipeline_overhead_ms": 20
+  },
+  "interruption": {
+    "mechanism": "session_turn_handling",
+    "description": "AgentSession with TurnHandlingOptions(turn_detection=MultilingualModel()) handles interruption automatically. When user speech is detected during agent output, the session cancels in-flight TTS and LLM output.",
+    "code_hint": "session = AgentSession(vad=silero.VAD.load(), turn_handling=TurnHandlingOptions(turn_detection=MultilingualModel())) — interruption is automatic."
+  },
   "directions": [
     "inbound",
     "outbound"

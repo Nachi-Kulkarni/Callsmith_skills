@@ -17,12 +17,12 @@ const BASE = {
 
 const rt = (telephony, orch, model, extra = {}) => ({
   ...BASE, surface: 'inbound_pstn', architecture: 'realtime_s2s',
-  telephony, orchestration: orch, realtime_model: model, ...extra,
+  telephony, orchestration: orch, realtime_model: model, vad: 'silero', ...extra,
 });
 
 const cas = (telephony, orch, stt, tts, extra = {}) => ({
   ...BASE, surface: 'inbound_pstn', architecture: 'cascaded',
-  telephony, orchestration: orch, stt, tts, llm: 'gpt_4o', ...extra,
+  telephony, orchestration: orch, stt, tts, llm: 'gpt_4o', vad: 'silero', ...extra,
 });
 
 const TEL = ['exotel', 'twilio', 'plivo', 'telnyx', 'vonage'];
@@ -59,7 +59,7 @@ fixtures['61-exotel-custom-deepgram-elevenlabs'] = cas('exotel', 'custom_fastapi
 
 // Edge cases
 fixtures['70-outbound-twilio-livekit-gemini'] = rt('twilio', 'livekit', 'gemini_live', { surface: 'outbound_pstn' });
-fixtures['71-web-voice-livekit-gemini'] = { ...BASE, surface: 'web_voice', architecture: 'realtime_s2s', orchestration: 'livekit', realtime_model: 'gemini_live' };
+fixtures['71-web-voice-livekit-gemini'] = { ...BASE, surface: 'web_voice', architecture: 'realtime_s2s', orchestration: 'livekit', realtime_model: 'gemini_live', vad: 'silero' };
 
 // Cross-product edges: mixed providers
 fixtures['80-plivo-pipecat-assemblyai-cartesia'] = cas('plivo', 'pipecat', 'assemblyai', 'cartesia');
@@ -70,7 +70,7 @@ fixtures['82-vonage-pipecat-deepgram-cartesia'] = cas('vonage', 'pipecat', 'deep
 fixtures['90-hybrid-twilio-pipecat-deepgram-gemini'] = {
   ...BASE, surface: 'inbound_pstn', architecture: 'hybrid',
   telephony: 'twilio', orchestration: 'pipecat',
-  realtime_model: 'gemini_live', stt: 'deepgram', tts: 'elevenlabs', llm: 'gpt_4o',
+  realtime_model: 'gemini_live', stt: 'deepgram', tts: 'elevenlabs', llm: 'gpt_4o', vad: 'silero',
 };
 
 // Outbound with different telephony
@@ -80,7 +80,7 @@ fixtures['92-outbound-plivo-pipecat-openai'] = rt('plivo', 'pipecat', 'openai_re
 // Web voice surface (no telephony)
 fixtures['93-webvoice-pipecat-deepgram-elevenlabs'] = {
   ...BASE, surface: 'web_voice', architecture: 'cascaded',
-  orchestration: 'pipecat', stt: 'deepgram', tts: 'elevenlabs', llm: 'gpt_4o',
+  orchestration: 'pipecat', stt: 'deepgram', tts: 'elevenlabs', llm: 'gpt_4o', vad: 'silero',
 };
 
 // Half-duplex (no barge-in)

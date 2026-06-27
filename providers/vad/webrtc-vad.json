@@ -1,0 +1,52 @@
+{
+  "id": "webrtc-vad",
+  "kind": "vad",
+  "label": "WebRTC VAD",
+  "transport": "inline",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Lightweight frame-based VAD using the WebRTC voice activity detector. Fastest but least accurate."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Passes PCM through unchanged."
+  },
+  "latency_estimates": {
+    "processing_ms": 10
+  },
+  "interruption": {
+    "mechanism": "frame_energy",
+    "description": "WebRTC VAD classifies each audio frame as speech or non-speech using GMM (Gaussian Mixture Model). On consecutive speech frames during agent output, triggers interruption.",
+    "code_hint": "Install py-webrtcvad. Configure aggressiveness 0-3 (3 = most aggressive). Pipecat: WebRTCVADAnalyzer. LiveKit: use a custom VAD adapter."
+  },
+  "lifecycle": [
+    "frame_speech",
+    "frame_silence",
+    "speech_segment"
+  ],
+  "potholes": [
+    {
+      "id": "low_accuracy",
+      "severity": "warning",
+      "note": "WebRTC VAD has lower accuracy than Silero, especially in noisy environments. May cause false interruptions or miss quiet speech."
+    },
+    {
+      "id": "no_model_download",
+      "severity": "note",
+      "note": "Pure C library with no model to download. Lowest cold-start latency — ideal for serverless deployments."
+    }
+  ],
+  "env_keys": [],
+  "doc_urls": [
+    "https://github.com/wiseman/py-webrtcvad"
+  ],
+  "context7": null
+}

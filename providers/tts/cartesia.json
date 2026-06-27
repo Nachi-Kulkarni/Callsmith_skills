@@ -28,5 +28,11 @@
   ],
   "env_keys": ["CARTESIA_API_KEY"],
   "doc_urls": ["https://docs.cartesia.ai", "https://docs.cartesia.ai/api-reference/tts/websocket"],
+  "latency_estimates": { "ttfa_ms": 150 },
+  "interruption": {
+    "mechanism": "stop_playback",
+    "description": "On interruption, close the Cartesia streaming WebSocket session. Discard buffered PCM chunks.",
+    "code_hint": "Close the WebSocket and clear output buffer. Frameworks handle this automatically via InterruptionFrame."
+  },
   "context7": { "library_id": "/websites/cartesia_ai", "topics": ["streaming-tts", "sonic-latest", "output-format"] }
 }

@@ -1,0 +1,52 @@
+{
+  "id": "deepgram-endpointing",
+  "kind": "vad",
+  "label": "Deepgram Endpointing",
+  "transport": "inline",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Uses Deepgram's utterance endpointing to detect turn boundaries. Configured via Deepgram STT live_options."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Passes PCM through unchanged."
+  },
+  "latency_estimates": {
+    "processing_ms": 30
+  },
+  "interruption": {
+    "mechanism": "endpoint_detection",
+    "description": "Deepgram's endpointing detects when a user finishes speaking (or starts speaking during agent output) using the interim_results + endpointing parameter. Configure endpointing_ms (default 300ms, lower for faster interruption).",
+    "code_hint": "Pipecat: DeepgramSTTService(live_options={'interim_results': True, 'endpointing': 300}). LiveKit: deepgram.STT with turn detection config."
+  },
+  "lifecycle": [
+    "speech_detected",
+    "utterance_end",
+    "endpoint_detected"
+  ],
+  "potholes": [
+    {
+      "id": "endpointing_latency",
+      "severity": "warning",
+      "note": "The endpointing parameter (ms) adds delay before a turn is considered complete. 300ms is default; lower to 100-200ms for faster interruption but more false triggers."
+    },
+    {
+      "id": "requires_deepgram_stt",
+      "severity": "note",
+      "note": "Deepgram endpointing only works when Deepgram is the STT provider. Select Silero VAD if using a different STT."
+    }
+  ],
+  "env_keys": [],
+  "doc_urls": [
+    "https://developers.deepgram.com/docs/endpointing"
+  ],
+  "context7": null
+}

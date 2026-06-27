@@ -23,7 +23,6 @@ export function loadMenu() {
   return JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'menu.json'), 'utf8'));
 }
 
-// Does a group's `when` predicate hold against the flags accumulated so far?
 function whenMatches(when, flags) {
   if (!when) return true;
   for (const [k, v] of Object.entries(when)) {
@@ -34,8 +33,6 @@ function whenMatches(when, flags) {
   return true;
 }
 
-// Walk the menu in order, honoring each group's `when` predicate against flags
-// accumulated so far, and split each chosen option's `maps` into flags + provider selections.
 export function expandAnswers(raw, menu) {
   const flags = {};
   const providers = {};
@@ -45,9 +42,6 @@ export function expandAnswers(raw, menu) {
     const choice = raw[g.id] ?? g.default;
     const opt = g.options.find(o => o.id === choice);
     if (!opt) {
-      // Custom provider: choice doesn't match any menu option, but this group
-      // maps to a provider kind. Treat the raw choice as a custom provider ID
-      // so resolveUnknowns can resolve it online (P3).
       const kindHolder = g.options.find(o => o.maps?.kind);
       if (kindHolder && typeof choice === 'string' && choice) {
         providers[kindHolder.maps.kind] = { id: choice, selectedVia: g.id };
@@ -66,11 +60,10 @@ export function expandAnswers(raw, menu) {
   return { flags, providers, labels, raw };
 }
 
-// Compute the audio transforms needed to get from `from.egress` to `to.ingest`.
 function audioDiff(from, to) {
   const e = from.egress || {};
   const i = to.ingest || {};
-  if (!e.format || !i.format || e.format === 'text' || e.format === 'selectable' || i.format === 'text' || i.format === 'selectable') return [];
+  if (!e.format || !i.format || e.format === 'text' || e.format === 'selectable' || i.format === 'text' || i.format === 'selectable' || e.format === 'pcm-events' || i.format === 'pcm-events') return [];
   const steps = [];
   if (e.format !== i.format) {
     if (e.format === 'mulaw' && (i.format === 'pcm' || i.format === 'linear16')) steps.push('decode mulaw -> PCM');
@@ -82,27 +75,27 @@ function audioDiff(from, to) {
   return steps;
 }
 
-// The core: reconcile the selected stack into an explicit audio contract + transform list.
 export function resolve(answers, providers) {
   const { flags, providers: sel, labels } = answers;
   const mode = flags.mode;
   const needsTelephony = flags.needs_telephony;
 
-  // Build the ordered pipeline of audio-relevant nodes.
   const pipeline = [];
-  const telephony = needsTelephony ? providers[sel.telephony.id] : null;
+  const telephony = needsTelephony && sel.telephony ? providers[sel.telephony.id] : null;
   const orch = sel.orchestration ? providers[sel.orchestration.id] : null;
+  const vad = sel.vad ? providers[sel.vad.id] : null;
   if (telephony) pipeline.push({ role: 'telephony', pack: telephony });
   if (orch) pipeline.push({ role: 'orchestration', pack: orch });
+  if (vad) pipeline.push({ role: 'vad', pack: vad });
   if (mode === 'realtime' || mode === 'hybrid') {
     pipeline.push({ role: 'realtime', pack: providers[sel.realtime.id] });
   }
   if (mode === 'cascaded' || mode === 'hybrid') {
     if (sel.stt) pipeline.push({ role: 'stt', pack: providers[sel.stt.id] });
+    if (sel.llm) pipeline.push({ role: 'llm', pack: providers[sel.llm.id] });
     if (sel.tts) pipeline.push({ role: 'tts', pack: providers[sel.tts.id] });
   }
 
-  // Adjacent transform computation, honoring native capabilities that absorb work.
   const transforms = [];
   const blockers = [];
   const notes = [];
@@ -113,11 +106,10 @@ export function resolve(answers, providers) {
     for (const p of node.pack.potholes || []) potholes.push({ source: node.pack.id, ...p });
   }
 
-  // Inbound path: telephony -> ... -> model/stt
   const head = pipeline[0];
   const sink = pipeline.find(n => n.role === 'realtime' || n.role === 'stt');
   if (telephony && sink) {
-    const orchNormalizes = orch && (orch.audio_normalization || (orch.native_capabilities || []).includes('audio_normalization'));
+    const orchNormalizes = orch && (orch.native_capabilities || []).includes('audio_normalization');
     if (orchNormalizes) {
       notes.push(`Audio normalization (μ-law decode + resample) is handled by ${orch.label} at the edge. Your worker sees ${sink.pack.ingest.sample_rate || ''} ${sink.pack.ingest.format?.toUpperCase()} directly.`);
     } else {
@@ -129,10 +121,9 @@ export function resolve(answers, providers) {
     }
   }
 
-  // Outbound path: model/tts -> telephony
   const source = pipeline.find(n => n.role === 'realtime' || n.role === 'tts');
   if (telephony && source) {
-    const orchNormalizes = orch && (orch.audio_normalization || (orch.native_capabilities || []).includes('audio_normalization'));
+    const orchNormalizes = orch && (orch.native_capabilities || []).includes('audio_normalization');
     const ttsEmitsMulaw = source.pack.native_capabilities && source.pack.native_capabilities.includes('emit_mulaw_8000');
     if (orchNormalizes) {
       notes.push(`Outbound resample + μ-law encode is handled by ${orch.label}.`);
@@ -147,7 +138,6 @@ export function resolve(answers, providers) {
     }
   }
 
-  // Realtime asymmetry check
   if (mode === 'realtime' || mode === 'hybrid') {
     const rt = providers[sel.realtime.id];
     if (rt && rt.ingest && rt.egress && rt.ingest.sample_rate !== rt.egress.sample_rate) {
@@ -155,14 +145,15 @@ export function resolve(answers, providers) {
     }
   }
 
-  // Env keys
   const envKeys = [];
   for (const node of pipeline) if (node.pack) envKeys.push(...(node.pack.env_keys || []));
 
-  // barge-in
   if (flags.barge_in === true || flags.barge_in === 'optional') {
     notes.push('Barge-in enabled: on interruption, flush outbound buffer and cancel in-flight model/TTS output before resuming.');
   }
+
+  const interruption = resolveInterruption(sel, providers, flags);
+  const latency = computeLatencyBudget(sel, providers, flags);
 
   return {
     stack: { flags, providers: sel, labels },
@@ -172,16 +163,85 @@ export function resolve(answers, providers) {
     blockers,
     notes,
     envKeys: [...new Set(envKeys)],
+    interruption,
+    latency,
   };
 }
 
-// Detect stacks that are genuinely impossible — forge refuses these.
+export function resolveInterruption(sel, providers, flags) {
+  if (flags.barge_in === false) {
+    return { enabled: false, steps: [] };
+  }
+  const steps = [];
+  const order = ['vad', 'realtime', 'stt', 'orchestration', 'llm', 'tts', 'telephony'];
+  const layerLabels = {
+    vad: 'Speech Detection',
+    realtime: 'Realtime Model',
+    stt: 'Turn Endpointing',
+    orchestration: 'Pipeline Cancellation',
+    llm: 'LLM Stream Cancel',
+    tts: 'TTS Output Stop',
+    telephony: 'Media Playback Stop',
+  };
+  for (const role of order) {
+    const selection = sel[role];
+    if (!selection || !selection.id) continue;
+    const pack = providers[selection.id];
+    if (!pack || !pack.interruption) continue;
+    steps.push({
+      layer: layerLabels[role] || role,
+      provider: pack.id,
+      mechanism: pack.interruption.mechanism,
+      detail: pack.interruption.description,
+      code: pack.interruption.code_hint,
+    });
+  }
+  return { enabled: true, steps };
+}
+
+export function computeLatencyBudget(sel, providers, flags) {
+  const legs = [];
+  let total_ms = 0;
+
+  const add = (label, ms) => {
+    if (ms && ms > 0) {
+      legs.push({ label, ms });
+      total_ms += ms;
+    }
+  };
+
+  const tel = sel.telephony ? providers[sel.telephony.id] : null;
+  const orch = sel.orchestration ? providers[sel.orchestration.id] : null;
+  const vad = sel.vad ? providers[sel.vad.id] : null;
+  const rt = sel.realtime ? providers[sel.realtime.id] : null;
+  const stt = sel.stt ? providers[sel.stt.id] : null;
+  const llm = sel.llm ? providers[sel.llm.id] : null;
+  const tts = sel.tts ? providers[sel.tts.id] : null;
+
+  if (tel?.latency_estimates?.media_rtt_ms) add('Telephony media round-trip', tel.latency_estimates.media_rtt_ms);
+  if (orch?.latency_estimates?.pipeline_overhead_ms) add('Orchestration pipeline overhead', orch.latency_estimates.pipeline_overhead_ms);
+  if (vad?.latency_estimates?.processing_ms) add('VAD processing', vad.latency_estimates.processing_ms);
+
+  if (flags.mode === 'realtime' || flags.mode === 'hybrid') {
+    if (rt?.latency_estimates?.response_start_ms) add('Realtime model response start', rt.latency_estimates.response_start_ms);
+  }
+  if (flags.mode === 'cascaded' || flags.mode === 'hybrid') {
+    if (stt?.latency_estimates?.ttf_transcript_ms) add('STT time to first transcript', stt.latency_estimates.ttf_transcript_ms);
+    if (llm?.latency_estimates?.ttft_ms) add('LLM time to first token', llm.latency_estimates.ttft_ms);
+    if (tts?.latency_estimates?.ttfa_ms) add('TTS time to first audio', tts.latency_estimates.ttfa_ms);
+  }
+
+  const target = flags.latency === 'ultra' ? 500 : flags.latency === 'balanced' ? 800 : 1200;
+  const verdict = total_ms <= target ? 'within target' : total_ms <= target * 1.5 ? 'borderline' : 'exceeds target';
+
+  return { legs, total_ms, target_ms: target, verdict };
+}
+
 export function detectImpossibilities(answers, providers) {
   const { flags, providers: sel } = answers;
   const impossible = [];
 
   for (const [role, selection] of Object.entries(sel)) {
-    if (role === 'llm') continue;
     if (selection && selection.id && !providers[selection.id]) {
       impossible.push({
         code: 'unknown_provider',
@@ -199,6 +259,7 @@ export function detectImpossibilities(answers, providers) {
   if (flags.mode === 'cascaded' || flags.mode === 'hybrid') {
     if (!sel.stt) impossible.push({ code: 'missing_leg', message: 'Cascaded architecture requires an STT provider but none was selected.' });
     if (!sel.tts) impossible.push({ code: 'missing_leg', message: 'Cascaded architecture requires a TTS provider but none was selected.' });
+    if (!sel.llm) impossible.push({ code: 'missing_leg', message: 'Cascaded architecture requires an LLM provider but none was selected.' });
   }
 
   if (flags.needs_telephony && sel.telephony && providers[sel.telephony.id]) {

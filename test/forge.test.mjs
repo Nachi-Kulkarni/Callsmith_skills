@@ -68,6 +68,8 @@ for (const fixture of ALL_FIXTURES) {
   test(`recipe from ${fixture} contains all agent-required sections`, () => {
     const { recipeRaw } = forge(fixture);
     assert.match(recipeRaw, /## Audio contract/i, 'must have an Audio contract section');
+    assert.match(recipeRaw, /## Interruption & turn-taking/i, 'must have an Interruption section');
+    assert.match(recipeRaw, /## Latency budget/i, 'must have a Latency budget section');
     assert.match(recipeRaw, /## Build order/i, 'must have a Build order section');
     assert.match(recipeRaw, /## Blockers/i, 'must have a Blockers & potholes section');
     assert.match(recipeRaw, /## Intent/i, 'must have an Intent section');
@@ -83,6 +85,8 @@ test('recipe references context files that forge actually produces', () => {
     '.callsmith/context/audio-contract.md',
     '.callsmith/context/potholes.md',
     '.callsmith/context/build-order.md',
+    '.callsmith/context/interruption.md',
+    '.callsmith/context/latency-budget.md',
   ];
   for (const f of contextFiles) {
     assert.ok(result.recipeRaw.includes(f),

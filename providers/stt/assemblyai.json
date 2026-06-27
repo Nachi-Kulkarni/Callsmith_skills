@@ -29,5 +29,11 @@
   ],
   "env_keys": ["ASSEMBLYAI_API_KEY"],
   "doc_urls": ["https://www.assemblyai.com/docs/Guides/real-time_streaming_transcription"],
+  "latency_estimates": { "ttf_transcript_ms": 350 },
+  "interruption": {
+    "mechanism": "turn_event",
+    "description": "AssemblyAI Universal streaming emits Turn events. A turn with end_of_turn=true signals the user finished speaking, which can trigger interruption if the agent was outputting.",
+    "code_hint": "Subscribe to Turn events with end_of_turn field. On turn end during agent speech, trigger interruption."
+  },
   "context7": { "library_id": null, "topics": ["streaming", "universal-3-5-pro", "turn-based"] }
 }

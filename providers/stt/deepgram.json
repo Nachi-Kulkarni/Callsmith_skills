@@ -57,6 +57,14 @@
       "nova-3"
     ]
   },
+  "latency_estimates": {
+    "ttf_transcript_ms": 300
+  },
+  "interruption": {
+    "mechanism": "speech_started_event",
+    "description": "Deepgram emits SpeechStarted when the user begins speaking. Wire this event to trigger interruption of agent output.",
+    "code_hint": "DeepgramSTTService emits speech_started. In Pipecat, this feeds into the interruption pipeline. In custom code, subscribe to SpeechStarted and call your interrupt handler."
+  },
   "directions": [
     "inbound",
     "outbound"

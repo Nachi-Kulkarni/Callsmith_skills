@@ -6,9 +6,9 @@
   "required": ["id", "kind", "label", "transport", "ingest", "egress", "directions", "native_capabilities"],
   "properties": {
     "id": { "type": "string", "description": "Stable identifier, matches menu option id. Lowercase-kebab." },
-    "kind": { "type": "string", "enum": ["telephony", "orchestration", "realtime", "stt", "tts", "llm"] },
+    "kind": { "type": "string", "enum": ["telephony", "orchestration", "realtime", "stt", "tts", "llm", "vad"] },
     "label": { "type": "string" },
-    "transport": { "type": "string", "enum": ["websocket", "sip", "webrtc", "http", "grpc", "sdk"] },
+    "transport": { "type": "string", "enum": ["websocket", "sip", "webrtc", "http", "grpc", "sdk", "inline"] },
     "directions": {
       "type": "array",
       "items": { "type": "string", "enum": ["inbound", "outbound"] },
@@ -25,9 +25,9 @@
       "description": "The audio format this component needs to RECEIVE on its input side (what the bridge must hand it).",
       "required": ["format", "sample_rate", "channels"],
       "properties": {
-        "format": { "type": "string", "examples": ["pcm", "mulaw", "opus"] },
-        "sample_rate": { "type": "integer", "examples": [8000, 16000, 24000] },
-        "channels": { "type": "integer", "examples": [1] },
+        "format": { "type": "string", "examples": ["pcm", "mulaw", "opus", "text", "pcm-events"] },
+        "sample_rate": { "type": "integer", "examples": [0, 8000, 16000, 24000] },
+        "channels": { "type": "integer", "examples": [0, 1] },
         "bit_depth": { "type": "integer", "examples": [8, 16] },
         "note": { "type": "string" }
       }
@@ -37,11 +37,37 @@
       "description": "The audio format this component PRODUCES on its output side (what the bridge receives from it).",
       "required": ["format", "sample_rate", "channels"],
       "properties": {
-        "format": { "type": "string" },
-        "sample_rate": { "type": "integer" },
-        "channels": { "type": "integer" },
-        "bit_depth": { "type": "integer" },
+        "format": { "type": "string", "examples": ["pcm", "mulaw", "opus", "text", "pcm-events"] },
+        "sample_rate": { "type": "integer", "examples": [0, 8000, 16000, 24000] },
+        "channels": { "type": "integer", "examples": [0, 1] },
+        "bit_depth": { "type": "integer", "examples": [8, 16] },
         "note": { "type": "string" }
+      }
+    },
+    "model": { "type": "string", "description": "Current verified model ID. Pinned by staleness guard tests." },
+    "streaming": { "type": "boolean", "description": "Whether this provider supports streaming output." },
+    "tool_calling": { "type": "boolean", "description": "Whether this provider supports function/tool calling." },
+    "context_window": { "type": "integer", "description": "Maximum context window in tokens (LLM only)." },
+    "latency_estimates": {
+      "type": "object",
+      "description": "Typical latency contribution from this provider in milliseconds. Used for latency budget computation.",
+      "properties": {
+        "media_rtt_ms": { "type": "integer", "description": "Telephony media stream round-trip time." },
+        "ttf_transcript_ms": { "type": "integer", "description": "STT: time to first transcript." },
+        "ttft_ms": { "type": "integer", "description": "LLM: time to first token." },
+        "ttfa_ms": { "type": "integer", "description": "TTS: time to first audio chunk." },
+        "response_start_ms": { "type": "integer", "description": "Realtime model: time to first audio response." },
+        "processing_ms": { "type": "integer", "description": "VAD/pipeline: processing latency." },
+        "pipeline_overhead_ms": { "type": "integer", "description": "Orchestration: frame pipeline overhead." }
+      }
+    },
+    "interruption": {
+      "type": "object",
+      "description": "How this provider participates in barge-in / interruption handling.",
+      "properties": {
+        "mechanism": { "type": "string", "description": "The interruption mechanism this provider uses." },
+        "description": { "type": "string", "description": "What happens when the user interrupts." },
+        "code_hint": { "type": "string", "description": "Framework-specific code pattern for interruption." }
       }
     },
     "lifecycle": {
@@ -64,7 +90,7 @@
     "env_keys": { "type": "array", "items": { "type": "string" }, "description": "Required environment variables." },
     "doc_urls": { "type": "array", "items": { "type": "string" } },
     "context7": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "library_id": { "type": ["string", "null"] },
         "topics": { "type": "array", "items": { "type": "string" } }

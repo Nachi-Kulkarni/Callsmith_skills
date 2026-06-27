@@ -1,0 +1,61 @@
+{
+  "id": "gemini",
+  "kind": "llm",
+  "label": "Google (Gemini 2.5 Flash)",
+  "transport": "http",
+  "model": "gemini-2.5-flash",
+  "streaming": true,
+  "tool_calling": true,
+  "context_window": 1000000,
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Receives transcribed text from STT. GenerateContent streaming API."
+  },
+  "egress": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Streams text tokens to TTS. Use stream=True for low-latency first-token."
+  },
+  "latency_estimates": {
+    "ttft_ms": 350
+  },
+  "interruption": {
+    "mechanism": "stream_cancel",
+    "description": "On interruption, cancel the in-flight streaming generation. Gemini's streaming API supports cancellation.",
+    "code_hint": "Pipecat: GoogleLLMService handles this via InterruptionFrame. LiveKit: inference.LLM handles cancellation. Custom: close the streaming response."
+  },
+  "lifecycle": [
+    "generate_start",
+    "text_streaming",
+    "function_call",
+    "generate_end"
+  ],
+  "potholes": [
+    {
+      "id": "multilingual_strength",
+      "severity": "note",
+      "note": "Gemini 2.5 Flash excels at code-mixed languages (Hinglish, Spanglish). Preferred for Indian-language voice agents."
+    },
+    {
+      "id": "long_context",
+      "severity": "note",
+      "note": "1M token context window means conversation history rarely needs truncation. Still implement summarization for calls >1 hour."
+    }
+  ],
+  "env_keys": [
+    "GOOGLE_API_KEY"
+  ],
+  "doc_urls": [
+    "https://ai.google.dev/gemini-api/docs/text-generation#generate-a-text-stream",
+    "https://ai.google.dev/gemini-api/docs/function-calling"
+  ],
+  "context7": {
+    "library_id": "/google-gemini/generative-ai-python",
+    "topics": ["streaming", "function-calling"]
+  }
+}

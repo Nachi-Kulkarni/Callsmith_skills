@@ -94,6 +94,17 @@
       ]
     },
     {
+      "id": "vad",
+      "title": "Which voice activity detection (VAD)?",
+      "help": "VAD detects when the user starts/stops speaking. It drives barge-in (interruption) and turn-taking. Silero is the standard in both Pipecat and LiveKit.",
+      "default": "silero",
+      "options": [
+        { "id": "silero", "label": "Silero VAD", "blurb": "Most accurate neural VAD. Standard in Pipecat and LiveKit.", "maps": { "provider": "silero", "kind": "vad" } },
+        { "id": "deepgram_endpointing", "label": "Deepgram Endpointing", "blurb": "Built into Deepgram STT. Lower accuracy than Silero but no extra dependency.", "maps": { "provider": "deepgram-endpointing", "kind": "vad" } },
+        { "id": "webrtc_vad", "label": "WebRTC VAD", "blurb": "Lightweight GMM-based. Fastest but least accurate. No model download.", "maps": { "provider": "webrtc-vad", "kind": "vad" } }
+      ]
+    },
+    {
       "id": "language",
       "title": "Which language(s)?",
       "default": "hinglish",

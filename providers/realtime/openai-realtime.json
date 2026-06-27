@@ -81,6 +81,14 @@
       "sip"
     ]
   },
+  "latency_estimates": {
+    "response_start_ms": 450
+  },
+  "interruption": {
+    "mechanism": "server_vad_speech_started",
+    "description": "OpenAI Realtime emits input_audio_buffer.speech_started on user speech. This signals barge-in. Stop outbound playback, clear the buffer, and send response.cancel to abort in-flight responses.",
+    "code_hint": "On 'input_audio_buffer.speech_started': (1) call response.cancel, (2) flush outbound audio, (3) resume listening. Pipecat/LiveKit handle this automatically."
+  },
   "directions": [
     "inbound",
     "outbound"

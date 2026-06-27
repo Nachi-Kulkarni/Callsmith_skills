@@ -59,6 +59,14 @@
       "output-format"
     ]
   },
+  "latency_estimates": {
+    "ttfa_ms": 250
+  },
+  "interruption": {
+    "mechanism": "stop_playback",
+    "description": "On interruption, stop consuming the streaming TTS WebSocket. Discard any buffered audio chunks. Cancel the text input stream.",
+    "code_hint": "Close the ElevenLabs streaming WebSocket and clear your TTS output buffer. Pipecat handles this via InterruptionFrame; LiveKit via session cancellation."
+  },
   "directions": [
     "inbound",
     "outbound"

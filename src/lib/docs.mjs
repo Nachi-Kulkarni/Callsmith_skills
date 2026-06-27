@@ -69,6 +69,22 @@ function renderProviderDoc(pack, flags) {
   L.push(`- **transport:** ${pack.transport}`);
   if (pack.model) L.push(`- **model:** \`${pack.model}\``);
   L.push('');
+  if (pack.latency_estimates) {
+    L.push('## Latency estimate');
+    L.push('');
+    const le = pack.latency_estimates;
+    const entries = Object.entries(le);
+    for (const [k, v] of entries) L.push(`- **${k}:** ${v} ms`);
+    L.push('');
+  }
+  if (pack.interruption) {
+    L.push('## Interruption');
+    L.push('');
+    L.push(`- **mechanism:** \`${pack.interruption.mechanism}\``);
+    L.push(`- **description:** ${pack.interruption.description}`);
+    if (pack.interruption.code_hint) L.push(`- **code:** \`${pack.interruption.code_hint}\``);
+    L.push('');
+  }
   L.push('## Lifecycle events');
   L.push('');
   for (const e of pack.lifecycle || []) L.push(`- \`${e}\``);
@@ -79,12 +95,14 @@ function renderProviderDoc(pack, flags) {
     for (const p of pack.potholes) L.push(`- **[${p.severity}]** ${p.note}`);
     L.push('');
   }
-  L.push('## Required env');
-  L.push('');
-  L.push('```bash');
-  for (const k of pack.env_keys || []) L.push(`${k}=`);
-  L.push('```');
-  L.push('');
+  if (pack.env_keys && pack.env_keys.length) {
+    L.push('## Required env');
+    L.push('');
+    L.push('```bash');
+    for (const k of pack.env_keys) L.push(`${k}=`);
+    L.push('```');
+    L.push('');
+  }
   if (pack.doc_urls && pack.doc_urls.length) {
     L.push('## Official docs');
     L.push('');

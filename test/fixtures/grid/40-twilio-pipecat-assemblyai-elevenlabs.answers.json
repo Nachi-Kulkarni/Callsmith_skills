@@ -11,5 +11,6 @@
   "orchestration": "pipecat",
   "stt": "assemblyai",
   "tts": "elevenlabs",
-  "llm": "gpt_4o"
+  "llm": "gpt_4o",
+  "vad": "silero"
 }

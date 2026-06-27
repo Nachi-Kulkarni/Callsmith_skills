@@ -1,0 +1,61 @@
+{
+  "id": "anthropic",
+  "kind": "llm",
+  "label": "Anthropic (Claude Sonnet 4)",
+  "transport": "http",
+  "model": "claude-sonnet-4-20250514",
+  "streaming": true,
+  "tool_calling": true,
+  "context_window": 200000,
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Receives transcribed text from STT. Streaming messages API."
+  },
+  "egress": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Streams text tokens to TTS. Use stream=True for low-latency first-token."
+  },
+  "latency_estimates": {
+    "ttft_ms": 450
+  },
+  "interruption": {
+    "mechanism": "stream_cancel",
+    "description": "On interruption, cancel the in-flight streaming message. Claude's streaming API supports cancellation.",
+    "code_hint": "Pipecat: LLMContextAggregator handles this automatically. LiveKit: session handles cancellation. Custom: close the streaming response."
+  },
+  "lifecycle": [
+    "message_start",
+    "text_delta",
+    "tool_use",
+    "message_stop"
+  ],
+  "potholes": [
+    {
+      "id": "system_prompt_format",
+      "severity": "warning",
+      "note": "Claude uses a separate 'system' parameter (not a system message in the messages array). Pipecat and LiveKit handle this automatically."
+    },
+    {
+      "id": "extended_thinking",
+      "severity": "note",
+      "note": "Claude Sonnet 4 supports extended thinking. For voice agents, disable thinking (thinking={'type': 'disabled'}) to reduce latency."
+    }
+  ],
+  "env_keys": [
+    "ANTHROPIC_API_KEY"
+  ],
+  "doc_urls": [
+    "https://docs.anthropic.com/en/api/messages-streaming",
+    "https://docs.anthropic.com/en/docs/build-with-claude/tool-use"
+  ],
+  "context7": {
+    "library_id": "/anthropics/anthropic-sdk-python",
+    "topics": ["streaming", "tool-use"]
+  }
+}
