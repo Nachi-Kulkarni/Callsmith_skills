@@ -46,11 +46,11 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 | R3 | **Soft difficulty still forges** | A stack that's merely hard (e.g. needs 4 audio transforms) still forges, with `[BLOCKER]` warnings the user reads. Only true impossibilities refuse. |
 | R4 | **`check` mirrors this** | `check` exits non-zero when any impossibility or unresolved blocker is present; exits 0 on a clean/blocked-only stack. |
 
-### Provider scope (v1.0)
+### Provider scope (v1.1)
 
 | ID | Decision | Detail |
 |---|---|---|
-| P1 | **All major providers** | v1.0 ships ~15 verified packs, not golden-path-only. |
+| P1 | **All major providers** | v1.1 ships 21 verified packs, not golden-path-only. |
 | P2 | **Confirmed list** | See §4 below. |
 | P3 | **Unknown provider → online resolution (two-tier)** ✅ | **Implemented.** When answers reference a provider with no installed pack: **(1) registry lookup** — fetch from a community pack registry (`CALLSMITH_REGISTRY` env, default GitHub raw URL; supports `file://`/local paths for testing); **(2) dynamic synthesis fallback** — build a transient pack with sensible defaults + blocker pothole. Registry packs pass validation and are `verified: true`. Synthesized packs are stamped **`UNVERIFIED PROVIDER — validate before shipping`** in the recipe (prominent header) + lock `resolved_providers` array. `CALLSMITH_REGISTRY_SKIP=1` forces synthesis for testing. |
 
@@ -66,9 +66,9 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 
 | ID | Decision | Detail |
 |---|---|---|
-| Q1 | **Pack schema = hard gate** | Every pack validates against `providers/_schema.json`. CI fails on any invalid pack. A missing field is a build error. Critical with ~15 packs drifting. |
+| Q1 | **Pack schema = hard gate** | Every pack validates against `providers/_schema.json`. CI fails on any invalid pack. A missing field is a build error. Critical with 21 packs drifting. |
 | Q2 | **Scaffolded tests run in CI** | The generated repo's pytest passing IS a callsmith guarantee. CI does: scaffold → `pip install -r requirements.txt` → `pytest`, per fixture. |
-| Q3 | **Model staleness = test guard now** | A test pins current model names (`gpt-realtime-2`, `gemini-live-2.5-flash-preview`, `nova-3`). Scheduled CI re-verification against live docs/APIs is a **v1.x** addition. |
+| Q3 | **Model staleness = test guard now** | A test pins current model names (`gpt-5.5`, `claude-sonnet-4-6`, `gemini-3.5-flash`, `gemini-3.1-flash-live-preview`, `gpt-realtime-2`, `nova-3`, `eleven_v3`, `sonic-3.5`). Scheduled CI re-verification against live docs/APIs is a **v1.x** addition. |
 
 ### CLI contract
 
@@ -88,7 +88,7 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 | T3 | **Agent-skill = recipe-structure assertions + manual checklist** | A test asserts every recipe.md contains the sections an agent needs (audio contract, build order, potholes, required env). A human checklist covers the full agent run. |
 | T4 | **Docs-fetch testing** ✅ | **Implemented.** `test/docs.test.mjs` (11 tests) asserts stubs contain frozen audio contracts (format, sample rate, transport), env keys, lifecycle events, potholes, Context7 commands, and official doc URLs — all offline. Live fetch is best-effort and verified manually. |
 | T5 | **Fixture creation = generator + checked-in goldens** | A script generates `answers.json` for each grid combo from the provider list; outputs are checked in, reviewed, and regeneratable when packs change. Not hand-written, not runtime-only. |
-| T6 | **Impossibility detection via extended pack schema** | Each pack declares supported `directions` (inbound/outbound) and `surfaces`; native capabilities carry explicit conflict annotations. Clean, testable rules. Ripples a small metadata addition to all 15 packs. (Backs R2b/R2d.) |
+| T6 | **Impossibility detection via extended pack schema** | Each pack declares supported `directions` (inbound/outbound) and `surfaces`; native capabilities carry explicit conflict annotations. Clean, testable rules. Ripples a small metadata addition to all 21 packs. (Backs R2b/R2d.) |
 
 ### Tier 1 features (voice-agent completeness)
 
@@ -104,14 +104,14 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 
 | ID | Decision | Detail |
 |---|---|---|
-| V1 | **One big push to v1.0** | Build the full matrix + tests first, then cut v1.0. No intermediate npm publish. TDD is still incremental within the push (vertical slice per pack / per behavior). |
-| V2 | **v1.0 = full Python matrix + green CI** | ~15 packs, Python scaffold, all 6 test layers green. |
-| V3 | **TypeScript scaffold deferred to v1.x** | Python is the v1.0 target (AI/voice ecosystem is Python-native). TS scaffold lands later only if demand appears. |
-| V4 | **Hosting: personal account for now** | Repo under personal GitHub + personal npm scope (e.g. `@radhikakulkarni/callsmith`). CI via GitHub Actions. Transferable to a dedicated org later if it grows. |
+| V1 | **v1.0 shipped** | Full matrix + tests + green CI. 117 tests across 10 files. |
+| V2 | **v1.1 = Tier 1 completeness** | LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds. 21 provider packs. |
+| V3 | **TypeScript scaffold deferred** | Python is the v1.x target (AI/voice ecosystem is Python-native). TS scaffold lands if demand appears. |
+| V4 | **Hosting: personal account for now** | Repo under personal GitHub + personal npm scope. CI via GitHub Actions. Transferable to a dedicated org later if it grows. |
 
 ---
 
-## 4. The v1.0 provider matrix (21 packs)
+## 4. Provider matrix (21 packs)
 
 Confirmed list. Each = research + verified pack + schema test + fixtures.
 
@@ -127,21 +127,21 @@ Confirmed list. Each = research + verified pack + schema test + fixtures.
 
 ---
 
-## 5. Code findings — gaps between current state and the guarantees
+## 5. Code findings — gaps (ALL RESOLVED)
 
-These are the concrete places where the code does NOT yet honor a decision above. Each is a real TDD RED candidate (the test fails because the behavior doesn't exist yet).
+All gaps below were identified during the initial audit and have been fixed. Retained for historical context.
 
-| # | Gap | Location | Decision it violates | TDD type |
-|---|---|---|---|---|
-| G1 | **`check` never exits non-zero** | `bin/callsmith.mjs:112-123` (no `process.exit` in `check`) | C1 | **RED → GREEN** (new behavior) |
-| G2 | **`forge` never refuses impossibilities** | `bin/callsmith.mjs:100-111`, `src/lib/resolver.mjs` | R1, R2, C2 | **RED → GREEN** (new behavior) |
-| G3 | **`lock.json` is not deterministic** (`generated_at`) | `src/lib/compile.mjs` | D1, D2 | **RED → GREEN** (change behavior) |
-| G4 | **No bad-input validation** | `bin/callsmith.mjs` (only guards missing `--answers`) | C3 | **RED → GREEN** (new behavior) |
-| G5 | **No pack schema validation gate** | no validator exists | Q1 | **RED → GREEN** (new behavior) |
-| G6 | **Only 8 of 15 packs exist** | `providers/` | P1, P2 | **RED → GREEN** (per pack) |
-| G7 | **Existing tests are implementation-coupled** | `test/resolver.test.mjs:49,57` (`transforms.length === 4`), `:31-34,42` (internal `providers` map), `:14-16` (shape assertions) | T1 (should drive through artifacts) | **Retrofit** (replace, not RED-first) |
-| G8 | **No recipe-structure assertion test** | — | T3 | **RED → GREEN** (new behavior) |
-| G9 | **Packs lack impossibility metadata** (no `directions`/`surfaces`, no conflict annotations) | `providers/_schema.json` + all 8 packs | T6, R2b, R2d | **RED → GREEN** (schema extension, foundational — blocks B4–B7) |
+| # | Gap | Status |
+|---|---|---|
+| G1 | `check` never exits non-zero | ✅ Fixed — exits non-zero on blockers |
+| G2 | `forge` never refuses impossibilities | ✅ Fixed — refuses missing leg + direction mismatch |
+| G3 | `lock.json` not deterministic | ✅ Fixed — no timestamps, byte-identical |
+| G4 | No bad-input validation | ✅ Fixed — malformed JSON, missing answers, unknown command |
+| G5 | No pack schema validation gate | ✅ Fixed — `validate.mjs` + CI gate |
+| G6 | Only 8 of 15 packs | ✅ Fixed — 21 packs (telephony + orchestration + realtime + stt + llm + tts + vad) |
+| G7 | Tests implementation-coupled | ✅ Fixed — tests drive through CLI → artifacts |
+| G8 | No recipe-structure assertion | ✅ Fixed — structural assertions in forge tests |
+| G9 | Packs lack impossibility metadata | ✅ Fixed — directions + native_capabilities on all packs |
 
 ---
 
@@ -157,7 +157,7 @@ This is the bridge to the test plan and TDD execution. Each behavior below is on
 ### Layer 2 — Resolver logic (the impossible vs possible boundary)
 - **B4.** `forge` REFUSES (non-zero exit, no recipe) when no audio path exists.
 - **B5.** `forge` REFUSES on surface/direction mismatch.
-- **B6.** `forge` REFUSES on missing mandatory leg (cascaded w/o STT; realtime w/o realtime model).
+- **B6.** `forge` REFUSES on missing mandatory leg (cascaded w/o STT, LLM, or TTS; realtime w/o realtime model).
 - **B7.** `forge` REFUSES on conflicting native capabilities.
 - **B8.** `forge` SUCCEEDS (with `[BLOCKER]` warnings) on a hard-but-possible stack (4 transforms).
 - **B9.** A realtime stack's recipe names no STT/TTS; a cascaded stack names no realtime model (when-groups).
@@ -194,22 +194,17 @@ This is the bridge to the test plan and TDD execution. Each behavior below is on
 
 ## 7. Open decisions
 
-| ID | Item | Recommendation |
+| ID | Item | Status |
 |---|---|---|
-| T4 | Docs-fetch testing strategy | Assert frozen stubs + Context7 commands offline; live fetch verified manually. Confirm at TDD time. |
-| P3-detail | Registry format & hosting for unknown-provider lookup | GitHub directory of community packs under `callsmith-packs/` org, mirrored to skills.sh. Detail before implementing P3. |
-| — | custom-FastAPI: pack file vs resolver special-case | Audit current handling; formalize as whichever the resolver tests pass with. |
+| T4 | Docs-fetch testing strategy | ✅ Resolved — `test/docs.test.mjs` (11 tests) asserts frozen stubs offline. |
+| P3-detail | Registry format & hosting | ✅ Resolved — `CALLSMITH_REGISTRY` env supports URL/local-path; synthesis fallback implemented. |
+| — | custom-FastAPI formalization | ✅ Resolved — exists as `providers/orchestration/custom-fastapi.json` pack. |
 
 ---
 
 ## 8. How this doc is used
 
-1. **Test plan derives from §6.** Each behavior B1–B32 becomes a test (or a few), built in vertical TDD slices.
-2. **§5 gaps are the RED queue.** G1–G9, ordered by dependency:
-   - **G9** (schema extension: directions + conflict rules) — *foundational; blocks B4–B7 impossibility tests and all new-pack work (G6), since every pack must carry the new metadata.*
-   - **G3** (determinism) + **G7** (retrofit) — unblock snapshot/byte-diff tests for everything downstream.
-   - **G5** (schema gate) — unblocks the pack-adding sprint (G6); pairs with G9 since the validator enforces the new fields.
-   - **G1 / G2 / G4** (exit codes + validation) — the strict-resolver work; depends on G9 for impossibility metadata.
-   - **G6** (7 new packs) — each a vertical slice; depends on G9 + G5.
-   - **G8** (recipe-structure assertion) — independent; can land anytime.
-3. **Decisions are living.** When a decision changes, update this doc AND the test it maps to. A green test that contradicts this doc is a bug.
+1. **Test plan derives from §6.** Each behavior B1–B32+ maps to tests (117 total, all green).
+2. **§5 gaps are all resolved** (G1–G9). Retained for history.
+3. **§Tier 1 features** (L1–L5) track the voice-agent completeness work: LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds.
+4. **Decisions are living.** When a decision changes, update this doc AND the test it maps to. A green test that contradicts this doc is a bug.

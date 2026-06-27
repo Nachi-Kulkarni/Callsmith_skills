@@ -9,6 +9,8 @@ import { resolveUnknowns } from '../src/lib/registry.mjs';
 import { scaffold } from '../src/lib/scaffold.mjs';
 import { hydrate } from '../src/lib/docs.mjs';
 
+const VERSION = '1.1.0';
+
 const [cmd, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);
 
@@ -42,15 +44,16 @@ function whenMatches(when, flags) {
   return true;
 }
 
-const HELP = `callsmith — compile a voice-agent implementation recipe.
+const HELP = `callsmith v${VERSION} — compile a voice-agent implementation recipe.
 
 Usage:
   callsmith spec [--answers <out.json>]     Interactive MCQ intake (writes an answers file)
   callsmith forge --answers <file> [--out dir]   Compile answers into a recipe + lock + context
   callsmith check --answers <file>          Print the compatibility matrix (no files written)
-  callsmith scaffold --answers <file> [--out dir]  Generate the repo skeleton (lego pieces)
+  callsmith scaffold --answers <file> [--out dir]  Generate the framework-native repo skeleton
   callsmith docs --answers <file> [--out dir]  Hydrate provider docs into .callsmith/docs/
   callsmith context                         Preflight: report whether a recipe is loaded here
+  callsmith --version                       Print version
 
 Environment:
   CALLSMITH_REGISTRY=<url|path>   Community pack registry (default: GitHub raw)
@@ -88,6 +91,11 @@ async function interactiveSpec(menu) {
 }
 
 switch (cmd) {
+  case '--version':
+  case '-v': {
+    console.log(`callsmith v${VERSION}`);
+    break;
+  }
   case 'spec': {
     const menu = loadMenu();
     if (process.stdin.isTTY && !args.answers) {
@@ -158,6 +166,14 @@ switch (cmd) {
     for (const b of result.blockers) console.log('    [BLOCKER]', b.note);
     console.log('  notes:', result.notes.length);
     for (const n of result.notes) console.log('    -', n);
+    if (result.interruption.enabled) {
+      console.log('  interruption:', `${result.interruption.steps.length} layers (${result.interruption.steps.map(s => s.layer).join(' -> ')})`);
+    } else {
+      console.log('  interruption: disabled (half-duplex)');
+    }
+    const lat = result.latency;
+    console.log(`  latency: ${lat.total_ms}ms estimated / ${lat.target_ms}ms target — ${lat.verdict}`);
+    for (const leg of lat.legs) console.log(`    ${leg.label}: ${leg.ms}ms`);
     if (resolved.length) {
       console.log('  resolved providers:');
       for (const r of resolved) {

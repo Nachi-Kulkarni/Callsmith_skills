@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadMenu, loadProviders, expandAnswers, resolve } from './resolver.mjs';
 
-const VERSION = '0.2.0';
+const VERSION = '1.1.0';
 
 function write(file, content) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
