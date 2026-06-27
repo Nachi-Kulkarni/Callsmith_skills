@@ -24,6 +24,9 @@ export function compile(rawAnswers, outDir, opts = {}) {
   write(path.join(root, '.callsmith/context/build-order.md'), renderBuildOrder(result, sel, flags));
   write(path.join(root, '.callsmith/context/interruption.md'), renderInterruption(result));
   write(path.join(root, '.callsmith/context/latency-budget.md'), renderLatencyBudget(result));
+  write(path.join(root, '.callsmith/context/cost-estimation.md'), renderCostEstimation(result));
+  write(path.join(root, '.callsmith/context/conversation-state.md'), renderConversationState(result, sel, providers));
+  write(path.join(root, '.callsmith/context/error-handling.md'), renderErrorHandling(result, sel));
 
   write(path.join(root, '.env.example'),
     '# Callsmith-generated environment template.\n' +
@@ -43,23 +46,26 @@ export function compile(rawAnswers, outDir, opts = {}) {
       blockers: result.blockers.length,
     },
     latency: result.latency,
+    cost: result.cost,
     resolved_providers: resolved,
   };
   write(path.join(root, 'callsmith.lock.json'), JSON.stringify(lock, null, 2) + '\n');
 
-  write(path.join(root, 'callsmith.recipe.md'), renderRecipe(result, flags, sel, labels, lock, resolved));
+  write(path.join(root, 'callsmith.recipe.md'), renderRecipe(result, flags, sel, labels, lock, resolved, providers));
 
   return { lock, result, files: [
     'callsmith.recipe.md', 'callsmith.lock.json', '.env.example',
     '.callsmith/context/architecture.md', '.callsmith/context/audio-contract.md',
     '.callsmith/context/potholes.md', '.callsmith/context/build-order.md',
     '.callsmith/context/interruption.md', '.callsmith/context/latency-budget.md',
+    '.callsmith/context/cost-estimation.md', '.callsmith/context/conversation-state.md',
+    '.callsmith/context/error-handling.md',
   ] };
 }
 
 function stackLine(labels, key, fallback) { return labels[key] || fallback || '—'; }
 
-function renderRecipe(result, flags, sel, labels, lock, resolved = []) {
+function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers = {}) {
   const { transforms, blockers, notes, potholes } = result;
   const needsBridge = transforms.length > 0;
   const unverified = (resolved || []).filter(r => !r.verified);
@@ -143,6 +149,43 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = []) {
   lines.push('');
   lines.push('Full breakdown: see [.callsmith/context/latency-budget.md](.callsmith/context/latency-budget.md).');
   lines.push('');
+  lines.push('## Cost estimation');
+  lines.push('');
+  const cost = result.cost;
+  lines.push('| Leg | Provider | Billing | Per minute |');
+  lines.push('|---|---|---|---|');
+  for (const leg of cost.legs) {
+    lines.push(`| ${leg.role} | ${leg.label} | ${leg.billing} | $${leg.per_minute_usd.toFixed(4)} |`);
+  }
+  lines.push(`| **Total** | | | **$${cost.total_per_minute_usd.toFixed(4)}/min** |`);
+  lines.push('');
+  lines.push(`- **Per hour:** ~$${cost.per_hour_usd}`);
+  lines.push(`- **Per 1k calls (5 min avg):** ~$${cost.per_1k_calls_usd}`);
+  lines.push(`- *Assumptions: ${cost.assumptions}. Verify at provider sites before budgeting.*`);
+  lines.push('');
+  lines.push('Full details: see [.callsmith/context/cost-estimation.md](.callsmith/context/cost-estimation.md).');
+  lines.push('');
+  lines.push('## Conversation state');
+  lines.push('');
+  const llmPack = sel.llm ? providers[sel.llm.id] : null;
+  const ctxWindow = llmPack?.context_window || 128000;
+  const overflowMin = Math.floor(ctxWindow / 250);
+  lines.push(`- **Context window:** ${ctxWindow.toLocaleString()} tokens${llmPack ? ` (${llmPack.label})` : ''}. At ~250 tokens/min, overflow at ~${overflowMin.toLocaleString()} min.`);
+  lines.push(`- **Strategy:** Sliding window — when approaching limit, drop oldest non-system messages. System prompt is always retained.`);
+  lines.push(`- **Transcript:** SQLite persistence at \`transcripts.db\`. Every turn logged with timestamp, role, content, token estimate, and metadata.`);
+  lines.push(`- **DTMF:** Collected with configurable inter-digit timeout (default 5s). Injected into conversation as text. See \`state.py\`.`);
+  lines.push('');
+  lines.push('See [.callsmith/context/conversation-state.md](.callsmith/context/conversation-state.md) for implementation details.');
+  lines.push('');
+  lines.push('## Error handling & resilience');
+  lines.push('');
+  lines.push('- **WebSocket recovery:** Exponential backoff (1s, 2s, 4s, 8s, 16s, max 30s) with +/-25% jitter. Max 5 retries before session fails.');
+  lines.push('- **Rate limits:** `Retry-After` header honored. Exponential backoff on 429/5xx responses. Max 3 retries per request.');
+  lines.push('- **Fallback chains:** Configured per pipeline leg. On primary failure after retries, switch to fallback provider automatically.');
+  lines.push('- **Tool call timeouts:** 5s default. On timeout, respond with "let me check that" and retry asynchronously.');
+  lines.push('');
+  lines.push('See [.callsmith/context/error-handling.md](.callsmith/context/error-handling.md) for implementation details.');
+  lines.push('');
   lines.push('## Blockers & potholes');
   lines.push('');
   if (blockers.length === 0 && potholes.filter(p => p.severity === 'blocker').length === 0) {
@@ -170,8 +213,11 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = []) {
   lines.push('2. `.callsmith/context/audio-contract.md`');
   lines.push('3. `.callsmith/context/interruption.md`');
   lines.push('4. `.callsmith/context/latency-budget.md`');
-  lines.push('5. `.callsmith/context/potholes.md`');
-  lines.push('6. `.callsmith/context/build-order.md`');
+  lines.push('5. `.callsmith/context/cost-estimation.md`');
+  lines.push('6. `.callsmith/context/conversation-state.md`');
+  lines.push('7. `.callsmith/context/error-handling.md`');
+  lines.push('8. `.callsmith/context/potholes.md`');
+  lines.push('9. `.callsmith/context/build-order.md`');
   lines.push('');
   lines.push('Do not invent unsupported audio formats. Do not skip transcoding if the audio-contract requires it. Do not assume telephony frame boundaries align with model frames.');
   lines.push('');
@@ -240,9 +286,11 @@ function renderBuildOrder(result, sel, flags) {
   }
   L.push('4. **VAD & interruption wiring** — configure the VAD provider from the recipe; wire interruption events to the turn manager. See `.callsmith/context/interruption.md`.');
   L.push('5. **Model session** — connect realtime/STT+LLM+TTS; wire interruption handling and tool calling.');
-  L.push('6. **Business logic & tools** — implement the job and tool calls.');
-  L.push('7. **Observability** — log inbound, post-transcode, model output, and outbound streams separately.');
-  L.push('8. **E2E test** — fake call simulator covering call lifecycle + barge-in.');
+  L.push('6. **Conversation state** — wire `state.py` (ContextManager, TranscriptStore, DTMFHandler) into the session. See `.callsmith/context/conversation-state.md`.');
+  L.push('7. **Error handling & resilience** — wire `resilience.py` (reconnection, retry, fallback). See `.callsmith/context/error-handling.md`.');
+  L.push('8. **Business logic & tools** — implement the job and tool calls.');
+  L.push('9. **Observability** — log inbound, post-transcode, model output, and outbound streams separately.');
+  L.push('10. **E2E test** — fake call simulator covering call lifecycle + barge-in + DTMF + reconnection.');
   return L.join('\n') + '\n';
 }
 
@@ -293,5 +341,291 @@ function renderLatencyBudget(result) {
   L.push('- **TTS first-audio** varies by provider. Cartesia (~150ms) is fastest; ElevenLabs (~250ms) is average.');
   L.push('- **VAD processing** is small but additive. WebRTC VAD (10ms) is fastest; Silero (20ms) is most accurate.');
   L.push('- **Telephony media RTT** is fixed by the provider. Cannot be optimized in your code.');
+  return L.join('\n') + '\n';
+}
+
+function renderCostEstimation(result) {
+  const L = ['# Cost Estimation', ''];
+  const cost = result.cost;
+  L.push('| Leg | Provider | Billing model | Raw rate | Per minute (USD) |');
+  L.push('|---|---|---|---|---|');
+  for (const leg of cost.legs) {
+    L.push(`| ${leg.role} | ${leg.label} | ${leg.billing} | $${leg.raw_rate} | $${leg.per_minute_usd.toFixed(4)} |`);
+  }
+  L.push(`| **Total** | | | | **$${cost.total_per_minute_usd.toFixed(4)}/min** |`);
+  L.push('');
+  L.push('## Scale projections');
+  L.push('');
+  L.push(`- **Per hour:** ~$${cost.per_hour_usd}`);
+  L.push(`- **Per 1k calls (5 min avg):** ~$${cost.per_1k_calls_usd}`);
+  L.push('');
+  L.push(`**Assumptions:** ${cost.assumptions}.`);
+  L.push('');
+  L.push('## Per-leg detail');
+  L.push('');
+  for (const leg of cost.legs) {
+    L.push(`### ${leg.role} — ${leg.label}`);
+    L.push(`- **Billing:** ${leg.billing}`);
+    if (leg.billing === 'per_1k_chars') {
+      L.push(`- **Rate:** $${leg.raw_rate}/1k chars. At ~800 chars/min = $${leg.per_minute_usd.toFixed(4)}/min.`);
+    } else if (leg.billing === 'per_hour') {
+      L.push(`- **Rate:** $${leg.raw_rate}/hour = $${leg.per_minute_usd.toFixed(4)}/min.`);
+    } else if (leg.billing === 'free') {
+      L.push(`- **Rate:** Free (self-hosted or open source).`);
+    } else {
+      L.push(`- **Rate:** $${leg.raw_rate}/min.`);
+    }
+    if (leg.notes) L.push(`- **Notes:** ${leg.notes}`);
+    L.push('');
+  }
+  L.push('> Cost estimates use public pricing as of Jun 2026. Always verify at provider sites before budgeting.');
+  return L.join('\n') + '\n';
+}
+
+function renderConversationState(result, sel, providers) {
+  const L = ['# Conversation State Management', ''];
+  const llmPack = sel.llm ? providers[sel.llm.id] : null;
+  const ctxWindow = llmPack?.context_window || 128000;
+  const overflowMin = Math.floor(ctxWindow / 250);
+
+  L.push('## Context window management');
+  L.push('');
+  L.push(`The selected LLM (${llmPack?.label || 'default'}) has a **${ctxWindow.toLocaleString()}-token** context window.`);
+  L.push(`At a conversational pace of ~250 tokens/min, the window fills after ~${overflowMin.toLocaleString()} minutes.`);
+  L.push('');
+  L.push('### Strategy: sliding window');
+  L.push('');
+  L.push('1. System prompt is **always retained** (never dropped).');
+  L.push('2. When total tokens approach `max_tokens - reserve_tokens`, the oldest non-system messages are dropped.');
+  L.push('3. `reserve_tokens` (default: 4000) ensures headroom for the model\'s response.');
+  L.push('4. For calls exceeding 50% of the context window, consider adding a summarization step.');
+  L.push('');
+  L.push('```python');
+  L.push('from state import ContextManager');
+  L.push('');
+  L.push(`ctx = ContextManager(max_tokens=${ctxWindow}, reserve_tokens=4000)`);
+  L.push('ctx.add_message("system", SYSTEM_PROMPT)');
+  L.push('ctx.add_message("user", transcript_text)');
+  L.push('messages = ctx.get_messages()  # fits within budget');
+  L.push('```');
+  L.push('');
+
+  L.push('## Transcript persistence');
+  L.push('');
+  L.push('Every turn is logged to SQLite (`transcripts.db`). No external dependencies required.');
+  L.push('');
+  L.push('### Schema');
+  L.push('');
+  L.push('| Column | Type | Description |');
+  L.push('|---|---|---|');
+  L.push('| id | INTEGER | Auto-increment primary key |');
+  L.push('| call_id | TEXT | Unique call identifier (e.g. Twilio CallSid) |');
+  L.push('| timestamp | REAL | Unix timestamp |');
+  L.push('| role | TEXT | system / user / assistant |');
+  L.push('| content | TEXT | Message content |');
+  L.push('| tokens | INTEGER | Estimated token count |');
+  L.push('| metadata | TEXT | JSON blob (tool calls, DTMF, etc.) |');
+  L.push('');
+  L.push('```python');
+  L.push('from state import TranscriptStore');
+  L.push('');
+  L.push('store = TranscriptStore("transcripts.db")');
+  L.push('store.log_turn(call_sid, "user", "I need help with my order")');
+  L.push('store.log_turn(call_sid, "assistant", "Sure, what is your order number?")');
+  L.push('transcript = store.get_transcript(call_sid)  # list of all turns');
+  L.push('```');
+  L.push('');
+
+  L.push('## DTMF handling');
+  L.push('');
+  L.push('Telephony providers send DTMF (keypad) events. The `DTMFHandler` collects digits with a configurable inter-digit timeout.');
+  L.push('');
+  L.push('### Configuration');
+  L.push('');
+  L.push('| Parameter | Default | Description |');
+  L.push('|---|---|---|');
+  L.push('| max_digits | 0 (unlimited) | Flush after N digits collected |');
+  L.push('| inter_digit_timeout_ms | 5000 | Timeout between digits before flushing |');
+  L.push('');
+  L.push('### Framework wiring');
+  L.push('');
+  const orchId = sel.orchestration?.id;
+  if (orchId === 'pipecat') {
+    L.push('**Pipecat:** Use `DTMFAggregator` in the pipeline between `transport.input()` and `stt`:');
+    L.push('```python');
+    L.push('from pipecat.processors.aggregators.dtmf_aggregator import DTMFAggregator');
+    L.push('');
+    L.push('dtmf = DTMFAggregator(timeout=5.0, prefix="Keypad input: ")');
+    L.push('pipeline = Pipeline([');
+    L.push('    transport.input(),');
+    L.push('    dtmf,  # collects DTMF before STT');
+    L.push('    stt,');
+    L.push('    ...');
+    L.push('])');
+    L.push('```');
+  } else if (orchId === 'livekit') {
+    L.push('**LiveKit:** Use `GetDtmfTask` for IVR-style digit collection:');
+    L.push('```python');
+    L.push('from livekit.agents.tasks import GetDtmfTask');
+    L.push('');
+    L.push('# Collect 4-digit PIN with 10s timeout');
+    L.push('result = await GetDtmfTask(max_digits=4, timeout=10.0).run(session)');
+    L.push('pin = result.user_input');
+    L.push('```');
+  } else {
+    L.push('**Custom:** Parse DTMF from WebSocket messages:');
+    L.push('```python');
+    L.push('from state import DTMFHandler');
+    L.push('');
+    L.push('dtmf = DTMFHandler(max_digits=4, inter_digit_timeout_ms=5000)');
+    L.push('dtmf.on_complete(lambda digits: handle_input(digits))');
+    L.push('');
+    L.push('# In your WebSocket handler:');
+    L.push('if message.get("event") == "dtmf":');
+    L.push('    digit = message["dtmf"]["digit"]');
+    L.push('    dtmf.add_digit(digit)');
+    L.push('```');
+  }
+  L.push('');
+  L.push('### System prompt for DTMF');
+  L.push('');
+  L.push('Update the system prompt to handle keypad input alongside speech:');
+  L.push('```');
+  L.push('When you receive input starting with "Keypad input:", this represents');
+  L.push('button presses on the phone keypad. Respond to both voice and keypad input.');
+  L.push('```');
+  return L.join('\n') + '\n';
+}
+
+function renderErrorHandling(result, sel) {
+  const L = ['# Error Handling & Resilience', ''];
+
+  L.push('## WebSocket drop recovery');
+  L.push('');
+  L.push('The media WebSocket between telephony and agent can drop due to network blips, provider restarts, or load balancer timeouts.');
+  L.push('');
+  L.push('### Connection state machine');
+  L.push('');
+  L.push('| State | Meaning |');
+  L.push('|---|---|');
+  L.push('| CONNECTED | Media flowing normally |');
+  L.push('| DISCONNECTED | Connection lost, about to reconnect |');
+  L.push('| RECONNECTING | Backoff in progress |');
+  L.push('| FAILED | Max retries exhausted, session ends |');
+  L.push('');
+  L.push('### Backoff schedule');
+  L.push('');
+  L.push('| Retry | Base delay | With jitter (±25%) |');
+  L.push('|---|---|---|');
+  L.push('| 1 | 1s | 0.75s - 1.25s |');
+  L.push('| 2 | 2s | 1.50s - 2.50s |');
+  L.push('| 3 | 4s | 3.00s - 5.00s |');
+  L.push('| 4 | 8s | 6.00s - 10.00s |');
+  L.push('| 5 | 16s | 12.00s - 20.00s |');
+  L.push('');
+  L.push('Max 5 retries. After that, the session is marked FAILED and the call ends gracefully.');
+  L.push('');
+
+  L.push('## Rate-limit backoff');
+  L.push('');
+  L.push('LLM/STT/TTS APIs may return HTTP 429 (Too Many Requests) or 5xx errors.');
+  L.push('');
+  L.push('### Strategy');
+  L.push('');
+  L.push('1. If `Retry-After` header is present, use that value as the delay.');
+  L.push('2. Otherwise, exponential backoff: 1s, 2s, 4s (max 8s) with ±25% jitter.');
+  L.push('3. Max 3 retries per request.');
+  L.push('4. On final failure, log the error and fall back (if fallback configured).');
+  L.push('');
+  L.push('```python');
+  L.push('from resilience import retry_with_backoff');
+  L.push('');
+  L.push('@retry_with_backoff(max_retries=3, base_delay=1.0)');
+  L.push('async def call_llm(messages):');
+  L.push('    return await client.chat.completions.create(...)');
+  L.push('```');
+  L.push('');
+
+  L.push('## Fallback chains');
+  L.push('');
+  L.push('Configure fallback providers for each pipeline leg. On primary failure (after retries), switch to the next in the chain.');
+  L.push('');
+  const orchId = sel.orchestration?.id;
+  if (orchId === 'livekit') {
+    L.push('### LiveKit: FallbackAdapter');
+    L.push('');
+    L.push('LiveKit provides built-in `FallbackAdapter` for STT, LLM, and TTS:');
+    L.push('```python');
+    L.push('from livekit.agents import stt, llm, tts');
+    L.push('from livekit.plugins import deepgram, assemblyai, openai, cartesia');
+    L.push('');
+    L.push('session = AgentSession(');
+    L.push('    stt=stt.FallbackAdapter([deepgram.STT(), assemblyai.STT()]),');
+    L.push('    llm=llm.FallbackAdapter([openai.LLM(model="gpt-5.5")]),');
+    L.push('    tts=tts.FallbackAdapter([cartesia.TTS(...)]),');
+    L.push(')');
+    L.push('```');
+    L.push('');
+    L.push('The first provider is primary. If it fails on any error, the next is tried automatically.');
+  } else if (orchId === 'pipecat') {
+    L.push('### Pipecat: connection error handlers');
+    L.push('');
+    L.push('Pipecat services auto-reconnect with exponential backoff. Add event handlers for logging:');
+    L.push('```python');
+    L.push('@tts.event_handler("on_connection_error")');
+    L.push('async def on_tts_error(service, error):');
+    L.push('    logger.error(f"TTS connection error: {error}")');
+    L.push('    # ErrorFrame is pushed through pipeline automatically');
+    L.push('```');
+    L.push('');
+    L.push('For fallback, wrap service calls in `retry_with_backoff` and catch failures to switch providers.');
+  } else {
+    L.push('### Custom: manual fallback');
+    L.push('');
+    L.push('Use `FallbackConfig` to define chains and `retry_with_backoff` for each call:');
+    L.push('```python');
+    L.push('from resilience import FallbackConfig, retry_with_backoff');
+    L.push('');
+    L.push('fb = FallbackConfig()');
+    L.push('fb.register("stt", "deepgram", "assemblyai")');
+    L.push('fb.register("llm", "openai", "anthropic")');
+    L.push('fb.register("tts", "elevenlabs", "cartesia")');
+    L.push('');
+    L.push('# On primary failure, get fallback:');
+    L.push('fallback = fb.get_fallback("stt", "deepgram")  # -> "assemblyai"');
+    L.push('```');
+  }
+  L.push('');
+
+  L.push('## Tool call timeouts');
+  L.push('');
+  L.push('Tool calls pause audio output until the tool returns. Set a timeout and respond gracefully:');
+  L.push('');
+  L.push('```python');
+  L.push('import asyncio');
+  L.push('');
+  L.push('try:');
+  L.push('    result = await asyncio.wait_for(call_tool(args), timeout=5.0)');
+  L.push('except asyncio.TimeoutError:');
+  L.push('    # Respond with a holding message and retry asynchronously');
+  L.push('    await speak("Let me check that for you.")');
+  L.push('    result = await call_tool(args)  # retry without blocking audio');
+  L.push('```');
+  L.push('');
+
+  L.push('## Session crash recovery');
+  L.push('');
+  L.push('On session restart (crash, redeploy), restore conversation state from `TranscriptStore`:');
+  L.push('');
+  L.push('```python');
+  L.push('from state import TranscriptStore, ContextManager');
+  L.push('');
+  L.push('store = TranscriptStore("transcripts.db")');
+  L.push('transcript = store.get_transcript(call_id)');
+  L.push('');
+  L.push('ctx = ContextManager(max_tokens=128000)');
+  L.push('for turn in transcript:');
+  L.push('    ctx.add_message(turn["role"], turn["content"])');
+  L.push('```');
   return L.join('\n') + '\n';
 }

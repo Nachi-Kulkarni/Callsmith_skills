@@ -3,6 +3,12 @@
   "kind": "orchestration",
   "label": "Custom FastAPI bridge",
   "transport": "websocket",
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Self-hosted infrastructure only"
+  },
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
   "ingest": {

@@ -57,6 +57,12 @@
     "https://developer.exotel.com/api/",
     "https://support.exotel.com/support/solutions/folders/82318"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.010,
+    "per_minute_usd": 0.010,
+    "notes": "India domestic (~₹0.80/min)"
+  },
   "context7": {
     "library_id": null,
     "topics": [

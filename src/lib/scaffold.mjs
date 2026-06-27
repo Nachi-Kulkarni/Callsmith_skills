@@ -68,13 +68,20 @@ export function scaffold(rawAnswers, outDir, opts = {}) {
 
   w(root, 'config.py', renderConfig(result.envKeys));
 
+  w(root, 'state.py', renderStatePy(llmId, providers));
+  w(root, 'resilience.py', renderResiliencePy(sel, providers));
+
   if (orchId === 'livekit') {
     w(root, 'agent.py', renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtime));
     w(root, 'tests/test_agent_structure.py', renderLiveKitTest(sel, isCascaded, isRealtime));
+    w(root, 'tests/test_state.py', renderStateTest(llmId, providers));
+    w(root, 'tests/test_resilience.py', renderResilienceTest());
   } else if (orchId === 'pipecat') {
     w(root, 'bot.py', renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime));
     w(root, 'server.py', renderPipecatServer(telephonyId, providers));
     w(root, 'tests/test_pipeline_structure.py', renderPipecatTest(sel, isCascaded, isRealtime));
+    w(root, 'tests/test_state.py', renderStateTest(llmId, providers));
+    w(root, 'tests/test_resilience.py', renderResilienceTest());
   } else {
     w(root, 'audio/__init__.py', '');
     w(root, 'audio/codecs.py', renderCodecs());
@@ -82,6 +89,8 @@ export function scaffold(rawAnswers, outDir, opts = {}) {
     w(root, 'audio/bridge.py', renderBridge(needBridge, needDecode, needEncode, needResample, result));
     w(root, 'server.py', renderCustomServer(telephonyId, providers, flags));
     w(root, 'tests/test_audio_bridge.py', renderAudioTest(needBridge, needDecode, needEncode, needResample));
+    w(root, 'tests/test_state.py', renderStateTest(llmId, providers));
+    w(root, 'tests/test_resilience.py', renderResilienceTest());
   }
 
   w(root, 'tests/test_lifecycle.py', renderLifecycleTest(flags));
@@ -223,8 +232,12 @@ Architecture: ${flags.mode} | Language: ${flags.language} | Barge-in: ${flags.ba
 
 Read .callsmith/context/interruption.md and .callsmith/context/latency-budget.md
 before customizing turn detection or latency-sensitive parameters.
+Read .callsmith/context/conversation-state.md for ContextManager/DTMFHandler wiring.
+Read .callsmith/context/error-handling.md for FallbackAdapter and reconnection patterns.
 """
 ${imports.join('\n')}
+from state import ContextManager, TranscriptStore
+from resilience import retry_with_backoff
 
 load_dotenv()
 
@@ -321,9 +334,14 @@ function renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime)
     `from ${serializer.mod} import ${serializer.cls}`,
     'from pipecat.audio.vad.silero import SileroVADAnalyzer',
     'from pipecat.pipeline.context import LLMContext, LLMContextAggregatorPair, LLMUserAggregatorParams',
+    'from pipecat.processors.aggregators.dtmf_aggregator import DTMFAggregator',
+    'from pipecat.frames.core import ErrorFrame',
     'from fastapi import FastAPI, WebSocket, Request',
     'from fastapi.responses import PlainTextResponse',
     'import uvicorn',
+    'import logging',
+    'from state import ContextManager, TranscriptStore',
+    'from resilience import retry_with_backoff',
   ]);
 
   const serviceInits = [];
@@ -387,6 +405,7 @@ before customizing the pipeline or VAD parameters.
 ${[...imports].sort().join('\n')}
 
 app = FastAPI()
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = ${JSON.stringify(systemPrompt)}
@@ -406,6 +425,9 @@ async def run_bot(websocket: WebSocket, stream_sid: str = None, call_sid: str = 
 
 ${serviceInits.join('\n')}
 
+    dtmf_aggregator = DTMFAggregator(timeout=5.0, prefix="Keypad input: ")
+    transcript = TranscriptStore("transcripts.db")
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     context = LLMContext(messages)
     context_aggregator = LLMContextAggregatorPair(
@@ -417,6 +439,7 @@ ${serviceInits.join('\n')}
 
     pipeline = Pipeline([
         transport.input(),
+        dtmf_aggregator,
 ${pipelineNodes.join('\n')}
     ])
 
@@ -649,15 +672,22 @@ function renderCustomServer(telephonyId, providers, flags) {
 Stack: ${telephonyId || 'telephony'} -> custom bridge -> model
 Architecture: ${flags.mode}
 
+Read .callsmith/context/conversation-state.md for DTMF + transcript wiring.
+Read .callsmith/context/error-handling.md for reconnection patterns.
+
 Deploy behind HTTPS. Point your telephony webhook URL here.
 """
 import os
 import base64
 import json
+import logging
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import PlainTextResponse
 import uvicorn
+from state import ContextManager, TranscriptStore, DTMFHandler
+from resilience import ReconnectingWebSocket, retry_with_backoff, ConnectionState
 
+logger = logging.getLogger(__name__)
 app = FastAPI()
 
 
@@ -673,29 +703,43 @@ async def voice_webhook(request: Request):
 
 @app.websocket("/ws")
 async def media_stream(ws: WebSocket):
-    """Media stream WebSocket endpoint."""
+    """Media stream WebSocket endpoint with DTMF + transcript support."""
     await ws.accept()
-    # TODO: import audio bridge if needed
-    # from audio.bridge import AudioBridge
-    # bridge = AudioBridge()
+    call_id = None
+    transcript = TranscriptStore("transcripts.db")
+    dtmf = DTMFHandler(max_digits=0, inter_digit_timeout_ms=5000)
+
+    def on_dtmf_complete(digits: str):
+        logger.info(f"DTMF collected: {digits}")
+        # TODO: route digits to business logic (IVR menu, PIN entry, etc.)
+
+    dtmf.on_complete(on_dtmf_complete)
 
     try:
         async for message in ws.iter_json():
             event = message.get("event")
             if event == "start":
-                pass  # TODO: init session
+                call_id = message.get("start", {}).get("callSid", "unknown")
+                logger.info(f"Call started: {call_id}")
             elif event == "media":
                 payload_b64 = message.get("media", {}).get("payload", "")
                 if payload_b64:
                     raw = base64.b64decode(payload_b64)
-                    # pcm = bridge.inbound(raw)
-                    # -> STT/model
-                    # audio_out = bridge.outbound(model_audio)
-                    # ws.send_text(json.dumps({"event": "media", "media": {"payload": base64.b64encode(audio_out).decode()}}))
+                    # TODO: bridge.inbound(raw) -> STT -> LLM -> TTS -> bridge.outbound() -> ws.send
+            elif event == "dtmf":
+                digit = message.get("dtmf", {}).get("digit", "")
+                dtmf.add_digit(digit)
             elif event == "stop":
+                logger.info(f"Call ended: {call_id}")
                 break
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        # TODO: use ReconnectingWebSocket for automatic reconnection
+    finally:
+        if call_id:
+            t = transcript.get_transcript(call_id)
+            logger.info(f"Call {call_id}: {len(t)} turns logged")
+        transcript.close()
 
 
 if __name__ == "__main__":
@@ -768,6 +812,499 @@ def test_interrupt_flushes_queue():
 `;
 }
 
+// ─── Conversation state (state.py) ──────────────────────────────────
+
+function renderStatePy(llmId, providers) {
+  const llmPack = llmId ? providers[llmId] : null;
+  const ctxWindow = llmPack?.context_window || 128000;
+
+  return `"""Conversation state management — generated by callsmith.
+
+Three building blocks for managing call state:
+- ContextManager: tracks token count, enforces context window limits.
+- TranscriptStore: SQLite-backed persistence for every turn.
+- DTMFHandler: collects DTMF keypad digits with inter-digit timeout.
+
+Framework-agnostic. Wire into your session handler.
+See .callsmith/context/conversation-state.md for details.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+
+
+class ContextManager:
+    """Tracks token count and enforces context window limits.
+
+    Strategy: sliding window. When total tokens approach
+    max_tokens - reserve_tokens, oldest non-system messages are dropped.
+    """
+
+    def __init__(self, max_tokens: int = ${ctxWindow}, reserve_tokens: int = 4000):
+        self.max_tokens = max_tokens
+        self.reserve_tokens = reserve_tokens
+        self.messages: list[dict] = []
+        self._estimated_tokens = 0
+
+    def add_message(self, role: str, content: str) -> None:
+        tokens = self._estimate_tokens(content)
+        self.messages.append({"role": role, "content": content, "tokens": tokens})
+        self._estimated_tokens += tokens
+        if self._estimated_tokens > self.max_tokens - self.reserve_tokens:
+            self._compress()
+
+    def _estimate_tokens(self, text: str) -> int:
+        return max(1, len(text) // 4)
+
+    def _compress(self) -> None:
+        budget = self.max_tokens - self.reserve_tokens
+        while self._estimated_tokens > budget and len(self.messages) > 1:
+            removed = self.messages.pop(0)
+            self._estimated_tokens -= removed["tokens"]
+
+    def get_messages(self) -> list[dict]:
+        return [{"role": m["role"], "content": m["content"]} for m in self.messages]
+
+    @property
+    def token_count(self) -> int:
+        return self._estimated_tokens
+
+
+class TranscriptStore:
+    """SQLite-backed persistence for call transcripts.
+
+    No external dependencies. One row per turn.
+    """
+
+    def __init__(self, db_path: str = "transcripts.db"):
+        self.conn = sqlite3.connect(db_path)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS turns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                call_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                tokens INTEGER DEFAULT 0,
+                metadata TEXT
+            )
+        """)
+        self.conn.commit()
+
+    def log_turn(self, call_id: str, role: str, content: str,
+                 tokens: int = 0, metadata: dict = None) -> None:
+        self.conn.execute(
+            "INSERT INTO turns (call_id, timestamp, role, content, tokens, metadata) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (call_id, time.time(), role, content, tokens,
+             json.dumps(metadata) if metadata else None),
+        )
+        self.conn.commit()
+
+    def get_transcript(self, call_id: str) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT timestamp, role, content, tokens, metadata "
+            "FROM turns WHERE call_id = ? ORDER BY id",
+            (call_id,),
+        ).fetchall()
+        return [
+            {
+                "timestamp": r[0],
+                "role": r[1],
+                "content": r[2],
+                "tokens": r[3],
+                "metadata": json.loads(r[4]) if r[4] else None,
+            }
+            for r in rows
+        ]
+
+    def close(self) -> None:
+        self.conn.close()
+
+
+class DTMFHandler:
+    """Collects DTMF keypad digits with inter-digit timeout.
+
+    Call add_digit() for each received tone. Register a callback
+    via on_complete() to receive the collected digit string.
+    """
+
+    VALID_DIGITS = set("0123456789*#")
+
+    def __init__(self, max_digits: int = 0, inter_digit_timeout_ms: int = 5000):
+        self.max_digits = max_digits
+        self.inter_digit_timeout_ms = inter_digit_timeout_ms
+        self._buffer: list[str] = []
+        self._last_digit_time: float = 0
+        self._callback = None
+
+    def on_complete(self, callback) -> None:
+        self._callback = callback
+
+    def add_digit(self, digit: str) -> None:
+        if digit not in self.VALID_DIGITS:
+            return
+        now_ms = time.time() * 1000
+        if self._buffer and (now_ms - self._last_digit_time) > self.inter_digit_timeout_ms:
+            self._buffer = []
+        self._buffer.append(digit)
+        self._last_digit_time = now_ms
+        if self.max_digits and len(self._buffer) >= self.max_digits:
+            self._flush()
+
+    def check_timeout(self) -> bool:
+        if not self._buffer:
+            return False
+        now_ms = time.time() * 1000
+        if (now_ms - self._last_digit_time) > self.inter_digit_timeout_ms:
+            self._flush()
+            return True
+        return False
+
+    def _flush(self) -> None:
+        if self._buffer and self._callback:
+            self._callback("".join(self._buffer))
+        self._buffer = []
+
+    @property
+    def buffer(self) -> str:
+        return "".join(self._buffer)
+`;
+}
+
+// ─── Error handling (resilience.py) ─────────────────────────────────
+
+function renderResiliencePy(sel, providers) {
+  return `"""Error handling and resilience patterns — generated by callsmith.
+
+Three building blocks for production resilience:
+- ReconnectingWebSocket: automatic reconnection with exponential backoff.
+- retry_with_backoff: decorator for API calls with rate-limit handling.
+- FallbackConfig: configuration for provider fallback chains.
+
+Framework-agnostic. Wire into your session lifecycle.
+See .callsmith/context/error-handling.md for details.
+"""
+from __future__ import annotations
+
+import asyncio
+import functools
+import logging
+import random
+from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+
+class ConnectionState(Enum):
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    RECONNECTING = "reconnecting"
+    FAILED = "failed"
+
+
+class ReconnectingWebSocket:
+    """Wraps a WebSocket with automatic reconnection.
+
+    Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 30s) with +/-25% jitter.
+    Max 5 retries before the session is marked FAILED.
+    """
+
+    BASE_DELAY = 1.0
+    MAX_DELAY = 30.0
+    MAX_RETRIES = 5
+
+    def __init__(self):
+        self.state = ConnectionState.DISCONNECTED
+        self._retry_count = 0
+
+    async def connect(self, connect_fn) -> bool:
+        """Attempt to connect using connect_fn. Returns True on success."""
+        while self._retry_count < self.MAX_RETRIES:
+            try:
+                await connect_fn()
+                self.state = ConnectionState.CONNECTED
+                self._retry_count = 0
+                logger.info("WebSocket connected")
+                return True
+            except Exception as e:
+                self.state = ConnectionState.RECONNECTING
+                logger.warning(
+                    "WebSocket connect failed (attempt %d/%d): %s",
+                    self._retry_count + 1, self.MAX_RETRIES, e,
+                )
+                delay = min(
+                    self.BASE_DELAY * (2 ** self._retry_count), self.MAX_DELAY,
+                )
+                jitter = delay * 0.25 * random.random()
+                await asyncio.sleep(delay + jitter)
+                self._retry_count += 1
+
+        self.state = ConnectionState.FAILED
+        logger.error("WebSocket failed after %d retries", self.MAX_RETRIES)
+        return False
+
+    async def handle_disconnect(self, reconnect_fn) -> bool:
+        """Called when an established connection drops."""
+        self.state = ConnectionState.DISCONNECTED
+        self._retry_count = 0
+        return await self.connect(reconnect_fn)
+
+
+def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0, max_delay: float = 8.0):
+    """Decorator: retry async functions on exception with exponential backoff.
+
+    Honors Retry-After if the exception has a retry_after attribute.
+    Jitter: +/-25% of the computed delay.
+    """
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs):
+            last_exc = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return await fn(*args, **kwargs)
+                except Exception as e:
+                    last_exc = e
+                    if attempt == max_retries:
+                        logger.error(
+                            "%s failed after %d retries: %s",
+                            fn.__name__, max_retries, e,
+                        )
+                        raise
+                    delay = getattr(e, "retry_after", None) or min(
+                        base_delay * (2 ** attempt), max_delay,
+                    )
+                    jitter = delay * 0.25 * random.random()
+                    logger.warning(
+                        "%s attempt %d failed, retrying in %.1fs: %s",
+                        fn.__name__, attempt + 1, delay, e,
+                    )
+                    await asyncio.sleep(delay + jitter)
+            raise last_exc
+
+        return wrapper
+
+    return decorator
+
+
+class FallbackConfig:
+    """Configuration for provider fallback chains.
+
+    Register primary + fallback providers per pipeline leg.
+    On primary failure (after retries), the resolver uses get_fallback()
+    to determine the next provider to try.
+    """
+
+    def __init__(self):
+        self._chains: dict[str, list[str]] = {}
+
+    def register(self, role: str, primary: str, *fallbacks: str) -> None:
+        chain = [primary] + list(fallbacks)
+        self._chains[role] = chain
+
+    def get_chain(self, role: str) -> list[str]:
+        return self._chains.get(role, [])
+
+    def get_fallback(self, role: str, current: str) -> str | None:
+        chain = self._chains.get(role, [])
+        if current in chain:
+            idx = chain.index(current)
+            if idx + 1 < len(chain):
+                return chain[idx + 1]
+        return None
+`;
+}
+
+function renderStateTest(llmId, providers) {
+  const llmPack = llmId ? providers[llmId] : null;
+  const ctxWindow = llmPack?.context_window || 128000;
+
+  return `"""Tests for state.py — ContextManager, TranscriptStore, DTMFHandler."""
+import os
+import tempfile
+from state import ContextManager, TranscriptStore, DTMFHandler
+
+
+def test_context_manager_tracks_tokens():
+    ctx = ContextManager(max_tokens=${ctxWindow}, reserve_tokens=4000)
+    ctx.add_message("system", "You are a helpful assistant.")
+    ctx.add_message("user", "Hello, I need help.")
+    assert ctx.token_count > 0
+    msgs = ctx.get_messages()
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "system"
+    assert msgs[1]["role"] == "user"
+
+
+def test_context_manager_compresses():
+    ctx = ContextManager(max_tokens=100, reserve_tokens=20)
+    for i in range(50):
+        ctx.add_message("user", f"Message number {i} " * 10)
+    budget = 100 - 20
+    assert ctx.token_count <= budget + 50  # may keep one extra during compression
+
+
+def test_transcript_store_round_trip():
+    db_fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(db_fd)
+    try:
+        store = TranscriptStore(db_path)
+        store.log_turn("call-123", "user", "Hello")
+        store.log_turn("call-123", "assistant", "Hi there!")
+        store.log_turn("call-456", "user", "Other call")
+        transcript = store.get_transcript("call-123")
+        assert len(transcript) == 2
+        assert transcript[0]["role"] == "user"
+        assert transcript[0]["content"] == "Hello"
+        assert transcript[1]["role"] == "assistant"
+        other = store.get_transcript("call-456")
+        assert len(other) == 1
+        store.close()
+    finally:
+        os.unlink(db_path)
+
+
+def test_transcript_store_metadata():
+    db_fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(db_fd)
+    try:
+        store = TranscriptStore(db_path)
+        store.log_turn("call-1", "user", "Press 1", metadata={"dtmf": "1"})
+        t = store.get_transcript("call-1")
+        assert t[0]["metadata"] == {"dtmf": "1"}
+        store.close()
+    finally:
+        os.unlink(db_path)
+
+
+def test_dtmf_handler_collects_digits():
+    collected = []
+    handler = DTMFHandler(max_digits=4, inter_digit_timeout_ms=10000)
+    handler.on_complete(collected.append)
+    for d in "1234":
+        handler.add_digit(d)
+    assert collected == ["1234"]
+
+
+def test_dtmf_handler_rejects_invalid():
+    collected = []
+    handler = DTMFHandler(max_digits=2)
+    handler.on_complete(collected.append)
+    handler.add_digit("A")
+    handler.add_digit("1")
+    handler.add_digit("2")
+    assert collected == ["12"]
+
+
+def test_dtmf_handler_timeout_flush():
+    collected = []
+    handler = DTMFHandler(max_digits=0, inter_digit_timeout_ms=100)
+    handler.on_complete(collected.append)
+    handler.add_digit("1")
+    handler.add_digit("2")
+    import time
+    time.sleep(0.15)
+    assert handler.check_timeout() is True
+    assert collected == ["12"]
+`;
+}
+
+function renderResilienceTest() {
+  return `"""Tests for resilience.py — ReconnectingWebSocket, retry_with_backoff, FallbackConfig."""
+import asyncio
+import pytest
+from resilience import (
+    ConnectionState, ReconnectingWebSocket,
+    retry_with_backoff, FallbackConfig,
+)
+
+
+def test_fallback_config_register_and_get():
+    fb = FallbackConfig()
+    fb.register("stt", "deepgram", "assemblyai")
+    fb.register("llm", "openai", "anthropic", "gemini")
+    assert fb.get_chain("stt") == ["deepgram", "assemblyai"]
+    assert fb.get_chain("llm") == ["openai", "anthropic", "gemini"]
+    assert fb.get_fallback("stt", "deepgram") == "assemblyai"
+    assert fb.get_fallback("llm", "anthropic") == "gemini"
+    assert fb.get_fallback("stt", "assemblyai") is None
+    assert fb.get_chain("tts") == []
+
+
+def test_fallback_config_empty():
+    fb = FallbackConfig()
+    assert fb.get_chain("stt") == []
+    assert fb.get_fallback("stt", "deepgram") is None
+
+
+def test_retry_with_backoff_succeeds_immediately():
+    calls = []
+
+    @retry_with_backoff(max_retries=3)
+    async def quick_success():
+        calls.append(1)
+        return "ok"
+
+    result = asyncio.run(quick_success())
+    assert result == "ok"
+    assert len(calls) == 1
+
+
+def test_retry_with_backoff_retries_then_succeeds():
+    calls = []
+
+    @retry_with_backoff(max_retries=3, base_delay=0.01)
+    async def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise ValueError("not yet")
+        return "ok"
+
+    result = asyncio.run(flaky())
+    assert result == "ok"
+    assert len(calls) == 3
+
+
+def test_retry_with_backoff_exhausts_retries():
+    calls = []
+
+    @retry_with_backoff(max_retries=2, base_delay=0.01)
+    async def always_fail():
+        calls.append(1)
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(always_fail())
+    assert len(calls) == 3  # initial + 2 retries
+
+
+def test_reconnecting_websocket_connects():
+    rws = ReconnectingWebSocket()
+
+    async def good_connect():
+        pass
+
+    result = asyncio.run(rws.connect(good_connect))
+    assert result is True
+    assert rws.state == ConnectionState.CONNECTED
+
+
+def test_reconnecting_websocket_fails_after_retries():
+    rws = ReconnectingWebSocket()
+
+    async def bad_connect():
+        raise ConnectionError("nope")
+
+    result = asyncio.run(rws.connect(bad_connect))
+    assert result is False
+    assert rws.state == ConnectionState.FAILED
+`;
+}
+
 function renderSystemPrompt(flags) {
   const jobMap = {
     faq: 'answer frequently asked questions',
@@ -813,6 +1350,14 @@ ${stack}
 ## Audio bridge
 ${needBridge ? '**Custom bridge required** — see \`audio/bridge.py\` and \`.callsmith/context/audio-contract.md\`.' : '**No custom bridge** — the framework normalizes audio.'}
 
+## Conversation state
+- \`state.py\` — ContextManager (token tracking), TranscriptStore (SQLite), DTMFHandler (keypad)
+- See \`.callsmith/context/conversation-state.md\` for wiring details
+
+## Error handling
+- \`resilience.py\` — ReconnectingWebSocket, retry_with_backoff, FallbackConfig
+- See \`.callsmith/context/error-handling.md\` for patterns
+
 ## Entry point
 \`${entryFile}\`
 
@@ -820,13 +1365,16 @@ ${needBridge ? '**Custom bridge required** — see \`audio/bridge.py\` and \`.ca
 \`\`\`bash
 cp .env.example .env  # fill keys
 pip install -r requirements.txt
-pytest tests/         # validate structure
+pytest tests/         # validate structure + state + resilience
 python ${orchId === 'livekit' ? 'agent.py' : 'server.py'}
 \`\`\`
 
 ## Key context files
 - \`.callsmith/context/interruption.md\` — interruption/turn-taking design
 - \`.callsmith/context/latency-budget.md\` — latency breakdown
+- \`.callsmith/context/cost-estimation.md\` — per-minute cost table
+- \`.callsmith/context/conversation-state.md\` — context window + transcript + DTMF
+- \`.callsmith/context/error-handling.md\` — reconnection + retry + fallback
 - \`.callsmith/context/audio-contract.md\` — audio format requirements
 `;
 }

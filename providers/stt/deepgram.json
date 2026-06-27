@@ -49,6 +49,12 @@
     "https://developers.deepgram.com/docs/streaming",
     "https://developers.deepgram.com/docs/models-languages-overview"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.0043,
+    "per_minute_usd": 0.0043,
+    "notes": "Nova-3 streaming pay-as-you-go"
+  },
   "context7": {
     "library_id": "/websites/developers_deepgram",
     "topics": [

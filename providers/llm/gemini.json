@@ -54,6 +54,12 @@
     "https://ai.google.dev/gemini-api/docs/text-generation#generate-a-text-stream",
     "https://ai.google.dev/gemini-api/docs/function-calling"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.0001,
+    "per_minute_usd": 0.0001,
+    "notes": "Est. ~250 tokens/min at 3.5 Flash pricing (~$0.10/1M in)"
+  },
   "context7": {
     "library_id": "/google-gemini/generative-ai-python",
     "topics": ["streaming", "function-calling"]

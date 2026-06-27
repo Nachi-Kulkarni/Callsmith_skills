@@ -45,6 +45,12 @@
     }
   ],
   "env_keys": [],
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Open source, runs in-process"
+  },
   "doc_urls": [
     "https://github.com/wiseman/py-webrtcvad"
   ],

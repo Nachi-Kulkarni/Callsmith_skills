@@ -174,6 +174,9 @@ switch (cmd) {
     const lat = result.latency;
     console.log(`  latency: ${lat.total_ms}ms estimated / ${lat.target_ms}ms target — ${lat.verdict}`);
     for (const leg of lat.legs) console.log(`    ${leg.label}: ${leg.ms}ms`);
+    const cost = result.cost;
+    console.log(`  cost: $${cost.total_per_minute_usd.toFixed(4)}/min ($${cost.per_hour_usd}/hr, $${cost.per_1k_calls_usd}/1k calls)`);
+    for (const leg of cost.legs) console.log(`    ${leg.role} (${leg.label}): $${leg.per_minute_usd.toFixed(4)}/min [${leg.billing}]`);
     if (resolved.length) {
       console.log('  resolved providers:');
       for (const r of resolved) {

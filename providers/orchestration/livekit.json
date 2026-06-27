@@ -46,6 +46,12 @@
     "https://docs.livekit.io/agents/",
     "https://docs.livekit.io/agents/pipelines/voice-pipeline/"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.005,
+    "per_minute_usd": 0.005,
+    "notes": "LiveKit Cloud per-participant. Self-hosted is free."
+  },
   "context7": {
     "library_id": "/livekit/agents",
     "topics": [

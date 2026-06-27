@@ -60,6 +60,12 @@
     "https://ai.google.dev/gemini-api/docs/live",
     "https://ai.google.dev/api/multimodal-live"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.025,
+    "per_minute_usd": 0.025,
+    "notes": "Audio I/O bundled rate (est. for Gemini Live)"
+  },
   "context7": {
     "library_id": "/googleapis/python-genai",
     "topics": [

@@ -54,6 +54,12 @@
     "https://platform.openai.com/docs/api-reference/chat/streaming",
     "https://platform.openai.com/docs/guides/function-calling"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.002,
+    "per_minute_usd": 0.002,
+    "notes": "Est. ~250 tokens/min at GPT-5.5 pricing ($3/1M in, $15/1M out)"
+  },
   "context7": {
     "library_id": "/openai/openai-python",
     "topics": ["chat-completions", "streaming", "function-calling"]

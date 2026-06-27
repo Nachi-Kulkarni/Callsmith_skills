@@ -35,5 +35,11 @@
     "description": "AssemblyAI Universal streaming emits Turn events. A turn with end_of_turn=true signals the user finished speaking, which can trigger interruption if the agent was outputting.",
     "code_hint": "Subscribe to Turn events with end_of_turn field. On turn end during agent speech, trigger interruption."
   },
+  "cost_estimates": {
+    "billing": "per_hour",
+    "rate_usd": 0.37,
+    "per_minute_usd": 0.0062,
+    "notes": "Universal-3.5 streaming ($0.37/hr)"
+  },
   "context7": { "library_id": null, "topics": ["streaming", "universal-3-5-pro", "turn-based"] }
 }

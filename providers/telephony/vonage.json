@@ -35,5 +35,11 @@
     "description": "Send {\"action\":\"clear\"} JSON message to the WebSocket to flush all buffered outbound audio. Vonage supports this natively.",
     "code_hint": "ws.send(json.dumps({\"action\":\"clear\"})) flushes the outbound buffer immediately on interruption."
   },
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.009,
+    "per_minute_usd": 0.009,
+    "notes": "US domestic voice leg"
+  },
   "context7": { "library_id": "/websites/developer_vonage_en_api", "topics": ["voice-api", "websockets", "ncco"] }
 }

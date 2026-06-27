@@ -34,5 +34,11 @@
     "description": "On interruption, stop the TTS streaming session. Discard buffered audio.",
     "code_hint": "Close the WebSocket and clear output buffer."
   },
+  "cost_estimates": {
+    "billing": "per_1k_chars",
+    "rate_usd": 0.006,
+    "per_minute_usd": 0.005,
+    "notes": "₹0.50/1k chars at ~800 chars/min (~$0.006/1k)"
+  },
   "context7": { "library_id": "/llmstxt/sarvam_ai_llms_txt", "topics": ["tts", "bulbul", "indian-languages"] }
 }

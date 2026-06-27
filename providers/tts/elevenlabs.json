@@ -51,6 +51,12 @@
     "https://elevenlabs.io/docs/product/api-reference/text-to-speech",
     "https://elevenlabs.io/docs/product/api-reference/websockets/streaming"
   ],
+  "cost_estimates": {
+    "billing": "per_1k_chars",
+    "rate_usd": 0.30,
+    "per_minute_usd": 0.24,
+    "notes": "$0.30/1k chars at ~800 chars/min conversational pace"
+  },
   "context7": {
     "library_id": "/elevenlabs/elevenlabs-python",
     "topics": [

@@ -100,14 +100,23 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 | L4 | **Latency budget modeling** ✅ | **Implemented.** Every provider pack carries `latency_estimates` (per-leg ms). The resolver computes a total budget, compares against a target (500/800/1200ms by latency priority), and produces a verdict. Recipe includes a latency table + `.callsmith/context/latency-budget.md` with optimization tips. Lock includes `latency` object. |
 | L5 | **Framework-native scaffolds** ✅ | **Implemented.** Scaffolds now use the actual framework APIs: **LiveKit** generates `agent.py` with `AgentSession`, `Agent`, `TurnHandlingOptions`, `silero.VAD.load()`; **Pipecat** generates `bot.py` with `Pipeline`, `PipelineTask`, `DeepgramSTTService`, `OpenAILLMService`, `TwilioFrameSerializer`, `SileroVADAnalyzer`, `LLMContextAggregatorPair` + `server.py` with webhook + WebSocket handler; **Custom FastAPI** generates webhook server + audio bridge with codecs/resampler. Tests verify framework-specific structure via AST analysis. |
 
+### Tier 2 — Cost, state, resilience
+
+| ID | Feature | Status |
+|---|---|---|
+| T2-1 | **Cost estimation per stack** ✅ | **Implemented.** Every provider pack carries `cost_estimates` with billing model + normalized per-minute USD. Resolver `computeCost()` sums per-leg costs. Recipe includes cost table + `.callsmith/context/cost-estimation.md` with per-leg detail + scale projections (per-hour, per-1k-calls). Lock includes `cost` object. `check` command shows cost summary. |
+| T2-2 | **Conversation state management** ✅ | **Implemented.** Scaffold generates `state.py` with: (1) `ContextManager` — sliding-window token tracking against the LLM's context window; (2) `TranscriptStore` — SQLite-backed persistence for every turn (call_id, timestamp, role, content, tokens, metadata); (3) `DTMFHandler` — keypad digit collection with inter-digit timeout. Framework-specific DTMF wiring: Pipecat uses `DTMFAggregator`, LiveKit uses `GetDtmfTask`, Custom parses from WebSocket events. |
+| T2-3 | **Error handling & resilience** ✅ | **Implemented.** Scaffold generates `resilience.py` with: (1) `ReconnectingWebSocket` — exponential backoff (1s→2s→4s→8s→16s, max 30s) with ±25% jitter, max 5 retries, `ConnectionState` machine; (2) `retry_with_backoff` decorator — honors `Retry-After` header, exponential backoff on 429/5xx, max 3 retries; (3) `FallbackConfig` — per-leg fallback chain registration. Context file includes framework-specific patterns (LiveKit `FallbackAdapter`, Pipecat `on_connection_error`, custom manual fallback). |
+
 ### Versioning & roadmap
 
 | ID | Decision | Detail |
 |---|---|---|
 | V1 | **v1.0 shipped** | Full matrix + tests + green CI. 117 tests across 10 files. |
 | V2 | **v1.1 = Tier 1 completeness** | LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds. 21 provider packs. |
-| V3 | **TypeScript scaffold deferred** | Python is the v1.x target (AI/voice ecosystem is Python-native). TS scaffold lands if demand appears. |
-| V4 | **Hosting: personal account for now** | Repo under personal GitHub + personal npm scope. CI via GitHub Actions. Transferable to a dedicated org later if it grows. |
+| V3 | **v1.2 = Tier 2 completeness** | Cost estimation, conversation state management (ContextManager + TranscriptStore + DTMFHandler), error handling & resilience (ReconnectingWebSocket + retry_with_backoff + FallbackConfig). 144 tests across 12 files. |
+| V4 | **TypeScript scaffold deferred** | Python is the v1.x target (AI/voice ecosystem is Python-native). TS scaffold lands if demand appears. |
+| V5 | **Hosting: personal account for now** | Repo under personal GitHub + personal npm scope. CI via GitHub Actions. Transferable to a dedicated org later if it grows. |
 
 ---
 
@@ -204,7 +213,7 @@ This is the bridge to the test plan and TDD execution. Each behavior below is on
 
 ## 8. How this doc is used
 
-1. **Test plan derives from §6.** Each behavior B1–B32+ maps to tests (117 total, all green).
+1. **Test plan derives from §6.** Each behavior B1–B32+ maps to tests (144 total, all green).
 2. **§5 gaps are all resolved** (G1–G9). Retained for history.
 3. **§Tier 1 features** (L1–L5) track the voice-agent completeness work: LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds.
 4. **Decisions are living.** When a decision changes, update this doc AND the test it maps to. A green test that contradicts this doc is a bug.

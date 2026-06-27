@@ -42,6 +42,12 @@
     "https://docs.pipecat.ai/",
     "https://docs.pipecat.ai/server/transports/"
   ],
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Open source, self-hosted"
+  },
   "context7": {
     "library_id": "/pipecat-ai/pipecat",
     "topics": [

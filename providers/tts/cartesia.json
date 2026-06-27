@@ -34,5 +34,11 @@
     "description": "On interruption, close the Cartesia streaming WebSocket session. Discard buffered PCM chunks.",
     "code_hint": "Close the WebSocket and clear output buffer. Frameworks handle this automatically via InterruptionFrame."
   },
+  "cost_estimates": {
+    "billing": "per_1k_chars",
+    "rate_usd": 0.065,
+    "per_minute_usd": 0.052,
+    "notes": "$0.065/1k chars at ~800 chars/min conversational pace"
+  },
   "context7": { "library_id": "/websites/cartesia_ai", "topics": ["streaming-tts", "sonic-3.5", "output-format"] }
 }

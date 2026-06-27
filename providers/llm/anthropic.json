@@ -54,6 +54,12 @@
     "https://docs.anthropic.com/en/api/messages-streaming",
     "https://docs.anthropic.com/en/docs/build-with-claude/tool-use"
   ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.002,
+    "per_minute_usd": 0.002,
+    "notes": "Est. ~250 tokens/min at Sonnet 4.6 pricing ($3/1M in, $15/1M out)"
+  },
   "context7": {
     "library_id": "/anthropics/anthropic-sdk-python",
     "topics": ["streaming", "tool-use"]

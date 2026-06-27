@@ -49,16 +49,19 @@ callsmith docs --answers voice.answers.json --out .
 ### What forge writes
 
 ```
-callsmith.recipe.md          # the handoff packet (intent, stack, audio contract, interruption, latency, build order)
-callsmith.lock.json          # reproducible manifest (providers, models, compatibility, latency budget)
+callsmith.recipe.md          # the handoff packet (intent, stack, audio contract, interruption, latency, cost, conversation state, error handling, build order)
+callsmith.lock.json          # reproducible manifest (providers, models, compatibility, latency, cost)
 .env.example                 # required keys for the selected stack
 .callsmith/context/
   architecture.md            # pipeline + flags (includes LLM, VAD)
   audio-contract.md          # THE audio transforms (or "handled natively")
   interruption.md            # per-provider interruption flow (VAD -> cancel -> flush -> clear)
   latency-budget.md          # per-leg latency breakdown + optimization tips
+  cost-estimation.md         # per-leg cost table + scale projections
+  conversation-state.md      # context window strategy + transcript schema + DTMF wiring
+  error-handling.md          # WebSocket recovery + rate-limit backoff + fallback chains
   potholes.md                # all blockers/warnings/notes from every provider
-  build-order.md             # implementation sequence (includes VAD + interruption wiring)
+  build-order.md             # implementation sequence (10 steps including state + resilience)
 ```
 
 ## Commands
@@ -67,7 +70,7 @@ callsmith.lock.json          # reproducible manifest (providers, models, compati
 |---|---|
 | `spec [--answers f]` | Print the intake menu, or emit a fillable answers template |
 | `forge --answers f [--out d]` | Compile answers into the handoff packet (recipe + lock + context) |
-| `check --answers f` | Print the compatibility matrix (transforms, blockers, latency, interruption). Exits non-zero if blockers remain |
+| `check --answers f` | Print the compatibility matrix (transforms, blockers, latency, cost, interruption). Exits non-zero if blockers remain |
 | `scaffold --answers f [--out d]` | Generate the framework-native repo skeleton |
 | `docs --answers f [--out d]` | Hydrate provider docs via Context7 into `.callsmith/docs/` |
 | `context` | Preflight: report whether a recipe is loaded in the cwd |
@@ -100,7 +103,50 @@ The scaffold generates code that uses the actual framework APIs — not a generi
 
 **Pipecat**: generates `bot.py` with `Pipeline([transport.input(), stt, context_aggregator.user(), llm, tts, transport.output(), context_aggregator.assistant()])`, `PipelineTask`, `PipelineRunner`, `TwilioFrameSerializer`, `SileroVADAnalyzer` + `server.py` with webhook + WebSocket handler.
 
-**Custom FastAPI**: generates `server.py` with webhook endpoint + WebSocket media handler + `audio/bridge.py` with μ-law codecs and resampler (only when transforms are needed).
+**Custom FastAPI**: generates `server.py` with webhook endpoint + WebSocket media handler (includes DTMF parsing, TranscriptStore logging, ReconnectingWebSocket pattern) + `audio/bridge.py` with μ-law codecs and resampler (only when transforms are needed).
+
+All scaffolds also generate:
+- **`state.py`** — `ContextManager` (sliding-window token tracking against the LLM's context window), `TranscriptStore` (SQLite persistence for every turn), `DTMFHandler` (keypad digit collection with inter-digit timeout).
+- **`resilience.py`** — `ReconnectingWebSocket` (exponential backoff reconnection), `retry_with_backoff` (rate-limit handling decorator), `FallbackConfig` (per-leg provider fallback chains).
+- **`tests/test_state.py`** + **`tests/test_resilience.py`** — validates all three modules round-trip correctly.
+
+## Cost estimation
+
+Every provider pack carries `cost_estimates` with billing model + normalized per-minute USD. The recipe includes:
+
+- A per-leg cost table (telephony, orchestration, VAD, STT, LLM, TTS)
+- Scale projections: per-hour, per-1k calls (5-min avg)
+- Per-leg detail with billing model explanation
+
+Cost assumptions: ~250 tokens/min LLM, ~800 chars/min TTS, 5-min avg call. Always verify at provider sites.
+
+## Conversation state management
+
+The recipe and scaffold address three state concerns:
+
+1. **Context window management**: `ContextManager` tracks token count and enforces a sliding window. System prompt is always retained. When approaching `max_tokens - reserve_tokens`, oldest messages are dropped. Uses the LLM's actual `context_window` from the provider pack.
+
+2. **Transcript persistence**: `TranscriptStore` logs every turn to SQLite (`transcripts.db`). Schema: call_id, timestamp, role, content, tokens, metadata. Enables crash recovery — on restart, load transcript back into ContextManager.
+
+3. **DTMF handling**: Framework-specific wiring:
+   - **Pipecat**: `DTMFAggregator` in pipeline between `transport.input()` and `stt`
+   - **LiveKit**: `GetDtmfTask` for IVR-style digit collection
+   - **Custom**: parse `dtmf` events from WebSocket messages
+
+## Error handling & resilience
+
+The recipe and scaffold address four resilience concerns:
+
+1. **WebSocket drop recovery**: `ReconnectingWebSocket` with exponential backoff (1s→2s→4s→8s→16s, max 30s) and ±25% jitter. Max 5 retries. `ConnectionState` machine: CONNECTED → DISCONNECTED → RECONNECTING → CONNECTED/FAILED.
+
+2. **Rate-limit backoff**: `retry_with_backoff` decorator honors `Retry-After` header. Exponential backoff on 429/5xx. Max 3 retries. Applied to LLM/STT/TTS API calls.
+
+3. **Fallback chains**: `FallbackConfig` registers primary + fallback per pipeline leg. Framework-specific:
+   - **LiveKit**: `stt.FallbackAdapter([deepgram.STT(), assemblyai.STT()])`
+   - **Pipecat**: `@tts.event_handler("on_connection_error")` for auto-reconnect logging
+   - **Custom**: manual `FallbackConfig.register("stt", "deepgram", "assemblyai")`
+
+4. **Tool call timeouts**: 5s default. On timeout, respond with holding message and retry asynchronously.
 
 ## How to use callsmith when building for a user
 
@@ -190,7 +236,7 @@ When answers reference a provider not in the installed packs, callsmith resolves
 | TTS (3) | ElevenLabs (`eleven_v3`), Cartesia (`sonic-3.5`), Sarvam (`bulbul:v3`) |
 | VAD (3) | Silero VAD, Deepgram Endpointing, WebRTC VAD |
 
-Each pack declares: audio ingest/egress format, transport, lifecycle events, potholes, latency estimates, interruption mechanism, env keys, doc URLs, and Context7 library IDs.
+Each pack declares: audio ingest/egress format, transport, lifecycle events, potholes, latency estimates, cost estimates, interruption mechanism, env keys, doc URLs, and Context7 library IDs.
 
 ## Anti-patterns to avoid
 
@@ -200,3 +246,7 @@ Each pack declares: audio ingest/egress format, transport, lifecycle events, pot
 - Do not assume the orchestration framework normalizes audio — verify it appears in the recipe's notes.
 - Do not mix input formats on a realtime model (e.g. feed both 24 kHz PCM and μ-law to OpenAI Realtime).
 - Do not treat WebSocket close and telephony hangup as the same event; map both to one session state machine.
+- Do not ignore the context window — long calls overflow. Use `ContextManager` from `state.py`.
+- Do not skip transcript logging — `TranscriptStore` enables crash recovery and debugging.
+- Do not hardcode retry logic — use `retry_with_backoff` from `resilience.py` instead.
+- Do not configure fallback providers without reading `.callsmith/context/error-handling.md`.

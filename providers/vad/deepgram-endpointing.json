@@ -45,6 +45,12 @@
     }
   ],
   "env_keys": [],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.0043,
+    "per_minute_usd": 0.0043,
+    "notes": "Bundled with Deepgram STT billing"
+  },
   "doc_urls": [
     "https://developers.deepgram.com/docs/endpointing"
   ],

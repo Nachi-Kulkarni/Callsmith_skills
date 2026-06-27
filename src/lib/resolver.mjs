@@ -154,6 +154,7 @@ export function resolve(answers, providers) {
 
   const interruption = resolveInterruption(sel, providers, flags);
   const latency = computeLatencyBudget(sel, providers, flags);
+  const cost = computeCost(sel, providers);
 
   return {
     stack: { flags, providers: sel, labels },
@@ -165,6 +166,7 @@ export function resolve(answers, providers) {
     envKeys: [...new Set(envKeys)],
     interruption,
     latency,
+    cost,
   };
 }
 
@@ -235,6 +237,43 @@ export function computeLatencyBudget(sel, providers, flags) {
   const verdict = total_ms <= target ? 'within target' : total_ms <= target * 1.5 ? 'borderline' : 'exceeds target';
 
   return { legs, total_ms, target_ms: target, verdict };
+}
+
+export function computeCost(sel, providers) {
+  const legs = [];
+  let total = 0;
+
+  const roleOrder = ['telephony', 'orchestration', 'vad', 'realtime', 'stt', 'llm', 'tts'];
+  for (const role of roleOrder) {
+    const selection = sel[role];
+    if (!selection || !selection.id) continue;
+    const pack = providers[selection.id];
+    if (!pack) continue;
+    const ce = pack.cost_estimates;
+    if (!ce) continue;
+
+    const perMin = ce.per_minute_usd || 0;
+    legs.push({
+      role,
+      provider: pack.id,
+      label: pack.label,
+      billing: ce.billing || 'unknown',
+      per_minute_usd: perMin,
+      raw_rate: ce.rate_usd || 0,
+      notes: ce.notes || '',
+    });
+    total += perMin;
+  }
+
+  const round = (n, d = 4) => Math.round(n * Math.pow(10, d)) / Math.pow(10, d);
+
+  return {
+    legs,
+    total_per_minute_usd: round(total),
+    per_hour_usd: round(total * 60, 2),
+    per_1k_calls_usd: round(total * 5 * 1000, 2),
+    assumptions: '~250 tokens/min LLM, ~800 chars/min TTS, 5-min avg call',
+  };
 }
 
 export function detectImpossibilities(answers, providers) {

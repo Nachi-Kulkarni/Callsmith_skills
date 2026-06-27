@@ -89,6 +89,16 @@
     },
     "env_keys": { "type": "array", "items": { "type": "string" }, "description": "Required environment variables." },
     "doc_urls": { "type": "array", "items": { "type": "string" } },
+    "cost_estimates": {
+      "type": "object",
+      "description": "Pricing data for cost estimation. per_minute_usd is pre-normalized for the resolver to sum.",
+      "properties": {
+        "billing": { "type": "string", "enum": ["per_minute", "per_1k_chars", "per_hour", "free"], "description": "How the provider bills." },
+        "rate_usd": { "type": "number", "description": "Raw rate in the billing unit." },
+        "per_minute_usd": { "type": "number", "description": "Normalized cost per minute (USD). Pre-computed from billing + rate using conversational assumptions." },
+        "notes": { "type": "string" }
+      }
+    },
     "context7": {
       "type": ["object", "null"],
       "properties": {

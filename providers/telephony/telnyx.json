@@ -34,5 +34,11 @@
     "description": "Stop sending audio frames to the Call Control media stream. Telnyx media socket does not support explicit clear.",
     "code_hint": "On interruption: stop writing to the WebSocket and flush your local outbound buffer."
   },
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.003,
+    "per_minute_usd": 0.003,
+    "notes": "US domestic voice leg"
+  },
   "context7": { "library_id": "/websites/developers_telnyx", "topics": ["call-control", "media-stream"] }
 }
