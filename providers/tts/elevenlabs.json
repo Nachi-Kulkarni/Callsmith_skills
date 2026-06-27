@@ -1,8 +1,8 @@
 {
   "id": "elevenlabs",
   "kind": "tts",
-  "label": "ElevenLabs (streaming TTS)",
-  "model": "eleven_multilingual_v2",
+  "label": "ElevenLabs (eleven_v3)",
+  "model": "eleven_v3",
   "transport": "websocket",
   "ingest": {
     "format": "text",

@@ -23,11 +23,11 @@ const PIPECAT_SERVICES = {
 const LIVEKIT_INFERENCE = {
   deepgram:     'inference.STT(model="deepgram/nova-3", language="multi")',
   assemblyai:   'inference.STT(model="assemblyai/universal-3-5-pro")',
-  openai:       'inference.LLM(model="openai/gpt-4o")',
-  anthropic:    'inference.LLM(model="anthropic/claude-sonnet-4-20250514")',
-  gemini:       'inference.LLM(model="google/gemini-2.5-flash")',
-  elevenlabs:   'inference.TTS(model="elevenlabs/eleven_multilingual_v2")',
-  cartesia:     'inference.TTS(model="cartesia/sonic-latest")',
+  openai:       'inference.LLM(model="openai/gpt-5.5")',
+  anthropic:    'inference.LLM(model="anthropic/claude-sonnet-4-6")',
+  gemini:       'inference.LLM(model="google/gemini-3.5-flash")',
+  elevenlabs:   'inference.TTS(model="elevenlabs/eleven_v3")',
+  cartesia:     'inference.TTS(model="cartesia/sonic-3.5")',
 };
 
 const TELEPHONY_SERIALIZERS = {
@@ -194,7 +194,7 @@ function renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtim
     sessionParts.push(`        ),`);
   } else if (isRealtime && sel.realtime?.id === 'gemini-live') {
     sessionParts.push(`        llm=google.realtime.RealtimeModel(`);
-    sessionParts.push(`            model="gemini-live-2.5-flash-preview",`);
+    sessionParts.push(`            model="gemini-3.1-flash-live-preview",`);
     sessionParts.push(`        ),`);
   }
 

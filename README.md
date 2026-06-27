@@ -77,10 +77,10 @@ That difference — invisible in the model docs, fatal at runtime — is what ca
 |---|---|
 | Telephony | Exotel, Twilio, Plivo, Telnyx, Vonage |
 | Orchestration | LiveKit, Pipecat, custom FastAPI bridge |
-| Realtime S2S | Gemini Live (`gemini-live-2.5-flash-preview`), OpenAI Realtime (`gpt-realtime-2`, native SIP) |
+| Realtime S2S | Gemini Live (`gemini-3.1-flash-live-preview`), OpenAI Realtime (`gpt-realtime-2`, native SIP) |
 | STT (cascaded) | Deepgram (Nova-3), AssemblyAI (`universal-3-5-pro`) |
-| LLM (cascaded) | OpenAI (`gpt-4o`), Anthropic (`claude-sonnet-4-20250514`), Google (`gemini-2.5-flash`) |
-| TTS (cascaded) | ElevenLabs (`eleven_multilingual_v2`), Cartesia (`sonic-latest`, μ-law native), Sarvam (`bulbul:v3`) |
+| LLM (cascaded) | OpenAI (`gpt-5.5`), Anthropic (`claude-sonnet-4-6`), Google (`gemini-3.5-flash`) |
+| TTS (cascaded) | ElevenLabs (`eleven_v3`), Cartesia (`sonic-3.5`, μ-law native), Sarvam (`bulbul:v3`) |
 | VAD | Silero VAD, Deepgram Endpointing, WebRTC VAD |
 
 Each provider ships a pack (`providers/<kind>/<id>.json`) declaring its real ingest/egress audio contract, lifecycle events, potholes, and native capabilities. The resolver reconciles these across the stack. Add a provider by dropping in a pack — no code changes.

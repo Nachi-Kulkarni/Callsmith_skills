@@ -15,7 +15,7 @@ test('cascaded recipe includes the LLM in the selected stack', () => {
 test('cascaded lock pins the verified OpenAI model name', () => {
   const { lock } = forge('twilio-cascaded.answers.json');
   const models = Object.fromEntries(lock.provider_models.map(p => [p.id, p.model]));
-  assert.equal(models['openai'], 'gpt-4o', 'lock must pin GPT-4o model');
+  assert.equal(models['openai'], 'gpt-5.5', 'lock must pin GPT-5.5 model');
 });
 
 test('cascaded recipe includes OPENAI_API_KEY in env', () => {

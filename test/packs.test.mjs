@@ -47,16 +47,16 @@ test('every menu option that maps to a provider has an installed pack (no dangli
 test('all provider model names are pinned — staleness guard', () => {
   const providers = loadProviders();
   const pinned = {
-    'gemini-live': 'gemini-live-2.5-flash-preview',
+    'gemini-live': 'gemini-3.1-flash-live-preview',
     'openai-realtime': 'gpt-realtime-2',
     'deepgram': 'nova-3',
     'assemblyai': 'universal-3-5-pro',
-    'elevenlabs': 'eleven_multilingual_v2',
-    'cartesia': 'sonic-latest',
+    'elevenlabs': 'eleven_v3',
+    'cartesia': 'sonic-3.5',
     'sarvam': 'bulbul:v3',
-    'openai': 'gpt-4o',
-    'anthropic': 'claude-sonnet-4-20250514',
-    'gemini': 'gemini-2.5-flash',
+    'openai': 'gpt-5.5',
+    'anthropic': 'claude-sonnet-4-6',
+    'gemini': 'gemini-3.5-flash',
   };
   for (const [id, expectedModel] of Object.entries(pinned)) {
     assert.ok(providers[id], `${id} pack must exist`);

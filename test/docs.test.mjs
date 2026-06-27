@@ -40,7 +40,7 @@ test('gemini-live doc stub contains the frozen audio contract', () => {
   assert.match(doc, /pcm/i, 'must mention PCM format');
   assert.match(doc, /16000/i, 'must mention 16kHz ingest rate');
   assert.match(doc, /24000/i, 'must mention 24kHz egress rate');
-  assert.match(doc, /gemini-live-2.5-flash-preview/i, 'must pin the verified model name');
+  assert.match(doc, /gemini-3.1-flash-live-preview/i, 'must pin the verified model name');
 });
 
 // B-docs-3: stub contains required env keys

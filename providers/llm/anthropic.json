@@ -1,12 +1,12 @@
 {
   "id": "anthropic",
   "kind": "llm",
-  "label": "Anthropic (Claude Sonnet 4)",
+  "label": "Anthropic (Claude Sonnet 4.6)",
   "transport": "http",
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-sonnet-4-6",
   "streaming": true,
   "tool_calling": true,
-  "context_window": 200000,
+  "context_window": 1000000,
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
   "ingest": {

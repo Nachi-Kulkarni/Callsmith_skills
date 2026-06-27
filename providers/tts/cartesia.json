@@ -1,8 +1,8 @@
 {
   "id": "cartesia",
   "kind": "tts",
-  "label": "Cartesia",
-  "model": "sonic-latest",
+  "label": "Cartesia (sonic-3.5)",
+  "model": "sonic-3.5",
   "transport": "websocket",
   "directions": ["inbound", "outbound"],
   "native_capabilities": ["emit_mulaw_8000"],

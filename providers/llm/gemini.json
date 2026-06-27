@@ -1,9 +1,9 @@
 {
   "id": "gemini",
   "kind": "llm",
-  "label": "Google (Gemini 2.5 Flash)",
+  "label": "Google (Gemini 3.5 Flash)",
   "transport": "http",
-  "model": "gemini-2.5-flash",
+  "model": "gemini-3.5-flash",
   "streaming": true,
   "tool_calling": true,
   "context_window": 1000000,

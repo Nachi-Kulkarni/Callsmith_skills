@@ -77,9 +77,9 @@
       "when": { "mode": ["cascaded", "hybrid"] },
       "default": "gpt_4o",
       "options": [
-        { "id": "gpt_4o",   "label": "GPT-4o / GPT-4.1", "blurb": "OpenAI, tool-calling.", "maps": { "provider": "openai", "kind": "llm" } },
-        { "id": "claude",   "label": "Claude",          "blurb": "Anthropic, strong reasoning.", "maps": { "provider": "anthropic", "kind": "llm" } },
-        { "id": "gemini_l", "label": "Gemini 2.x",      "blurb": "Google, good at Hinglish.", "maps": { "provider": "gemini", "kind": "llm" } }
+        { "id": "gpt_4o",   "label": "GPT-5.5", "blurb": "OpenAI, tool-calling.", "maps": { "provider": "openai", "kind": "llm" } },
+        { "id": "claude",   "label": "Claude Sonnet 4.6", "blurb": "Anthropic, strong reasoning.", "maps": { "provider": "anthropic", "kind": "llm" } },
+        { "id": "gemini_l", "label": "Gemini 3.5 Flash", "blurb": "Google, good at Hinglish.", "maps": { "provider": "gemini", "kind": "llm" } }
       ]
     },
     {

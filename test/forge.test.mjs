@@ -37,7 +37,7 @@ test('a cascaded stack lock names no realtime provider', () => {
 test('lock pins the verified Gemini Live model name', () => {
   const { lock } = forge('exotel-gemini.answers.json');
   const models = Object.fromEntries(lock.provider_models.map(p => [p.id, p.model]));
-  assert.equal(models['gemini-live'], 'gemini-live-2.5-flash-preview');
+  assert.equal(models['gemini-live'], 'gemini-3.1-flash-live-preview');
 });
 
 test('cascaded lock pins the verified Deepgram model name', () => {

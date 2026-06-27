@@ -1,12 +1,12 @@
 {
   "id": "openai",
   "kind": "llm",
-  "label": "OpenAI (GPT-4o)",
+  "label": "OpenAI (GPT-5.5)",
   "transport": "http",
-  "model": "gpt-4o",
+  "model": "gpt-5.5",
   "streaming": true,
   "tool_calling": true,
-  "context_window": 128000,
+  "context_window": 1000000,
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
   "ingest": {
