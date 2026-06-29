@@ -2,7 +2,7 @@
 name: callsmith
 description: Compile a production-ready implementation recipe for voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, scaffold, or architect a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, LLM, speech-to-speech, barge-in, or media streams. Resolves the audio bridge, interruption/turn-taking, latency budget, detects impossible stacks, and compiles a deterministic handoff packet with framework-native scaffolds so a coding agent can build the whole thing in one pass.
 argument-hint: "[spec|forge|check|scaffold|docs|simulate|verify-packs|release-check|context] [target]"
-allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(npm install -g @callsmith/cli), Read, Write, Edit
+allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(npm install -g github:Nachi-Kulkarni/Callsmith_skills), Read, Write, Edit
 ---
 
 # callsmith
@@ -16,7 +16,7 @@ The hard part of voice agents is not the model. It is the audio bridge (μ-law 8
 Run this before anything else. If the CLI is missing, install it.
 
 ```bash
-command -v callsmith >/dev/null 2>&1 && echo "Installed" || npm install -g @callsmith/cli
+command -v callsmith >/dev/null 2>&1 && echo "Installed" || npm install -g github:Nachi-Kulkarni/Callsmith_skills
 ```
 
 In a checkout of the callsmith repo itself, the CLI runs without a global install:

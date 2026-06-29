@@ -50,17 +50,17 @@
   ],
   "license": "MIT",
   "author": "",
-  "homepage": "https://github.com/callsmith/callsmith",
+  "homepage": "https://github.com/Nachi-Kulkarni/Callsmith_skills",
   "repository": {
     "type": "git",
-    "url": "https://github.com/callsmith/callsmith.git"
+    "url": "https://github.com/Nachi-Kulkarni/Callsmith_skills.git"
   },
   "bugs": {
-    "url": "https://github.com/callsmith/callsmith/issues"
+    "url": "https://github.com/Nachi-Kulkarni/Callsmith_skills/issues"
   },
   "funding": {
     "type": "github",
-    "url": "https://github.com/sponsors/callsmith"
+    "url": "https://github.com/sponsors/Nachi-Kulkarni"
   },
   "publishConfig": {
     "access": "public"

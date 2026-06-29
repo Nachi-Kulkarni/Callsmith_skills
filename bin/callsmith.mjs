@@ -78,12 +78,18 @@ function whenMatches(when, flags) {
 const HELP = `callsmith v${VERSION} — compile a voice-agent implementation recipe.
 
 Usage:
-  callsmith spec [--answers <out.json>]     Interactive MCQ intake (writes an answers file)
-  callsmith init [--preset <id>] [--answers <out.json>]  One-shot intake with a preset
+  callsmith init [--preset <id>] [--out dir] [--force] [--dry-run]
+                                              Create a full voice-agent starter project
+  callsmith init --list                       Show available presets
+  callsmith execute [--preset <id>] [--out dir]
+                                              Alias for init while the command name settles
+
+Advanced:
+  callsmith spec [--answers <out.json>]       Interactive MCQ intake (writes an answers file)
   callsmith forge --answers <file> [--out dir] [--force] [--dry-run]   Compile answers into a recipe + lock + context
   callsmith check --answers <file>          Print the compatibility matrix (no files written)
   callsmith scaffold --answers <file> [--out dir] [--force] [--dry-run]  Generate the framework-native repo skeleton
-  callsmith docs --answers <file> [--out dir] [--force] [--dry-run]  Write provider doc stubs + Context7 prompts into .callsmith/docs/
+  callsmith docs --answers <file> [--out dir] [--force] [--dry-run] [--fetch]  Write provider doc stubs + Context7 prompts
   callsmith simulate --answers <file> [--out dir] [--scaffold dir] [--force] [--dry-run]  Run a deterministic fake call lifecycle
   callsmith explain --answers <file>        Plain-English summary of the selected stack (no files written)
   callsmith verify-packs [--json]          Check provider pack freshness and CI safety
@@ -95,7 +101,7 @@ Usage:
 Write-protection:
   --force        Overwrite existing files instead of refusing
   --dry-run      Report what would be written; write nothing
-  Without --force, scaffold/forge/docs refuse to overwrite existing files.
+  Without --force, init/forge/scaffold/docs/simulate refuse to overwrite existing files.
 
 Environment:
   CALLSMITH_REGISTRY=<url|path>   Community pack registry (default: GitHub raw)
@@ -132,6 +138,163 @@ async function interactiveSpec(menu) {
   return answers;
 }
 
+const DEFAULT_INIT_PRESET = 'india-support';
+
+function loadPresets() {
+  const presetsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'presets.json');
+  return JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
+}
+
+function listPresets(presets) {
+  console.log('\nAvailable presets:\n');
+  for (const id of Object.keys(presets.presets)) {
+    const p = presets.presets[id];
+    const marker = id === DEFAULT_INIT_PRESET ? ' (default)' : '';
+    console.log(`  ${id}${marker}  — ${p.label}`);
+    console.log(`    ${p.blurb}`);
+  }
+  console.log('\nStart with `callsmith init`, or choose one with `callsmith init --preset <id>`.\n');
+}
+
+function displayPath(file) {
+  const rel = path.relative(process.cwd(), path.resolve(file));
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : path.resolve(file);
+}
+
+function displayOutPath(root, rel) {
+  const file = path.join(root, rel);
+  const fromCwd = displayPath(file);
+  return fromCwd.startsWith(path.basename(root) + path.sep) ? fromCwd : rel;
+}
+
+function writeAnswersFile(file, answers, opts = {}) {
+  const force = opts.force === true;
+  if (fs.existsSync(file) && !force) {
+    return { collision: file, overwritten: [] };
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const overwritten = fs.existsSync(file) ? [file] : [];
+  fs.writeFileSync(file, JSON.stringify(answers, null, 2) + '\n');
+  return { collision: null, overwritten };
+}
+
+async function initPreview(rawAnswers, out, providers, resolved, answersFile) {
+  const reports = [
+    ['recipe', compile(rawAnswers, out, { providers, resolved, dryRun: true })],
+    ['scaffold', scaffold(rawAnswers, out, { providers, dryRun: true })],
+    ['docs', await hydrate(rawAnswers, out, { providers, dryRun: true })],
+    ['simulation', simulate(rawAnswers, out, { providers, dryRun: true })],
+  ];
+  const collisions = [];
+  if (fs.existsSync(answersFile)) collisions.push(`answers: ${displayPath(answersFile)}`);
+  for (const [label, res] of reports) {
+    for (const f of res.collisions || []) collisions.push(`${label}: ${f}`);
+  }
+  const manifest = [`answers: ${displayPath(answersFile)}`];
+  for (const [label, res] of reports) {
+    for (const f of res.manifest || []) manifest.push(`${label}: ${displayOutPath(out, f)}`);
+  }
+  return { reports, collisions, manifest };
+}
+
+function reportInitCollisions(collisions) {
+  console.error(`\n${collisions.length} existing file(s) would be overwritten:`);
+  for (const f of collisions) console.error(`  ${f}`);
+  console.error('\nRefusing to overwrite. Re-run with --force to overwrite, or --out <new-dir> to write elsewhere.');
+}
+
+function reportInitDryRun(out, presetId, preview, force) {
+  console.log(`\n[dry-run] init would create preset "${presetId}" in ${out}:`);
+  for (const f of preview.manifest) console.log(`  ${f}`);
+  if (force && preview.collisions.length) {
+    console.log('\nWould overwrite via --force:');
+    for (const f of preview.collisions) console.log(`  ${f}`);
+  }
+  console.log('\nNothing was written. Re-run without --dry-run to create the project.\n');
+}
+
+function assertNoCollisions(res, label) {
+  if (!res.collisions || !res.collisions.length) return;
+  reportWriteResult(res, label);
+}
+
+async function runInitCommand(commandName) {
+  const presets = loadPresets();
+  if (args.list === true || args.presets === true) {
+    listPresets(presets);
+    return;
+  }
+
+  const presetId = args.preset && args.preset !== true ? args.preset : DEFAULT_INIT_PRESET;
+  const preset = presets.presets[presetId];
+  if (!preset) {
+    console.error(`error: unknown preset "${presetId}". Available: ${Object.keys(presets.presets).join(', ')}`);
+    process.exit(1);
+  }
+
+  const out = path.resolve(args.out || path.join(process.cwd(), 'voice-agent'));
+  const answersFile = path.resolve(args.answers || path.join(out, 'voice.answers.json'));
+  const force = args.force === true;
+  const dryRun = args["dry-run"] === true;
+  const rawAnswers = preset.answers;
+
+  const menu = loadMenu();
+  const providers = loadProviders();
+  const expanded = expandOrExit(rawAnswers, menu);
+  const { providers: resolvedProviders, resolved } = await resolveUnknowns(providers, expanded);
+  const impossible = detectImpossibilities(expanded, resolvedProviders);
+  if (impossible.length) {
+    console.error('\nCannot init — the selected preset is impossible:');
+    for (const i of impossible) console.error(`  [${i.code}] ${i.message}`);
+    process.exit(1);
+  }
+
+  const preview = await initPreview(rawAnswers, out, resolvedProviders, resolved, answersFile);
+  if (preview.collisions.length && !force) {
+    reportInitCollisions(preview.collisions);
+    process.exit(1);
+  }
+  if (dryRun) {
+    reportInitDryRun(out, presetId, preview, force);
+    return;
+  }
+
+  const answerWrite = writeAnswersFile(answersFile, rawAnswers, { force });
+  if (answerWrite.collision) {
+    reportInitCollisions([`answers: ${displayPath(answerWrite.collision)}`]);
+    process.exit(1);
+  }
+
+  const compiled = compile(rawAnswers, out, { providers: resolvedProviders, resolved, force });
+  assertNoCollisions(compiled, 'forge');
+  const scaffolded = scaffold(rawAnswers, out, { providers: resolvedProviders, force });
+  assertNoCollisions(scaffolded, 'scaffold');
+  const docs = await hydrate(rawAnswers, out, { providers: resolvedProviders, force, fetchDocs: args.fetch === true });
+  assertNoCollisions(docs, 'docs');
+  const simulation = simulate(rawAnswers, out, { providers: resolvedProviders, scaffoldDir: out, force });
+  assertNoCollisions(simulation, 'simulate');
+
+  console.log(`\nInitialized ${presetId}: ${preset.label}`);
+  console.log(`  ${preset.blurb}`);
+  console.log(`\nProject: ${displayPath(out)}`);
+  console.log(`Answers: ${displayPath(answersFile)}`);
+  console.log(`Recipe: ${displayPath(path.join(out, 'callsmith.recipe.md'))}`);
+  console.log(`Scaffold: ${scaffolded.files} entries`);
+  console.log(`Docs: ${docs.written.length} provider context file(s)`);
+  console.log(`Simulation: ${simulation.status} (${simulation.metrics.first_response_ms}ms first response)`);
+
+  if (simulation.failures.length) {
+    for (const f of simulation.failures) console.error(`  [FAIL] ${f}`);
+    process.exit(1);
+  }
+
+  const cdTarget = displayPath(out);
+  console.log(`\nNext: cd ${cdTarget} && bash install.sh test\n`);
+  if (commandName === 'execute') {
+    console.log('Note: `execute` currently aliases `init`; `init` is the documented command.\n');
+  }
+}
+
 switch (cmd) {
   case undefined:
   case '--help':
@@ -145,31 +308,13 @@ switch (cmd) {
     console.log(`callsmith v${VERSION}`);
     break;
   }
-  case 'init': {
-    const presetsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'presets.json');
-    const presets = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
-    if (args.preset) {
-      const p = presets.presets[args.preset];
-      if (!p) {
-        console.error(`error: unknown preset "${args.preset}". Available: ${Object.keys(presets.presets).join(', ')}`);
-        process.exit(1);
-      }
-      const outFile = args.answers || 'voice.answers.json';
-      fs.writeFileSync(outFile, JSON.stringify(p.answers, null, 2) + '\n');
-      console.log(`\nInitialized ${args.preset}: ${p.label}`);
-      console.log(`  ${p.blurb}`);
-      console.log(`\nWrote ${outFile}`);
-      console.log('\nNext: callsmith forge --answers ' + outFile + ' --out ./voice-agent\n');
-    } else {
-      const ids = Object.keys(presets.presets);
-      console.log('\nAvailable presets (callsmith init --preset <id>):\n');
-      for (const id of ids) {
-        const p = presets.presets[id];
-        console.log(`  ${id}  — ${p.label}`);
-        console.log(`    ${p.blurb}`);
-      }
-      console.log('\nOr run `callsmith spec --answers voice.answers.json` for the full interactive intake.\n');
-    }
+  case 'init':
+  case 'execute': {
+    await runInitCommand(cmd);
+    break;
+  }
+  case 'presets': {
+    listPresets(loadPresets());
     break;
   }
   case 'explain': {
@@ -334,7 +479,12 @@ switch (cmd) {
     const baseProviders = loadProviders();
     const expanded = expandOrExit(raw, menu);
     const { providers } = await resolveUnknowns(baseProviders, expanded);
-    const h = await hydrate(raw, out, { providers, force: args.force === true, dryRun: args["dry-run"] === true });
+    const h = await hydrate(raw, out, {
+      providers,
+      force: args.force === true,
+      dryRun: args["dry-run"] === true,
+      fetchDocs: args.fetch === true,
+    });
     if (h.dryRun || h.collisions.length) { reportWriteResult(h, 'docs'); break; }
     const { written, ids } = h;
     console.log(`\nWrote docs context for: ${ids.join(', ')}`);
@@ -407,7 +557,7 @@ switch (cmd) {
     const has = fs.existsSync(recipe);
     console.log(has
       ? `preflight: PASS — callsmith.recipe.md present (${fs.existsSync(lock) ? 'lock ok' : 'lock MISSING'})`
-      : 'preflight: NO_RECIPE — run `callsmith forge --answers <file>` before scaffolding or coding.');
+      : 'preflight: NO_RECIPE — run `callsmith init` to create a starter project, or `callsmith forge --answers <file>` for the manual path.');
     break;
   }
   default:

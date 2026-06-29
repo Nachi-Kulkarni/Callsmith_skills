@@ -73,6 +73,7 @@ export function simulate(rawAnswers, outDir, opts = {}) {
   writer.w('.callsmith/simulation/report.json', JSON.stringify(report, null, 2) + '\n');
   report.collisions = writer.collisions;
   report.overwritten = writer.overwritten;
+  report.manifest = writer.manifest;
   report.dryRun = writer.dryRun;
   return report;
 }

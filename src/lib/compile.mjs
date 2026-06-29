@@ -349,7 +349,8 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers
   lines.push('');
   lines.push('## Required docs');
   lines.push('');
-  lines.push('Write provider docs context before coding:');
+  lines.push('Provider docs context should already exist when the project was created with `callsmith init`.');
+  lines.push('Refresh it manually if you are using the advanced command flow:');
   lines.push('```bash');
   lines.push('callsmith docs --answers <answers.json>   # writes stubs + Context7 prompts into .callsmith/docs/');
   lines.push('```');

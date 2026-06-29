@@ -141,22 +141,43 @@ test('scaffold --dry-run writes nothing', () => {
 
 // ── Fix #6: init presets + explain ───────────────────────────────────
 
-test('init lists presets', () => {
-  const r = runCli(['init'], { out: false });
+test('init --list lists presets', () => {
+  const r = runCli(['init', '--list'], { out: false });
   assert.equal(r.exitCode, 0);
   assert.match(r.stdout, /india-support/);
   assert.match(r.stdout, /cheap-cascaded/);
 });
 
-test('init --preset writes a forgeable answers file', () => {
+test('init creates a starter project with the default preset', () => {
+  const r = runCli(['init'], { out: true });
+  assert.equal(r.exitCode, 0, 'init must succeed. stderr: ' + r.stderr);
+  assert.match(r.stdout, /Initialized india-support/);
+  assert.equal(existsSync(join(r.outDir, 'voice.answers.json')), true);
+  assert.equal(existsSync(join(r.outDir, 'callsmith.recipe.md')), true);
+  assert.equal(existsSync(join(r.outDir, 'agent.py')), true);
+  assert.equal(existsSync(join(r.outDir, '.callsmith', 'docs', 'README.md')), true);
+  assert.equal(existsSync(join(r.outDir, '.callsmith', 'simulation', 'report.json')), true);
+});
+
+test('init --preset writes answers and the project', () => {
   const dir = mkdtempSync(join(tmpdir(), 'cs-init-'));
   const file = join(dir, 'a.json');
-  const r = runCli(['init', '--preset', 'global-support', '--answers', file], { out: false });
+  const r = runCli(['init', '--preset', 'global-support', '--answers', file], { out: true });
   assert.equal(r.exitCode, 0);
   assert.equal(existsSync(file), true);
+  assert.equal(existsSync(join(r.outDir, 'callsmith.recipe.md')), true);
+  assert.equal(existsSync(join(r.outDir, 'agent.py')), true);
   // it must forge cleanly
   const forgeResult = runCli(['forge', '--answers', file], { out: true });
   assert.equal(forgeResult.exitCode, 0, 'preset answers must forge. stderr: ' + forgeResult.stderr);
+});
+
+test('execute aliases the one-shot init flow', () => {
+  const r = runCli(['execute', '--preset', 'browser-voice'], { out: true });
+  assert.equal(r.exitCode, 0, 'execute must succeed. stderr: ' + r.stderr);
+  assert.match(r.stdout, /aliases `init`/);
+  assert.equal(existsSync(join(r.outDir, 'voice.answers.json')), true);
+  assert.equal(existsSync(join(r.outDir, 'callsmith.recipe.md')), true);
 });
 
 test('init --preset rejects unknown preset', () => {

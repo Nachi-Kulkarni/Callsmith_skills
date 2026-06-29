@@ -1,0 +1,21 @@
+{
+  "surface": "inbound_pstn",
+  "architecture": "realtime_s2s",
+  "telephony": "exotel",
+  "orchestration": "livekit",
+  "realtime_model": "gemini_live",
+  "stt": "",
+  "llm": "",
+  "tts": "",
+  "vad": "silero",
+  "language": "hinglish",
+  "barge_in": "required",
+  "operational_profile": "support_default",
+  "latency": "balanced",
+  "business_logic": "support",
+  "tools": "webhook",
+  "human_handoff": "ticket",
+  "recording_consent": "announce",
+  "transcript_retention": "thirty_days",
+  "deployment": "railway"
+}

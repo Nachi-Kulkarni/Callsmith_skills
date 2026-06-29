@@ -5,9 +5,11 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 ## [Unreleased]
 
 ### Added
-- `callsmith init --preset <id>` one-shot intake with 5 presets (india-support, global-support, low-latency-demo, cheap-cascaded, browser-voice).
+- `callsmith init` one-shot project creation: writes answers, recipe/context, provider docs, scaffold, and simulation report from the default preset.
+- `callsmith init --preset <id>` with 5 presets (india-support, global-support, low-latency-demo, cheap-cascaded, browser-voice).
+- `callsmith execute` alias for the one-shot init flow while the command naming settles.
 - `callsmith explain --answers <file>` plain-English stack summary (no files written).
-- Write protection: `forge`, `scaffold`, `docs`, `simulate` refuse to overwrite existing files. `--force` overwrites; `--dry-run` previews.
+- Write protection: `init`, `forge`, `scaffold`, `docs`, `simulate` refuse to overwrite existing files. `--force` overwrites; `--dry-run` previews.
 - `--help` / `help` / no-arg now exit 0.
 - Pothole mitigation: provider potholes resolved by a native layer (e.g. LiveKit audio normalization) are separated into a "Mitigated by native layer" section, removing audio-contract contradictions.
 - `.env.example` now includes dashboard links for every required key.
@@ -20,7 +22,8 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 ### Changed
 - Interactive `spec` saves answers directly when `--answers` is passed.
 - Interactive `spec` shows option IDs alongside labels.
-- README quickstart uses `--out ./voice-agent` and passes `--scaffold` to simulate (the documented happy path is green end-to-end).
+- README quickstart now starts with `callsmith init` instead of exposing the internal `spec -> forge -> scaffold -> docs -> simulate` pipeline.
+- Provider docs hydration no longer live-fetches by default; pass `callsmith docs --fetch` to opt in.
 - README documents local install honestly (npm name conflict noted).
 
 ### Fixed

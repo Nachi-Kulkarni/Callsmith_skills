@@ -25,6 +25,7 @@ export async function hydrate(rawAnswers, outDir, opts = {}) {
   const result = resolve(answers, providers);
   const writer = createSafeWriter(outDir, { force: opts.force === true, dryRun: opts.dryRun === true });
   const w = (rel, content) => writer.w(rel, content);
+  const fetchDocs = opts.fetchDocs === true;
 
   const ids = result.pipeline.filter(p => p.id).map(p => p.id);
   const written = [];
@@ -39,7 +40,7 @@ export async function hydrate(rawAnswers, outDir, opts = {}) {
     written.push(`.callsmith/docs/${id}.md`);
 
     // best-effort live fetch of the first doc url
-    if (!writer.dryRun && pack.doc_urls && pack.doc_urls[0]) {
+    if (fetchDocs && !writer.dryRun && pack.doc_urls && pack.doc_urls[0]) {
       const fetched = await tryFetch(pack.doc_urls[0]);
       if (fetched) w(`.callsmith/docs/${id}.fetched.md`, `<!-- fetched from ${pack.doc_urls[0]} -->\n\n${fetched}\n`);
     }
