@@ -13,12 +13,29 @@
       "type": "array",
       "items": { "type": "string", "enum": ["inbound", "outbound"] },
       "minItems": 1,
-      "description": "Which call directions this provider supports. Used for surface/direction impossibility detection."
+      "description": "Which call directions this provider supports. Used for surface/direction impossibility detection (telephony only). Inert for kind: vad — VADs have no call-direction semantics; declare [\"inbound\",\"outbound\"] as a safe superset."
     },
     "native_capabilities": {
       "type": "array",
       "items": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
       "description": "Native capabilities that short-circuit the resolver (e.g. audio_normalization absorbs the decode/resample bridge)."
+    },
+    "native_capability_conflicts": {
+      "type": "array",
+      "description": "Reserved guard. Optional explicit conflicts between this pack's native capabilities and capabilities claimed by other selected packs. No installed pack currently declares a conflict; this field exists so a future SIP-direct carrier (or similar incompatibility) can refuse an incompatible stack at forge time. The shape is exercised by test/impossibility.test.mjs.",
+      "items": {
+        "type": "object",
+        "required": ["capability", "conflicts_with"],
+        "properties": {
+          "capability": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
+          "conflicts_with": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
+            "minItems": 1
+          },
+          "note": { "type": "string" }
+        }
+      }
     },
     "ingest": {
       "type": "object",
@@ -83,7 +100,12 @@
         "properties": {
           "id": { "type": "string" },
           "severity": { "type": "string", "enum": ["blocker", "warning", "note"] },
-          "note": { "type": "string" }
+          "note": { "type": "string" },
+          "mitigated_by": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["audio_normalization", "emit_mulaw_8000", "native_sip"] },
+            "description": "Native capabilities that, when present in any selected pack, downgrade this pothole to 'mitigated'. Used to separate 'still required in user code' from 'resolved by a native layer'."
+          }
         }
       }
     },

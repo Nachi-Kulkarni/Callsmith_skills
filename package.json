@@ -1,6 +1,6 @@
 {
-  "name": "callsmith",
-  "version": "1.1.0",
+  "name": "@callsmith/cli",
+  "version": "1.3.0",
   "description": "Compile a production-ready implementation recipe for voice AI agents. Resolves audio bridges, interruption flows, latency budgets, and generates framework-native scaffolds.",
   "type": "module",
   "bin": {
@@ -12,7 +12,8 @@
   },
   "scripts": {
     "callsmith": "node bin/callsmith.mjs",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "release:check": "node scripts/release-qa.mjs"
   },
   "keywords": [
     "voice",
@@ -48,10 +49,30 @@
     "cli"
   ],
   "license": "MIT",
+  "author": "",
+  "homepage": "https://github.com/callsmith/callsmith",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/callsmith/callsmith.git"
+  },
+  "bugs": {
+    "url": "https://github.com/callsmith/callsmith/issues"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/callsmith"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "bin",
     "src",
     "data",
-    "providers"
+    "providers",
+    "scripts",
+    "SKILL.md",
+    "CHANGELOG.md",
+    "SECURITY.md"
   ]
 }

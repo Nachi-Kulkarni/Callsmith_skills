@@ -22,6 +22,9 @@ jobs:
       - name: Run callsmith test suite
         run: node --test test/
 
+      - name: Release readiness smoke
+        run: node bin/callsmith.mjs release-check --skip-tests --skip-generated-install
+
   validate-packs:
     runs-on: ubuntu-latest
     steps:

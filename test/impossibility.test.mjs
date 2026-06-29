@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { runCli, writeAnswers } from './helpers/cli.mjs';
 
 const BASE = {
@@ -10,6 +11,7 @@ const BASE = {
   telephony: 'exotel',
   orchestration: 'livekit',
   realtime_model: 'gemini_live',
+  vad: 'silero',
   language: 'english',
   barge_in: 'required',
   latency: 'balanced',
@@ -47,6 +49,7 @@ test('forge resolves an unknown STT provider via synthesis instead of refusing',
     architecture: 'cascaded',
     telephony: 'twilio',
     orchestration: 'pipecat',
+    realtime_model: '',
     stt: 'nonexistent_stt',
     tts: 'elevenlabs',
     llm: 'gpt_4o',
@@ -65,6 +68,69 @@ test('forge refuses a direction mismatch when provider lacks the requested direc
   // exotel supports both directions, so this should SUCCEED for now
   const result = runCli(['forge', '--answers', f]);
   assert.equal(result.exitCode, 0, 'exotel supports outbound — this should succeed');
+});
+
+test('forge refuses an unsupported audio codec when no native layer converts it', () => {
+  const registry = mkdtempSync(join(tmpdir(), 'cs-registry-'));
+  mkdirSync(join(registry, 'telephony'), { recursive: true });
+  writeFileSync(join(registry, 'telephony', 'opus-phone.json'), JSON.stringify({
+    id: 'opus-phone',
+    kind: 'telephony',
+    label: 'Opus Phone',
+    transport: 'websocket',
+    ingest: { format: 'opus', sample_rate: 48000, channels: 1 },
+    egress: { format: 'opus', sample_rate: 48000, channels: 1 },
+    directions: ['inbound', 'outbound'],
+    native_capabilities: [],
+    lifecycle: ['call_started', 'media', 'call_ended'],
+    potholes: [],
+    env_keys: [],
+    doc_urls: [],
+  }));
+
+  const f = writeAnswers({
+    ...BASE,
+    telephony: 'opus-phone',
+    orchestration: 'custom_fastapi',
+  });
+  const result = runCli(['forge', '--answers', f], {
+    env: { CALLSMITH_REGISTRY: registry },
+  });
+  assert.notEqual(result.exitCode, 0, 'unsupported codec stacks must be refused');
+  assert.match(result.stderr + result.stdout, /no_audio_path|No supported inbound audio path/i);
+  assert.ok(!existsSync(join(result.outDir, 'callsmith.recipe.md')),
+    'no recipe must be produced for an unsupported audio path');
+});
+
+test('forge refuses explicit native capability conflicts', () => {
+  const registry = mkdtempSync(join(tmpdir(), 'cs-registry-'));
+  mkdirSync(join(registry, 'telephony'), { recursive: true });
+  writeFileSync(join(registry, 'telephony', 'sip-only-carrier.json'), JSON.stringify({
+    id: 'sip-only-carrier',
+    kind: 'telephony',
+    label: 'SIP-only Carrier',
+    transport: 'sip',
+    ingest: { format: 'pcm', sample_rate: 16000, channels: 1 },
+    egress: { format: 'pcm', sample_rate: 16000, channels: 1 },
+    directions: ['inbound', 'outbound'],
+    native_capabilities: ['native_sip'],
+    native_capability_conflicts: [{
+      capability: 'native_sip',
+      conflicts_with: ['audio_normalization'],
+      note: 'This carrier requires owning the SIP leg directly.',
+    }],
+    lifecycle: ['call_started', 'media', 'call_ended'],
+    potholes: [],
+    env_keys: [],
+    doc_urls: [],
+  }));
+
+  const f = writeAnswers({ ...BASE, telephony: 'sip-only-carrier', orchestration: 'livekit' });
+  const result = runCli(['forge', '--answers', f], {
+    env: { CALLSMITH_REGISTRY: registry },
+  });
+  assert.notEqual(result.exitCode, 0, 'conflicting native capabilities must be refused');
+  assert.match(result.stderr + result.stdout, /native_capability_conflict|conflicts with/i);
 });
 
 // Regression guard — valid stacks still forge

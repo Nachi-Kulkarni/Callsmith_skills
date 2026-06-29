@@ -23,7 +23,7 @@
     "Begin", "Turn", "Termination"
   ],
   "potholes": [
-    { "id": "requires_16k_pcm", "severity": "blocker", "note": "AssemblyAI streaming requires 16 kHz 16-bit mono PCM. Telephony μ-law 8 kHz must be decoded + resampled first." },
+    { "id": "requires_16k_pcm", "severity": "blocker", "note": "AssemblyAI streaming requires 16 kHz 16-bit mono PCM. Telephony μ-law 8 kHz must be decoded + resampled first.", "mitigated_by": ["audio_normalization"] },
     { "id": "turn_vs_partial", "severity": "warning", "note": "Turn events have end_of_turn field; only act on finalized turns (end_of_turn: true) for tool-calling or database writes." },
     { "id": "session_billing", "severity": "note", "note": "Streaming is billed per session duration, not audio sent. Always send a Terminate message when done to avoid 3-hour auto-close billing." }
   ],

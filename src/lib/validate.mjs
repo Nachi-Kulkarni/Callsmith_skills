@@ -63,6 +63,14 @@ export function validatePack(pack) {
   for (const [key, sub] of Object.entries(SCHEMA.properties)) {
     if (key in pack) validateValue(pack[key], sub, `${name}.${key}`, errors);
   }
+  // Defense-in-depth: the resolver treats a missing/empty `format` as a no-op sentinel
+  // (isAudioSentinel), which would silently produce zero transforms for a malformed pack.
+  // The schema only checks type=string, so explicitly reject empty audio formats here.
+  for (const leg of ['ingest', 'egress']) {
+    if (pack[leg] && typeof pack[leg].format === 'string' && pack[leg].format === '') {
+      errors.push(`${name}.${leg}.format: must not be empty (empty format is silently treated as a no-op by the resolver)`);
+    }
+  }
   return errors;
 }
 

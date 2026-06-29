@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadMenu, loadProviders, expandAnswers, resolve } from './resolver.mjs';
-
-function w(file, content) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, content);
-}
+import { createSafeWriter } from './safe-write.mjs';
 
 const FETCH_TIMEOUT_MS = 4000;
 
@@ -27,40 +23,47 @@ export async function hydrate(rawAnswers, outDir, opts = {}) {
   const providers = opts.providers ?? loadProviders();
   const answers = expandAnswers(rawAnswers, menu);
   const result = resolve(answers, providers);
-  const root = path.resolve(outDir);
-  const docsDir = path.join(root, '.callsmith', 'docs');
+  const writer = createSafeWriter(outDir, { force: opts.force === true, dryRun: opts.dryRun === true });
+  const w = (rel, content) => writer.w(rel, content);
 
   const ids = result.pipeline.filter(p => p.id).map(p => p.id);
   const written = [];
 
   // Index
-  const indexLines = ['# Hydrated docs index', '', 'Per-provider context for the selected stack.', ''];
+  const indexLines = ['# Provider Docs Context', '', 'Per-provider frozen facts, official links, and Context7 prompts for the selected stack.', ''];
   for (const id of ids) {
     const pack = providers[id];
     if (!pack) continue;
     const md = renderProviderDoc(pack, answers.flags);
-    const file = path.join(docsDir, `${id}.md`);
-    w(file, md);
+    w(`.callsmith/docs/${id}.md`, md);
     written.push(`.callsmith/docs/${id}.md`);
 
     // best-effort live fetch of the first doc url
-    if (pack.doc_urls && pack.doc_urls[0]) {
+    if (!writer.dryRun && pack.doc_urls && pack.doc_urls[0]) {
       const fetched = await tryFetch(pack.doc_urls[0]);
-      if (fetched) w(path.join(docsDir, `${id}.fetched.md`), `<!-- fetched from ${pack.doc_urls[0]} -->\n\n${fetched}\n`);
+      if (fetched) w(`.callsmith/docs/${id}.fetched.md`, `<!-- fetched from ${pack.doc_urls[0]} -->\n\n${fetched}\n`);
     }
 
     indexLines.push(`- [${pack.label}](${id}.md) — ${pack.kind}`);
   }
-  w(path.join(docsDir, 'README.md'), indexLines.join('\n') + '\n');
+  w('.callsmith/docs/README.md', indexLines.join('\n') + '\n');
   written.push('.callsmith/docs/README.md');
-  return { written, ids };
+  return {
+    written,
+    ids,
+    root: writer.root,
+    collisions: writer.collisions,
+    overwritten: writer.overwritten,
+    manifest: writer.manifest,
+    dryRun: writer.dryRun,
+  };
 }
 
 function renderProviderDoc(pack, flags) {
   const L = [];
   L.push(`# ${pack.label}`);
   L.push('');
-  L.push(`> Contract slice frozen by callsmith at hydration time. Verify against the live API before shipping.`);
+  L.push(`> Contract slice frozen by callsmith. Use the official links and Context7 commands below to verify against the live API before shipping.`);
   L.push('');
   L.push('## Audio contract');
   L.push('');
@@ -110,7 +113,7 @@ function renderProviderDoc(pack, flags) {
     L.push('');
   }
   if (pack.context7 && pack.context7.library_id) {
-    L.push('## Context7 hydration (run at build time for fresh docs)');
+    L.push('## Context7 prompts (run at build time for fresh docs)');
     L.push('');
     L.push('```bash');
     L.push(`# resolve once`);

@@ -49,13 +49,14 @@ async function registryLookup(id, kind) {
 
 function synthesizePack(id, kind) {
   const label = id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const audio = synthesizedAudioContract(kind);
   const pack = {
     id,
     kind,
     label,
-    transport: 'websocket',
-    ingest: { format: 'pcm', sample_rate: 16000, channels: 1 },
-    egress: { format: 'pcm', sample_rate: 16000, channels: 1 },
+    transport: audio.transport,
+    ingest: audio.ingest,
+    egress: audio.egress,
     directions: ['inbound', 'outbound'],
     native_capabilities: [],
     model: 'UNKNOWN — research required',
@@ -70,6 +71,56 @@ function synthesizePack(id, kind) {
   return { pack, verified: false, source: 'synthesized' };
 }
 
+// Synthesized audio contracts for unknown providers. NOTE: only telephony/realtime/stt/tts
+// contracts are pipeline-active (they can be a sink/source in planAudioDiff). The llm and
+// vad branches are schema-completeness fillers — those kinds are never an audio sink/source
+// (resolver.mjs picks sink from realtime|stt and source from realtime|tts), so their
+// contracts never drive transforms. The realtime default mirrors Gemini Live's asymmetric
+// 16k-in/24k-out; the synthesized pack carries a blocker UNVERIFIED pothole forcing manual
+// verification, so any false asymmetry warning is surfaced to the operator.
+function synthesizedAudioContract(kind) {
+  if (kind === 'telephony') {
+    return {
+      transport: 'websocket',
+      ingest: { format: 'mulaw', sample_rate: 8000, channels: 1 },
+      egress: { format: 'mulaw', sample_rate: 8000, channels: 1 },
+    };
+  }
+  if (kind === 'realtime') {
+    return {
+      transport: 'websocket',
+      ingest: { format: 'pcm', sample_rate: 16000, channels: 1 },
+      egress: { format: 'pcm', sample_rate: 24000, channels: 1 },
+    };
+  }
+  if (kind === 'stt') {
+    return {
+      transport: 'websocket',
+      ingest: { format: 'pcm', sample_rate: 16000, channels: 1 },
+      egress: { format: 'text', sample_rate: 0, channels: 0 },
+    };
+  }
+  if (kind === 'llm') {
+    return {
+      transport: 'http',
+      ingest: { format: 'text', sample_rate: 0, channels: 0 },
+      egress: { format: 'text', sample_rate: 0, channels: 0 },
+    };
+  }
+  if (kind === 'tts') {
+    return {
+      transport: 'websocket',
+      ingest: { format: 'text', sample_rate: 0, channels: 0 },
+      egress: { format: 'pcm', sample_rate: 24000, channels: 1 },
+    };
+  }
+  return {
+    transport: kind === 'vad' ? 'inline' : 'websocket',
+    ingest: { format: 'pcm', sample_rate: 16000, channels: 1 },
+    egress: { format: 'pcm', sample_rate: 16000, channels: 1 },
+  };
+}
+
 export async function resolveUnknownProvider(id, kind) {
   const registryResult = await registryLookup(id, kind);
   if (registryResult) return registryResult;
@@ -82,7 +133,6 @@ export async function resolveUnknowns(providers, answers) {
   const resolved = [];
 
   for (const [role, selection] of Object.entries(sel)) {
-    if (role === 'llm') continue;
     if (!selection || !selection.id) continue;
     if (merged[selection.id]) continue;
 

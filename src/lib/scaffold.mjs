@@ -1,23 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadMenu, loadProviders, expandAnswers, resolve } from './resolver.mjs';
-
-function w(root, rel, content) {
-  const full = path.join(root, rel);
-  fs.mkdirSync(path.dirname(full), { recursive: true });
-  fs.writeFileSync(full, content);
-}
+import { voiceUxConfig, safetyConfig } from './compile.mjs';
+import { createSafeWriter } from './safe-write.mjs';
 
 const PIPECAT_SERVICES = {
-  deepgram:       { cls: 'DeepgramSTTService',      mod: 'pipecat.services.deepgram',       init: 'api_key=os.getenv("DEEPGRAM_API_KEY")' },
-  assemblyai:     { cls: 'AssemblyAIService',       mod: 'pipecat.services.assemblyai',     init: 'api_key=os.getenv("ASSEMBLYAI_API_KEY")' },
-  openai:         { cls: 'OpenAILLMService',        mod: 'pipecat.services.openai',         init: 'api_key=os.getenv("OPENAI_API_KEY")' },
-  anthropic:      { cls: 'AnthropicLLMService',     mod: 'pipecat.services.anthropic',      init: 'api_key=os.getenv("ANTHROPIC_API_KEY")' },
-  gemini:         { cls: 'GoogleLLMService',        mod: 'pipecat.services.google',         init: 'api_key=os.getenv("GOOGLE_API_KEY")' },
-  elevenlabs:     { cls: 'ElevenLabsTTSService',    mod: 'pipecat.services.elevenlabs',     init: 'api_key=os.getenv("ELEVENLABS_API_KEY")' },
-  cartesia:       { cls: 'CartesiaTTSService',      mod: 'pipecat.services.cartesia',       init: 'api_key=os.getenv("CARTESIA_API_KEY")' },
+  deepgram:       { cls: 'DeepgramSTTService',      mod: 'pipecat.services.deepgram.stt',   init: 'api_key=os.getenv("DEEPGRAM_API_KEY")' },
+  assemblyai:     { cls: 'AssemblyAIService',       mod: 'pipecat.services.assemblyai.stt', init: 'api_key=os.getenv("ASSEMBLYAI_API_KEY")' },
+  openai:         { cls: 'OpenAILLMService',        mod: 'pipecat.services.openai.llm',     init: 'api_key=os.getenv("OPENAI_API_KEY")' },
+  anthropic:      { cls: 'AnthropicLLMService',     mod: 'pipecat.services.anthropic.llm',  init: 'api_key=os.getenv("ANTHROPIC_API_KEY")' },
+  gemini:         { cls: 'GoogleLLMService',        mod: 'pipecat.services.google.llm',     init: 'api_key=os.getenv("GOOGLE_API_KEY")' },
+  elevenlabs:     { cls: 'ElevenLabsTTSService',    mod: 'pipecat.services.elevenlabs.tts', init: 'api_key=os.getenv("ELEVENLABS_API_KEY")' },
+  cartesia:       { cls: 'CartesiaTTSService',      mod: 'pipecat.services.cartesia.tts',   init: 'api_key=os.getenv("CARTESIA_API_KEY")' },
   'gemini-live':  { cls: 'GoogleGenAIRealtimeService', mod: 'pipecat.services.google.genai', init: 'api_key=os.getenv("GEMINI_API_KEY")' },
-  'openai-realtime': { cls: 'OpenAIRealtimeService', mod: 'pipecat.services.openai_realtime', init: 'api_key=os.getenv("OPENAI_API_KEY")' },
+  'openai-realtime': { cls: 'OpenAIRealtimeLLMService', mod: 'pipecat.services.openai.realtime', init: 'api_key=os.getenv("OPENAI_API_KEY")' },
 };
 
 const LIVEKIT_INFERENCE = {
@@ -38,13 +34,31 @@ const TELEPHONY_SERIALIZERS = {
   vonage:   { cls: 'ProtobufFrameSerializer',   mod: 'pipecat.serializers.protobuf' },
 };
 
+// Single source of truth for the scaffold's file manifest. Consumed by simulate.mjs
+// (requiredScaffoldFiles) so the simulator validates against what scaffold actually writes,
+// not a separately-maintained list that can drift.
+const OPERATIONAL_FILES = [
+  'state.py', 'resilience.py', 'operations.py', 'observability.py', 'tools.py', 'voice_ux.py',
+  'safety.py', 'handoff.py', 'local_test.py', 'simulate_call.py',
+];
+
+export function expectedScaffoldFiles(orchestrationId) {
+  const files = [...OPERATIONAL_FILES];
+  if (orchestrationId === 'livekit') files.push('agent.py');
+  else if (orchestrationId === 'pipecat') files.push('bot.py', 'server.py');
+  else files.push('server.py', 'audio/bridge.py');
+  return files;
+}
+
 export function scaffold(rawAnswers, outDir, opts = {}) {
   const menu = loadMenu();
   const providers = opts.providers ?? loadProviders();
   const answers = expandAnswers(rawAnswers, menu);
   const result = resolve(answers, providers);
   const { flags, providers: sel } = answers;
-  const root = path.resolve(outDir);
+  const writer = createSafeWriter(outDir, { force: opts.force === true, dryRun: opts.dryRun === true });
+  const w = (rel, content) => writer.w(rel, content);
+  const root = writer.root;
 
   const telephonyId = sel.telephony?.id;
   const orchId = sel.orchestration?.id;
@@ -56,48 +70,73 @@ export function scaffold(rawAnswers, outDir, opts = {}) {
 
   const transforms = result.transforms;
   const needDecode = transforms.some(t => /decode mulaw/i.test(t.step));
-  const needEncode = transforms.some(t => /-> mulaw|transcode pcm -> mulaw/i.test(t.step));
+  const needEncode = transforms.some(t => /encode PCM -> mulaw|-> mulaw|transcode pcm -> mulaw/i.test(t.step));
   const needResample = transforms.some(t => /resample/i.test(t.step));
   const needBridge = transforms.length > 0;
   const isCascaded = flags.mode === 'cascaded' || flags.mode === 'hybrid';
   const isRealtime = flags.mode === 'realtime' || flags.mode === 'hybrid';
 
   const deps = generateDeps(sel, orchId);
-  w(root, 'requirements.txt', deps.join('\n') + '\n');
-  w(root, 'requirements-test.txt', orchId === 'custom-fastapi' ? 'numpy\nscipy\npytest\n' : 'pytest\n');
+  w('requirements.txt', deps.join('\n') + '\n');
+  w('requirements-test.txt', orchId === 'custom-fastapi' ? 'numpy\nscipy\npytest\n' : 'pytest\n');
 
-  w(root, 'config.py', renderConfig(result.envKeys));
+  w('config.py', renderConfig(result.envKeys));
 
-  w(root, 'state.py', renderStatePy(llmId, providers));
-  w(root, 'resilience.py', renderResiliencePy(sel, providers));
+  w('state.py', renderStatePy(llmId, providers));
+  w('resilience.py', renderResiliencePy(sel, providers));
+  w('operations.py', renderOperationsPy(result));
+  w('observability.py', renderObservabilityPy(result));
+  w('tools.py', renderToolsPy(flags));
+  w('voice_ux.py', renderVoiceUxPy(flags));
+  w('safety.py', renderSafetyPy(flags));
+  w('handoff.py', renderHandoffPy(flags));
+  w('local_test.py', renderLocalTestPy(telephonyId, orchId));
+  w('simulate_call.py', renderSimulateCallPy(flags, result));
 
   if (orchId === 'livekit') {
-    w(root, 'agent.py', renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtime));
-    w(root, 'tests/test_agent_structure.py', renderLiveKitTest(sel, isCascaded, isRealtime));
-    w(root, 'tests/test_state.py', renderStateTest(llmId, providers));
-    w(root, 'tests/test_resilience.py', renderResilienceTest());
+    w('agent.py', renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtime));
+    w('tests/test_agent_structure.py', renderLiveKitTest(sel, isCascaded, isRealtime));
+    w('tests/test_state.py', renderStateTest(llmId, providers));
+    w('tests/test_resilience.py', renderResilienceTest());
+    w('tests/test_operational_modules.py', renderOperationalModulesTest());
   } else if (orchId === 'pipecat') {
-    w(root, 'bot.py', renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime));
-    w(root, 'server.py', renderPipecatServer(telephonyId, providers));
-    w(root, 'tests/test_pipeline_structure.py', renderPipecatTest(sel, isCascaded, isRealtime));
-    w(root, 'tests/test_state.py', renderStateTest(llmId, providers));
-    w(root, 'tests/test_resilience.py', renderResilienceTest());
+    w('bot.py', renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime));
+    w('server.py', renderPipecatServer(telephonyId, providers));
+    w('tests/test_pipeline_structure.py', renderPipecatTest(sel, isCascaded, isRealtime));
+    w('tests/test_state.py', renderStateTest(llmId, providers));
+    w('tests/test_resilience.py', renderResilienceTest());
+    w('tests/test_operational_modules.py', renderOperationalModulesTest());
   } else {
-    w(root, 'audio/__init__.py', '');
-    w(root, 'audio/codecs.py', renderCodecs());
-    if (needResample) w(root, 'audio/resampler.py', renderResampler());
-    w(root, 'audio/bridge.py', renderBridge(needBridge, needDecode, needEncode, needResample, result));
-    w(root, 'server.py', renderCustomServer(telephonyId, providers, flags));
-    w(root, 'tests/test_audio_bridge.py', renderAudioTest(needBridge, needDecode, needEncode, needResample));
-    w(root, 'tests/test_state.py', renderStateTest(llmId, providers));
-    w(root, 'tests/test_resilience.py', renderResilienceTest());
+    w('audio/__init__.py', '');
+    w('audio/codecs.py', renderCodecs());
+    if (needResample) w('audio/resampler.py', renderResampler());
+    w('audio/bridge.py', renderBridge(needBridge, result));
+    w('server.py', renderCustomServer(telephonyId, providers, flags));
+    w('tests/test_audio_bridge.py', renderAudioTest(needBridge, needDecode, needEncode, needResample));
+    w('tests/test_state.py', renderStateTest(llmId, providers));
+    w('tests/test_resilience.py', renderResilienceTest());
+    w('tests/test_operational_modules.py', renderOperationalModulesTest());
   }
 
-  w(root, 'tests/test_lifecycle.py', renderLifecycleTest(flags));
-  w(root, 'Dockerfile', renderDockerfile());
-  w(root, 'README.md', renderReadme(flags, result, needBridge, orchId));
+  w('tests/test_lifecycle.py', renderLifecycleTest(flags));
+  w('install.sh', renderInstallScript());
+  w('pytest.ini', renderPytestIni());
+  w('pyproject.toml', renderPyprojectToml());
+  w('Dockerfile', renderDockerfile());
+  w('Makefile', renderMakefile(orchId));
+  w('README.md', renderReadme(flags, result, needBridge, orchId));
 
-  return { root, needBridge, transformCount: transforms.length, files: countFiles(root) };
+  const fileCount = writer.dryRun ? writer.manifest.length : countFiles(root);
+  return {
+    root,
+    needBridge,
+    transformCount: transforms.length,
+    files: fileCount,
+    collisions: writer.collisions,
+    overwritten: writer.overwritten,
+    manifest: writer.manifest,
+    dryRun: writer.dryRun,
+  };
 }
 
 function countFiles(root) {
@@ -118,12 +157,13 @@ function generateDeps(sel, orchId) {
     if (sel.stt?.id === 'deepgram' || sel.realtime?.id) add('livekit-plugins-deepgram');
     if (sel.llm?.id === 'openai' || sel.realtime?.id === 'openai-realtime') add('livekit-plugins-openai');
     if (sel.llm?.id === 'gemini' || sel.realtime?.id === 'gemini-live') add('livekit-plugins-google');
+    if (sel.realtime?.id === 'gemini-live') add('google-genai');
     if (sel.tts?.id === 'elevenlabs') add('livekit-plugins-elevenlabs');
     if (sel.tts?.id === 'cartesia') add('livekit-plugins-cartesia');
     add('python-dotenv');
   } else if (orchId === 'pipecat') {
     add('# Pipecat framework');
-    add('pipecat-ai[openai,deepgram,elevenlabs,google,cartesia,silero]>=0.0.50');
+    add('pipecat-ai[openai,deepgram,elevenlabs,google,cartesia,silero]>=0.0.36');
     add('fastapi');
     add('uvicorn[standard]');
     add('twilio');
@@ -135,7 +175,7 @@ function generateDeps(sel, orchId) {
     add('websockets');
     add('python-dotenv');
     if (sel.stt?.id === 'deepgram') add('deepgram-sdk>=3.0');
-    if (sel.stt?.id === 'assemblyai') add('assemblyai>=1.0');
+    if (sel.stt?.id === 'assemblyai') add('assemblyai>=0.40');
     if (sel.llm?.id === 'openai') add('openai>=1.50');
     if (sel.llm?.id === 'anthropic') add('anthropic>=0.40');
     if (sel.llm?.id === 'gemini') add('google-genai');
@@ -194,6 +234,9 @@ function renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtim
       sessionParts.push(`        tts=${LIVEKIT_INFERENCE[sel.tts.id]},`);
     }
   }
+  if (isRealtime && !isCascaded) {
+    sessionParts.push(`        stt=inference.STT(language="multi"),`);
+  }
 
   if (isRealtime && sel.realtime?.id === 'openai-realtime') {
     sessionParts.push(`        llm=openai.realtime.RealtimeModel(`);
@@ -204,6 +247,12 @@ function renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtim
   } else if (isRealtime && sel.realtime?.id === 'gemini-live') {
     sessionParts.push(`        llm=google.realtime.RealtimeModel(`);
     sessionParts.push(`            model="gemini-3.1-flash-live-preview",`);
+    sessionParts.push(`            realtime_input_config=types.RealtimeInputConfig(`);
+    sessionParts.push(`                automatic_activity_detection=types.AutomaticActivityDetection(`);
+    sessionParts.push(`                    disabled=True,`);
+    sessionParts.push(`                ),`);
+    sessionParts.push(`            ),`);
+    sessionParts.push(`            input_audio_transcription=None,`);
     sessionParts.push(`        ),`);
   }
 
@@ -218,11 +267,18 @@ function renderLiveKitAgent(flags, sel, result, providers, isCascaded, isRealtim
     'from livekit.agents import AgentServer, AgentSession, Agent, inference, room_io, TurnHandlingOptions',
     'from livekit.plugins import silero',
     'from livekit.plugins.turn_detector.multilingual import MultilingualModel',
+    'from observability import CallTrace, wire_livekit_session',
+    'from operations import get_operations_config',
+    'from voice_ux import get_voice_ux_config',
+    'from tools import build_default_registry',
+    'from safety import SafetyPolicy',
+    'from handoff import HandoffManager',
   ];
   if (isRealtime && sel.realtime?.id === 'openai-realtime') {
     imports.push('from livekit.plugins import openai');
   } else if (isRealtime && sel.realtime?.id === 'gemini-live') {
     imports.push('from livekit.plugins import google');
+    imports.push('from google.genai import types');
   }
 
   return `"""LiveKit Agents voice agent — generated by callsmith.
@@ -240,6 +296,7 @@ from state import ContextManager, TranscriptStore
 from resilience import retry_with_backoff
 
 load_dotenv()
+import config  # fail-fast: exits if required provider keys are missing
 
 
 class Assistant(Agent):
@@ -255,18 +312,28 @@ server = AgentServer()
 @server.rtc_session(agent_name="voice-agent")
 async def entrypoint(ctx: agents.JobContext):
     """LiveKit agent entry point. One session per room participant."""
+    ops = get_operations_config()
+    voice_ux = get_voice_ux_config()
+    trace = CallTrace(call_id=getattr(getattr(ctx, "job", None), "id", "livekit-call"))
+    # Operational singletons — instantiate here; wire into your session/tool layer per callsmith.recipe.md.
+    tools = build_default_registry(mode=${JSON.stringify(flags.tools || 'none')})
+    safety = SafetyPolicy()
+    handoff = HandoffManager(policy=voice_ux.handoff)
+
     session = AgentSession(
 ${sessionParts.join('\n')}
     )
+    wire_livekit_session(session, trace)
 
     await session.start(
         room=ctx.room,
         agent=Assistant(),
     )
 
-    await session.generate_reply(
-        instructions="Greet the user and offer your assistance.",
-    )
+    if voice_ux.greeting_mode == "immediate":
+        await session.generate_reply(
+            instructions=voice_ux.greeting_instruction(),
+        )
 
 
 if __name__ == "__main__":
@@ -286,6 +353,11 @@ function renderLiveKitTest(sel, isCascaded, isRealtime) {
   }
   if (isRealtime) {
     checks.push("    assert 'realtime' in source.lower(), 'realtime mode must use a realtime model'");
+    checks.push("    assert 'stt=' in source, 'LiveKit turn detection with realtime models must include an STT leg'");
+    if (sel.realtime?.id === 'gemini-live') {
+      checks.push("    assert 'automatic_activity_detection' in source, 'Gemini realtime must disable model-side activity detection when LiveKit owns turns'");
+      checks.push("    assert 'disabled=True' in source, 'Gemini realtime activity detection must be disabled'");
+    }
   }
 
   return `"""Verifies the generated LiveKit agent has the correct structure.
@@ -328,12 +400,13 @@ function renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime)
   const imports = new Set([
     'import os',
     'from pipecat.pipeline.pipeline import Pipeline',
-    'from pipecat.pipeline.task import PipelineTask',
     'from pipecat.pipeline.runner import PipelineRunner',
-    'from pipecat.transports.network.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams',
+    'from pipecat.pipeline.worker import PipelineWorker, PipelineParams',
+    'from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams',
     `from ${serializer.mod} import ${serializer.cls}`,
     'from pipecat.audio.vad.silero import SileroVADAnalyzer',
-    'from pipecat.pipeline.context import LLMContext, LLMContextAggregatorPair, LLMUserAggregatorParams',
+    'from pipecat.processors.aggregators.llm_context import LLMContext, LLMUserAggregatorParams',
+    'from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair',
     'from pipecat.processors.aggregators.dtmf_aggregator import DTMFAggregator',
     'from pipecat.frames.core import ErrorFrame',
     'from fastapi import FastAPI, WebSocket, Request',
@@ -342,6 +415,12 @@ function renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime)
     'import logging',
     'from state import ContextManager, TranscriptStore',
     'from resilience import retry_with_backoff',
+    'from observability import CallTrace, PipecatTraceObserver',
+    'from operations import get_operations_config',
+    'from voice_ux import get_voice_ux_config',
+    'from tools import build_default_registry',
+    'from safety import SafetyPolicy',
+    'from handoff import HandoffManager',
   ]);
 
   const serviceInits = [];
@@ -360,7 +439,7 @@ function renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime)
       imports.add(`from ${svc.mod} import ${svc.cls}`);
       const varName = 'llm';
       serviceInits.push(`    ${varName} = ${svc.cls}(${svc.init})`);
-      pipelineNodes.push('        context_aggregator.user(),');
+      pipelineNodes.push('        user_aggregator,');
       pipelineNodes.push(`        ${varName},`);
     }
     if (sel.tts?.id && PIPECAT_SERVICES[sel.tts.id]) {
@@ -370,10 +449,10 @@ function renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime)
       serviceInits.push(`    ${varName} = ${svc.cls}(${svc.init})`);
       pipelineNodes.push(`        ${varName},`);
       pipelineNodes.push('        transport.output(),');
-      pipelineNodes.push('        context_aggregator.assistant(),');
+      pipelineNodes.push('        assistant_aggregator,');
     } else {
       pipelineNodes.push('        transport.output(),');
-      pipelineNodes.push('        context_aggregator.assistant(),');
+      pipelineNodes.push('        assistant_aggregator,');
     }
   } else if (isRealtime) {
     const rtId = sel.realtime?.id;
@@ -381,10 +460,10 @@ function renderPipecatBot(flags, sel, result, providers, isCascaded, isRealtime)
       const svc = PIPECAT_SERVICES[rtId];
       imports.add(`from ${svc.mod} import ${svc.cls}`);
       serviceInits.push(`    realtime = ${svc.cls}(${svc.init})`);
-      pipelineNodes.push('        context_aggregator.user(),');
+      pipelineNodes.push('        user_aggregator,');
       pipelineNodes.push('        realtime,');
       pipelineNodes.push('        transport.output(),');
-      pipelineNodes.push('        context_aggregator.assistant(),');
+      pipelineNodes.push('        assistant_aggregator,');
     } else {
       pipelineNodes.push('        transport.output(),');
     }
@@ -402,7 +481,11 @@ Architecture: ${flags.mode} | Language: ${flags.language} | Barge-in: ${flags.ba
 Read .callsmith/context/interruption.md and .callsmith/context/latency-budget.md
 before customizing the pipeline or VAD parameters.
 """
+from dotenv import load_dotenv
 ${[...imports].sort().join('\n')}
+
+load_dotenv()
+import config  # fail-fast: exits if required provider keys are missing
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
@@ -413,6 +496,14 @@ SYSTEM_PROMPT = ${JSON.stringify(systemPrompt)}
 
 async def run_bot(websocket: WebSocket, stream_sid: str = None, call_sid: str = None):
     """Build and run the Pipecat pipeline for one call session."""
+    ops = get_operations_config()
+    voice_ux = get_voice_ux_config()
+    trace = CallTrace(call_id=call_sid or stream_sid or "pipecat-call")
+    # Operational singletons — instantiate here; wire into your session/tool layer per callsmith.recipe.md.
+    tools = build_default_registry(mode=${JSON.stringify(flags.tools || 'none')})
+    safety = SafetyPolicy()
+    handoff = HandoffManager(policy=voice_ux.handoff)
+
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
@@ -430,7 +521,7 @@ ${serviceInits.join('\n')}
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     context = LLMContext(messages)
-    context_aggregator = LLMContextAggregatorPair(
+    user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
             vad_analyzer=SileroVADAnalyzer(),
@@ -443,7 +534,15 @@ ${serviceInits.join('\n')}
 ${pipelineNodes.join('\n')}
     ])
 
-    task = PipelineTask(pipeline)
+    task = PipelineWorker(
+        pipeline,
+        params=PipelineParams(
+            enable_metrics=True,
+            enable_usage_metrics=True,
+            idle_timeout_secs=max(1, voice_ux.silence_timeout_ms // 1000),
+        ),
+        observers=[PipecatTraceObserver(trace)],
+    )
     runner = PipelineRunner()
     await runner.run(task)
 `;
@@ -469,8 +568,14 @@ import os
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import PlainTextResponse
 import uvicorn
+from bot import run_bot
 
 app = FastAPI()
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True}
 
 
 ${webhookPath}
@@ -485,26 +590,20 @@ async def voice_webhook(request: Request):
 
 @app.websocket("/ws")
 async def media_stream(ws: WebSocket):
-    """WebSocket media endpoint. Receives audio frames from ${telephonyId || 'provider'}."""
+    """WebSocket media endpoint. Hands the socket to the Pipecat pipeline."""
     await ws.accept()
     stream_sid = None
     call_sid = None
 
     try:
-        async for message in ws.iter_json():
-            if message.get("event") == "start":
-                stream_sid = message.get("start", {}).get("streamSid")
-                call_sid = message.get("start", {}).get("callSid")
-                # TODO: initialize session, start bot
-            elif message.get("event") == "media":
-                payload = message.get("media", {}).get("payload", "")
-                # TODO: base64-decode payload, process audio
-            elif message.get("event") == "stop":
-                break
+        first = await ws.receive_json()
+        if first.get("event") == "start":
+            stream_sid = first.get("start", {}).get("streamSid")
+            call_sid = first.get("start", {}).get("callSid")
+        await run_bot(ws, stream_sid=stream_sid, call_sid=call_sid)
     except Exception:
         pass
     finally:
-        # TODO: session teardown
         pass
 
 
@@ -517,7 +616,8 @@ if __name__ == "__main__":
 function renderPipecatTest(sel, isCascaded, isRealtime) {
   const checks = [
     "    assert 'Pipeline(' in source, 'bot.py must construct a Pipeline'",
-    "    assert 'PipelineTask' in source, 'must create PipelineTask'",
+    "    assert 'PipelineWorker' in source, 'must create PipelineWorker'",
+    "    assert 'PipecatTraceObserver' in source, 'must attach observability observer'",
     "    assert 'PipelineRunner' in source, 'must use PipelineRunner'",
     "    assert 'SileroVADAnalyzer' in source, 'must configure SileroVADAnalyzer'",
     "    assert 'LLMContextAggregatorPair' in source, 'must use context aggregator'",
@@ -551,6 +651,8 @@ def test_server_has_webhook_and_websocket():
         source = f.read()
     assert 'websocket' in source.lower(), 'server must have WebSocket endpoint'
     assert 'webhook' in source.lower() or 'post' in source.lower(), 'server must have webhook endpoint'
+    assert 'from bot import run_bot' in source, 'server must import the Pipecat bot runner'
+    assert 'await run_bot' in source, 'WebSocket endpoint must start the Pipecat pipeline'
 
 def test_bot_has_system_prompt():
     source = _read_bot()
@@ -632,7 +734,7 @@ def _gcd(a, b):
 `;
 }
 
-function renderBridge(needBridge, needDecode, needEncode, needResample, result) {
+function renderBridge(needBridge, result) {
   if (!needBridge) {
     return `"""Audio bridge — passthrough (no custom transcoding needed)."""
 
@@ -644,26 +746,57 @@ class AudioBridge:
 
     def outbound(self, data: bytes) -> bytes:
         return data
-`;
+	`;
   }
+  const inbound = result.transforms.filter(t => t.direction === 'inbound');
+  const outbound = result.transforms.filter(t => t.direction === 'outbound');
+  const needDecode = result.transforms.some(t => /decode mulaw/i.test(t.step));
+  const needEncode = result.transforms.some(t => /encode PCM -> mulaw|transcode pcm -> mulaw/i.test(t.step));
+  const needResample = result.transforms.some(t => /resample/i.test(t.step));
+  const imports = [];
+  if (needDecode) imports.push('from audio.codecs import mulaw_bytes_to_pcm');
+  if (needEncode) imports.push('from audio.codecs import pcm_to_mulaw_bytes');
+  if (needResample) imports.push('from audio import resampler');
+
   return `"""Audio bridge implementing the transforms in .callsmith/context/audio-contract.md."""
-${needDecode ? 'from audio.codecs import mulaw_bytes_to_pcm' : ''}
-${needEncode ? 'from audio.codecs import pcm_to_mulaw_bytes' : ''}
-${needResample ? 'from audio import resampler' : ''}
+${imports.join('\n')}
 
 
 class AudioBridge:
     """Custom bridge: ${result.transforms.length} transforms required."""
 
     def inbound(self, telephony_bytes: bytes) -> bytes:
-        ${needDecode ? 'pcm = mulaw_bytes_to_pcm(telephony_bytes)' : 'pcm = telephony_bytes'}
-        ${needResample ? 'pcm = resampler.resample(pcm, 8000, 16000)' : ''}
-        return pcm
+${renderTransformBody('telephony_bytes', inbound)}
 
     def outbound(self, model_pcm: bytes) -> bytes:
-        ${needResample ? 'pcm = resampler.resample(model_pcm, 24000, 8000)' : 'pcm = model_pcm'}
-        ${needEncode ? 'return pcm_to_mulaw_bytes(pcm)' : 'return pcm'}
+${renderTransformBody('model_pcm', outbound)}
 `;
+}
+
+function renderTransformBody(inputName, transforms) {
+  const L = [`        audio = ${inputName}`];
+  for (const t of transforms) {
+    if (/decode mulaw/i.test(t.step)) {
+      L.push('        audio = mulaw_bytes_to_pcm(audio)');
+      continue;
+    }
+    if (/encode PCM -> mulaw|transcode pcm -> mulaw/i.test(t.step)) {
+      L.push('        audio = pcm_to_mulaw_bytes(audio)');
+      continue;
+    }
+    const resample = t.step.match(/resample (\d+) Hz -> (\d+) Hz/i);
+    if (resample) {
+      L.push(`        audio = resampler.resample(audio, ${resample[1]}, ${resample[2]})`);
+      continue;
+    }
+    if (/normalize .* -> /i.test(t.step)) {
+      L.push(`        # ${t.step}: PCM byte layout is already compatible.`);
+      continue;
+    }
+    L.push(`        # Unsupported transform emitted by resolver: ${t.step}`);
+  }
+  L.push('        return audio');
+  return L.join('\n');
 }
 
 function renderCustomServer(telephonyId, providers, flags) {
@@ -681,14 +814,29 @@ import os
 import base64
 import json
 import logging
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import PlainTextResponse
 import uvicorn
 from state import ContextManager, TranscriptStore, DTMFHandler
 from resilience import ReconnectingWebSocket, retry_with_backoff, ConnectionState
+from observability import CallTrace
+from operations import get_operations_config
+from voice_ux import get_voice_ux_config
+from tools import build_default_registry
+from safety import SafetyPolicy
+from handoff import HandoffManager
+
+load_dotenv()
+import config  # fail-fast: exits if required provider keys are missing
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True}
 
 
 @app.post("/voice")
@@ -706,6 +854,13 @@ async def media_stream(ws: WebSocket):
     """Media stream WebSocket endpoint with DTMF + transcript support."""
     await ws.accept()
     call_id = None
+    ops = get_operations_config()
+    voice_ux = get_voice_ux_config()
+    trace = CallTrace(call_id="custom-call")
+    # Operational singletons — instantiate here; wire into your session/tool layer per callsmith.recipe.md.
+    tools = build_default_registry(mode=${JSON.stringify(flags.tools || 'none')})
+    safety = SafetyPolicy()
+    handoff = HandoffManager(policy=voice_ux.handoff)
     transcript = TranscriptStore("transcripts.db")
     dtmf = DTMFHandler(max_digits=0, inter_digit_timeout_ms=5000)
 
@@ -720,17 +875,22 @@ async def media_stream(ws: WebSocket):
             event = message.get("event")
             if event == "start":
                 call_id = message.get("start", {}).get("callSid", "unknown")
+                trace.call_id = call_id
+                trace.mark("call_started", call_id=call_id)
                 logger.info(f"Call started: {call_id}")
             elif event == "media":
                 payload_b64 = message.get("media", {}).get("payload", "")
                 if payload_b64:
                     raw = base64.b64decode(payload_b64)
+                    trace.mark("media_frame_in", bytes=len(raw))
                     # TODO: bridge.inbound(raw) -> STT -> LLM -> TTS -> bridge.outbound() -> ws.send
             elif event == "dtmf":
                 digit = message.get("dtmf", {}).get("digit", "")
                 dtmf.add_digit(digit)
+                trace.mark("dtmf", digits=digit)
             elif event == "stop":
                 logger.info(f"Call ended: {call_id}")
+                trace.mark("call_ended", reason="provider_stop")
                 break
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
@@ -812,6 +972,763 @@ def test_interrupt_flushes_queue():
 `;
 }
 
+// ─── Operational modules ────────────────────────────────────────────
+
+function renderOperationsPy(result) {
+  const ops = result.operations;
+  return `"""Operations contract — generated by callsmith.
+
+This is the runtime-facing version of .callsmith/context/operations.md.
+Use it to keep hosting, debugging, and audio-cleanup decisions inspectable
+after the project grows beyond the first scaffold.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class AudioFeature:
+    feature: str
+    mode: str
+    owner: str
+    action: str
+
+
+@dataclass(frozen=True)
+class OperationsConfig:
+    requested_hosting_model: str
+    effective_hosting_model: str
+    hosting_label: str
+    infrastructure_owner: str
+    orchestration: str | None
+    adjustments: list[str]
+    responsibilities: list[str]
+    debug_profile: str
+    trace_level: str
+    trace_sampling: float
+    retain_debug_audio_sec: int
+    debug_note: str
+    audio_enhancement: str
+    audio_features: list[AudioFeature]
+
+    def should_capture_debug_audio(self) -> bool:
+        return self.retain_debug_audio_sec > 0
+
+    def owns_media_bridge(self) -> bool:
+        return self.effective_hosting_model == "self_hosted"
+
+    def trace_event_allowed(self, sample_value: float = 0.0) -> bool:
+        return self.trace_sampling >= 1 or sample_value < self.trace_sampling
+
+    def audio_feature(self, feature_name: str) -> AudioFeature | None:
+        lowered = feature_name.lower()
+        for item in self.audio_features:
+            if item.feature.lower() == lowered:
+                return item
+        return None
+
+
+def _build_audio_features(raw: list[dict[str, Any]]) -> list[AudioFeature]:
+    return [AudioFeature(**item) for item in raw]
+
+
+def get_operations_config() -> OperationsConfig:
+    raw = ${JSON.stringify(ops, null, 8)}
+    raw["audio_features"] = _build_audio_features(raw["audio_features"])
+    return OperationsConfig(**raw)
+`;
+}
+
+function renderObservabilityPy(result) {
+  const ops = result.operations;
+  return `"""Call timeline and metrics — generated by callsmith.
+
+Use CallTrace for every call. Framework adapters are intentionally light:
+- LiveKit: wire_livekit_session(session, trace)
+- Pipecat: PipecatTraceObserver(trace)
+- Custom FastAPI: call trace.mark(...) directly from the WebSocket handler
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import json
+import time
+from typing import Any
+
+
+@dataclass
+class VoiceEvent:
+    at_ms: int
+    event: str
+    detail: dict[str, Any] = field(default_factory=dict)
+
+
+class CallTrace:
+    def __init__(self, call_id: str, cost_per_minute_usd: float = ${result.cost.total_per_minute_usd}):
+        self.call_id = call_id
+        self.cost_per_minute_usd = cost_per_minute_usd
+        self.debug_profile = "${ops.debug_profile}"
+        self.trace_level = "${ops.trace_level}"
+        self.trace_sampling = ${ops.trace_sampling}
+        self.retain_debug_audio_sec = ${ops.retain_debug_audio_sec}
+        self.started_at = time.perf_counter()
+        self.events: list[VoiceEvent] = []
+        self.counters = {
+            "dropped_frames": 0,
+            "reconnect_count": 0,
+            "tool_failures": 0,
+            "turn_count": 0,
+            "interruptions": 0,
+            "vad_false_triggers": 0,
+        }
+
+    def mark(self, event: str, **detail: Any) -> VoiceEvent:
+        at_ms = int((time.perf_counter() - self.started_at) * 1000)
+        ev = VoiceEvent(at_ms=at_ms, event=event, detail=detail)
+        self.events.append(ev)
+        if event == "dropped_frame":
+            self.counters["dropped_frames"] += 1
+        elif event == "reconnect_started":
+            self.counters["reconnect_count"] += 1
+        elif event == "tool_finished" and detail.get("status") != "ok":
+            self.counters["tool_failures"] += 1
+        elif event in {"stt_final", "realtime_turn_complete"}:
+            self.counters["turn_count"] += 1
+        elif event == "interruption_started":
+            self.counters["interruptions"] += 1
+        elif event == "vad_false_trigger":
+            self.counters["vad_false_triggers"] += 1
+        return ev
+
+    def first_ms(self, event: str) -> int | None:
+        for ev in self.events:
+            if ev.event == event:
+                return ev.at_ms
+        return None
+
+    def summary(self) -> dict[str, Any]:
+        first_audio = self.first_ms("agent_audio_out")
+        tool_latencies = [
+            ev.detail.get("latency_ms", 0)
+            for ev in self.events
+            if ev.event == "tool_finished"
+        ]
+        return {
+            "call_id": self.call_id,
+            "first_response_ms": first_audio,
+            "stt_first_partial_ms": self.first_ms("stt_partial"),
+            "stt_final_ms": self.first_ms("stt_final"),
+            "llm_first_token_ms": self.first_ms("llm_first_token"),
+            "tts_first_audio_ms": self.first_ms("tts_first_audio"),
+            "events": len(self.events),
+            "counters": dict(self.counters),
+            "tool_latency_ms": sum(tool_latencies),
+            "cost_per_minute_usd": self.cost_per_minute_usd,
+            "debug_profile": self.debug_profile,
+            "trace_level": self.trace_level,
+            "retain_debug_audio_sec": self.retain_debug_audio_sec,
+        }
+
+    def write_jsonl(self, path: str) -> None:
+        with open(path, "w") as f:
+            for ev in self.events:
+                f.write(json.dumps({
+                    "call_id": self.call_id,
+                    "at_ms": ev.at_ms,
+                    "event": ev.event,
+                    **ev.detail,
+                }) + "\\n")
+
+
+def wire_livekit_session(session, trace: CallTrace) -> None:
+    """Attach best-effort LiveKit AgentSession state handlers."""
+
+    def attach(event_name, handler):
+        try:
+            session.on(event_name)(handler)
+        except Exception:
+            trace.mark("observer_attach_failed", framework="livekit", event=event_name)
+
+    def on_user_state_changed(ev):
+        state = getattr(ev, "new_state", "unknown")
+        trace.mark("user_state_changed", state=state)
+        if state == "speaking":
+            trace.mark("interruption_started")
+        elif state == "listening":
+            trace.mark("interruption_ended")
+
+    def on_agent_state_changed(ev):
+        state = getattr(ev, "new_state", "unknown")
+        trace.mark("agent_state_changed", state=state)
+        if state == "speaking":
+            trace.mark("agent_audio_out")
+
+    attach("user_state_changed", on_user_state_changed)
+    attach("agent_state_changed", on_agent_state_changed)
+
+
+try:
+    from pipecat.observers.base_observer import BaseObserver
+except Exception:
+    class BaseObserver:  # type: ignore
+        pass
+
+
+class PipecatTraceObserver(BaseObserver):
+    """Pipecat observer that records frame-level lifecycle events."""
+
+    def __init__(self, trace: CallTrace):
+        super().__init__()
+        self.trace = trace
+
+    async def on_push_frame(self, data):
+        frame_name = data.frame.__class__.__name__
+        self.trace.mark("pipecat_frame_pushed", frame=frame_name)
+        if "Interruption" in frame_name:
+            self.trace.mark("interruption_started", frame=frame_name)
+        elif "BotStartedSpeaking" in frame_name:
+            self.trace.mark("agent_audio_out", frame=frame_name)
+        elif "Error" in frame_name:
+            self.trace.mark("pipeline_error", frame=frame_name)
+
+    async def on_process_frame(self, data):
+        frame_name = data.frame.__class__.__name__
+        if "Metrics" in frame_name:
+            self.trace.mark("pipeline_metrics", frame=frame_name)
+
+    async def on_pipeline_started(self):
+        self.trace.mark("pipeline_started")
+`;
+}
+
+function renderToolsPy(flags) {
+  const mode = flags.tools || 'none';
+  return `"""Tool calling primitives — generated by callsmith.
+
+Selected integration mode: ${mode}
+Every tool call gets timeout, retry, idempotency, and safe speech fallback.
+"""
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+import hashlib
+import json
+import sqlite3
+import time
+import urllib.request
+from typing import Any, Awaitable, Callable
+
+
+@dataclass
+class ToolResult:
+    ok: bool
+    data: Any = None
+    error: str | None = None
+    speech: str | None = None
+    latency_ms: int = 0
+    idempotency_key: str | None = None
+
+
+class ToolExecutionError(Exception):
+    pass
+
+
+def idempotency_key(call_id: str, tool_name: str, args: dict[str, Any]) -> str:
+    payload = json.dumps(args, sort_keys=True, default=str)
+    digest = hashlib.sha256(payload.encode()).hexdigest()[:16]
+    return f"{call_id}:{tool_name}:{digest}"
+
+
+def safe_failure_speech(tool_name: str) -> str:
+    return "I am having trouble checking that right now. I can keep going with what I know or connect you to someone."
+
+
+class ToolRegistry:
+    def __init__(self, default_timeout: float = 5.0, max_retries: int = 1):
+        self.default_timeout = default_timeout
+        self.max_retries = max_retries
+        self._tools: dict[str, Callable[..., Awaitable[Any]]] = {}
+
+    def register(self, name: str, fn: Callable[..., Awaitable[Any]]) -> None:
+        self._tools[name] = fn
+
+    async def call(self, name: str, *, call_id: str, args: dict[str, Any], timeout: float | None = None) -> ToolResult:
+        if name not in self._tools:
+            return ToolResult(ok=False, error=f"unknown tool: {name}", speech=safe_failure_speech(name))
+
+        idem = idempotency_key(call_id, name, args)
+        started = time.perf_counter()
+        last_error = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                data = await asyncio.wait_for(self._tools[name](**args, idempotency_key=idem), timeout=timeout or self.default_timeout)
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                return ToolResult(ok=True, data=data, latency_ms=latency_ms, idempotency_key=idem)
+            except Exception as exc:
+                last_error = str(exc)
+                if attempt < self.max_retries:
+                    await asyncio.sleep(0.05 * (attempt + 1))
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return ToolResult(ok=False, error=last_error, speech=safe_failure_speech(name), latency_ms=latency_ms, idempotency_key=idem)
+
+
+async def webhook_tool(url: str, payload: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotency_key,
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read().decode() or "{}")
+
+
+async def openapi_tool(operation_id: str, params: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+    return {
+        "operation_id": operation_id,
+        "params": params,
+        "idempotency_key": idempotency_key,
+        "todo": "Wire this stub to the generated OpenAPI client.",
+    }
+
+
+async def mcp_tool(server: str, tool: str, args: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
+    return {
+        "server": server,
+        "tool": tool,
+        "args": args,
+        "idempotency_key": idempotency_key,
+        "todo": "Wire this stub to your MCP client.",
+    }
+
+
+async def database_tool(db_path: str, sql: str, params: list[Any] | None = None, idempotency_key: str | None = None) -> dict[str, Any]:
+    if not sql.strip().lower().startswith(("select", "insert", "update")):
+        raise ToolExecutionError("Only select/insert/update statements are allowed by the scaffold.")
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.execute(sql, params or [])
+        conn.commit()
+        rows = cur.fetchall()
+        return {"rows": rows, "idempotency_key": idempotency_key}
+    finally:
+        conn.close()
+
+
+def build_default_registry(mode: str = "${mode}") -> ToolRegistry:
+    registry = ToolRegistry()
+
+    async def noop_lookup(**kwargs):
+        return {"mode": mode, "status": "stub", "args": kwargs}
+
+    if mode != "none":
+        registry.register(f"{mode}_lookup", noop_lookup)
+    return registry
+`;
+}
+
+function renderVoiceUxPy(flags) {
+  const ux = { ...voiceUxConfig(flags), handoff: flags.handoff || 'ticket' };
+  return `"""Runtime voice UX configuration — generated by callsmith."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class VoiceUXConfig:
+    endpointing: str
+    endpointing_ms: int
+    interruption_sensitivity: str
+    audio_enhancement: str
+    noise_cancellation: str
+    echo_cancellation: str
+    automatic_gain_control: str
+    silence_timeout_ms: int
+    max_call_duration_sec: int
+    greeting_mode: str
+    voice_profile: str
+    speaking_speed: float
+    language_fallback: str
+    handoff: str
+
+    def greeting_instruction(self) -> str:
+        if self.greeting_mode == "wait_for_user":
+            return "Wait for the caller to speak before greeting."
+        if self.greeting_mode == "business_hours":
+            return "Greet the caller and mention that availability may depend on business hours."
+        return "Greet the user and offer your assistance."
+
+    def should_reprompt(self, silence_ms: int) -> bool:
+        return silence_ms >= self.silence_timeout_ms
+
+    def should_end_call(self, elapsed_sec: int) -> bool:
+        return self.max_call_duration_sec > 0 and elapsed_sec >= self.max_call_duration_sec
+
+    def turn_config(self) -> dict:
+        return {
+            "endpointing_ms": self.endpointing_ms,
+            "interruption_sensitivity": self.interruption_sensitivity,
+            "audio_enhancement": self.audio_enhancement,
+            "noise_cancellation": self.noise_cancellation,
+            "echo_cancellation": self.echo_cancellation,
+            "automatic_gain_control": self.automatic_gain_control,
+        }
+
+
+def get_voice_ux_config() -> VoiceUXConfig:
+    return VoiceUXConfig(**${JSON.stringify(ux, null, 8)})
+`;
+}
+
+function renderSafetyPy(flags) {
+  const safety = safetyConfig(flags);
+  return `"""Safety and compliance guardrails — generated by callsmith."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+import re
+import time
+from typing import Any
+
+
+@dataclass(frozen=True)
+class SafetyPolicy:
+    recording_consent: str = "${safety.recording_consent}"
+    transcript_retention_days: int = ${safety.transcript_retention_days}
+    redact_pii: bool = ${safety.pii_redaction ? 'True' : 'False'}
+    audit_tool_actions: bool = ${safety.audit_tool_actions ? 'True' : 'False'}
+
+    def consent_prompt(self) -> str | None:
+        if self.recording_consent == "none":
+            return None
+        if self.recording_consent == "explicit":
+            return "This call may be recorded. Do I have your permission to continue?"
+        return "This call may be recorded for quality and training."
+
+    def can_record(self, caller_consented: bool = False) -> bool:
+        if self.recording_consent == "none":
+            return False
+        if self.recording_consent == "explicit":
+            return caller_consented
+        return True
+
+
+class PiiRedactor:
+    EMAIL = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", re.I)
+    PHONE = re.compile(r"(?<!\\d)(?:\\+?\\d[\\d -]{7,}\\d)(?!\\d)")
+    CARD = re.compile(r"(?<!\\d)(?:\\d[ -]*?){13,19}(?!\\d)")
+
+    def redact(self, text: str) -> str:
+        text = self.EMAIL.sub("[email]", text)
+        text = self.PHONE.sub("[phone]", text)
+        text = self.CARD.sub("[number]", text)
+        return text
+
+
+class AuditLog:
+    def __init__(self, path: str = "audit.jsonl", redactor: PiiRedactor | None = None):
+        self.path = path
+        self.redactor = redactor or PiiRedactor()
+
+    def record_tool_action(self, call_id: str, tool: str, status: str, args: dict[str, Any], idempotency_key: str | None = None) -> None:
+        redacted_args = {
+            key: self.redactor.redact(str(value))
+            for key, value in args.items()
+        }
+        row = {
+            "timestamp": time.time(),
+            "call_id": call_id,
+            "tool": tool,
+            "status": status,
+            "args": redacted_args,
+            "idempotency_key": idempotency_key,
+        }
+        with open(self.path, "a") as f:
+            f.write(json.dumps(row) + "\\n")
+
+
+def detects_opt_out(text: str) -> bool:
+    lowered = text.lower()
+    phrases = ["do not call", "stop calling", "remove my number", "unsubscribe"]
+    return any(phrase in lowered for phrase in phrases)
+`;
+}
+
+function renderHandoffPy(flags) {
+  const handoff = flags.handoff || 'ticket';
+  return `"""Human handoff and escalation — generated by callsmith."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class HandoffSummary:
+    call_id: str
+    reason: str
+    caller_intent: str
+    attempted_actions: list[str]
+    unresolved_question: str
+    risk: str
+    next_action: str
+    transcript_excerpt: str
+
+
+class HandoffManager:
+    def __init__(self, policy: str = "${handoff}"):
+        self.policy = policy
+
+    def should_handoff(self, reason: str, confidence: float = 1.0, tool_failures: int = 0) -> bool:
+        if self.policy == "none":
+            return False
+        if "human" in reason.lower() or "agent" in reason.lower():
+            return True
+        if confidence < 0.55:
+            return True
+        if tool_failures >= 2:
+            return True
+        if any(word in reason.lower() for word in ["complaint", "cancel", "refund", "legal", "unsafe"]):
+            return True
+        return False
+
+    def next_action(self) -> str:
+        if self.policy == "transfer":
+            return "transfer_live_call"
+        if self.policy == "callback":
+            return "schedule_callback"
+        if self.policy == "ticket":
+            return "create_support_ticket"
+        return "continue_conversation"
+
+    def create_summary(self, call_id: str, transcript: list[dict[str, Any]], reason: str, attempted_actions: list[str] | None = None) -> HandoffSummary:
+        attempted_actions = attempted_actions or []
+        user_turns = [t.get("content", "") for t in transcript if t.get("role") == "user"]
+        assistant_turns = [t.get("content", "") for t in transcript if t.get("role") == "assistant"]
+        excerpt = "\\n".join((user_turns + assistant_turns)[-6:])
+        return HandoffSummary(
+            call_id=call_id,
+            reason=reason,
+            caller_intent=user_turns[-1] if user_turns else "unknown",
+            attempted_actions=attempted_actions,
+            unresolved_question=reason,
+            risk="needs_human_review",
+            next_action=self.next_action(),
+            transcript_excerpt=excerpt,
+        )
+`;
+}
+
+function renderLocalTestPy(telephonyId, orchId) {
+  const webhookPath = orchId === 'pipecat' && telephonyId === 'twilio'
+    ? '/twilio/webhook'
+    : orchId === 'pipecat' && telephonyId === 'exotel'
+    ? '/exotel/webhook'
+    : orchId === 'livekit'
+    ? '/livekit/webhook'
+    : '/voice';
+  return `"""Local PSTN/WebSocket testing helper — generated by callsmith.
+
+Run:
+    python server.py
+    ngrok http 8000
+
+Paste the ngrok HTTPS URL below to derive provider webhook URLs.
+"""
+from __future__ import annotations
+
+
+def ngrok_command(port: int = 8000) -> list[str]:
+    return ["ngrok", "http", str(port)]
+
+
+def webhook_urls(public_https_url: str) -> dict[str, str]:
+    base = public_https_url.rstrip("/")
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+    ws_base = "wss://" + base.split("://", 1)[1]
+    return {
+        "voice_webhook": base + "${webhookPath}",
+        "media_websocket": ws_base + "/ws",
+        "health": base + "/health",
+    }
+
+
+def print_instructions(public_https_url: str, port: int = 8000) -> None:
+    urls = webhook_urls(public_https_url)
+    print("Run local server on port", port)
+    print("Run tunnel:", " ".join(ngrok_command(port)))
+    print("Voice webhook:", urls["voice_webhook"])
+    print("Media WebSocket:", urls["media_websocket"])
+
+
+if __name__ == "__main__":
+    import sys
+    print("=== Local Testing Helper ===")
+    print()
+    print("1. Start your server:")
+    print("   python server.py")
+    print()
+    print("2. In another terminal, expose it:")
+    print("   ", " ".join(ngrok_command()))
+    print()
+    print("3. Copy the ngrok HTTPS URL and re-run:")
+    print("   python local_test.py https://<your-ngrok-domain>.ngrok-free.app")
+    print()
+    if len(sys.argv) > 1:
+        print_instructions(sys.argv[1])
+    else:
+        print("(No URL provided. Pass your ngrok URL as an argument to see derived webhook URLs.)")
+`;
+}
+
+function renderSimulateCallPy(flags, result) {
+  const mode = flags.mode;
+  const tools = flags.tools || 'none';
+  return `"""Deterministic fake-call simulator — generated by callsmith.
+
+This is local and free: no provider SDKs, no paid API calls.
+"""
+from __future__ import annotations
+
+from observability import CallTrace
+from tools import build_default_registry
+from voice_ux import get_voice_ux_config
+
+
+class FakeCallSimulator:
+    def __init__(self):
+        self.trace = CallTrace("fake-call", cost_per_minute_usd=${result.cost.total_per_minute_usd})
+        self.voice_ux = get_voice_ux_config()
+        self.tools = build_default_registry(mode="${tools}")
+
+    def run(self) -> dict:
+        self.trace.mark("call_started")
+        self.trace.mark("media_frame_in", bytes=320)
+        if "${mode}" == "realtime":
+            self.trace.mark("realtime_input", frame_count=1)
+            self.trace.mark("realtime_turn_complete", transcript="I need help")
+        else:
+            self.trace.mark("stt_partial", text="I need")
+            self.trace.mark("stt_final", text="I need help")
+            self.trace.mark("llm_first_token", token="Sure")
+            if "${tools}" != "none":
+                self.trace.mark("tool_started", name="${tools}_lookup")
+                self.trace.mark("tool_finished", name="${tools}_lookup", status="ok", latency_ms=120)
+            self.trace.mark("tts_first_audio", bytes=960)
+        self.trace.mark("agent_audio_out", bytes=960)
+        if ${flags.barge_in === true || flags.barge_in === 'optional' ? 'True' : 'False'}:
+            self.trace.mark("interruption_started", reason="caller_speech_during_playback")
+            self.trace.mark("interruption_ended", action="resume_listening")
+        self.trace.mark("dtmf", digits="1")
+        self.trace.mark("reconnect_started", retry=1)
+        self.trace.mark("reconnect_finished", retry=1)
+        self.trace.mark("call_ended", reason="sim_complete")
+        return self.trace.summary()
+
+
+if __name__ == "__main__":
+    print(FakeCallSimulator().run())
+`;
+}
+
+function renderOperationalModulesTest() {
+  return `"""Tests for operational modules: observability, tools, UX, safety, handoff, local testing, simulator."""
+import asyncio
+
+from observability import CallTrace
+from operations import get_operations_config
+from tools import build_default_registry, idempotency_key
+from voice_ux import get_voice_ux_config
+from safety import SafetyPolicy, PiiRedactor, detects_opt_out
+from handoff import HandoffManager
+from local_test import ngrok_command, webhook_urls
+from simulate_call import FakeCallSimulator
+
+
+def test_call_trace_records_core_metrics():
+    trace = CallTrace("call-1", cost_per_minute_usd=0.05)
+    trace.mark("call_started")
+    trace.mark("stt_partial")
+    trace.mark("llm_first_token")
+    trace.mark("agent_audio_out")
+    summary = trace.summary()
+    assert summary["call_id"] == "call-1"
+    assert summary["first_response_ms"] is not None
+    assert summary["cost_per_minute_usd"] == 0.05
+
+
+def test_tool_registry_has_timeout_and_idempotency():
+    async def go():
+        registry = build_default_registry()
+        key = idempotency_key("call-1", "lookup", {"order": "123"})
+        assert key.startswith("call-1:lookup:")
+        if registry._tools:
+            name = next(iter(registry._tools))
+            result = await registry.call(name, call_id="call-1", args={"value": 1})
+            assert result.ok is True
+    asyncio.run(go())
+
+
+def test_voice_ux_config_exposes_timing_knobs():
+    cfg = get_voice_ux_config()
+    assert cfg.endpointing_ms > 0
+    assert cfg.silence_timeout_ms > 0
+    assert isinstance(cfg.turn_config(), dict)
+    assert "echo_cancellation" in cfg.turn_config()
+
+
+def test_operations_config_exposes_runtime_ownership():
+    cfg = get_operations_config()
+    assert cfg.effective_hosting_model in {"managed_cloud", "hybrid_worker", "self_hosted"}
+    assert cfg.infrastructure_owner
+    assert cfg.audio_feature("Noise suppression") is not None
+    assert cfg.trace_level in {"timeline", "frame_and_audio", "metrics"}
+
+
+def test_safety_redacts_and_detects_opt_out():
+    policy = SafetyPolicy()
+    assert policy.recording_consent in {"none", "announce", "explicit"}
+    redacted = PiiRedactor().redact("Call me at +1 415 555 0101 or a@example.com")
+    assert "[phone]" in redacted
+    assert "[email]" in redacted
+    assert detects_opt_out("Please do not call me again")
+
+
+def test_handoff_summary_has_next_action():
+    manager = HandoffManager(policy="ticket")
+    assert manager.should_handoff("caller asked for human")
+    summary = manager.create_summary(
+        "call-1",
+        [{"role": "user", "content": "I need a refund"}],
+        "refund policy",
+    )
+    assert summary.next_action == "create_support_ticket"
+
+
+def test_ngrok_helper_derives_webhook_urls():
+    assert ngrok_command(8000) == ["ngrok", "http", "8000"]
+    urls = webhook_urls("https://abc.ngrok-free.app")
+    assert urls["voice_webhook"].startswith("https://")
+    assert urls["media_websocket"].startswith("wss://")
+
+
+def test_fake_call_simulator_runs():
+    summary = FakeCallSimulator().run()
+    assert summary["events"] >= 8
+    assert summary["first_response_ms"] is not None
+`;
+}
+
 // ─── Conversation state (state.py) ──────────────────────────────────
 
 function renderStatePy(llmId, providers) {
@@ -861,7 +1778,13 @@ class ContextManager:
     def _compress(self) -> None:
         budget = self.max_tokens - self.reserve_tokens
         while self._estimated_tokens > budget and len(self.messages) > 1:
-            removed = self.messages.pop(0)
+            idx = next(
+                (i for i, msg in enumerate(self.messages) if msg["role"] != "system"),
+                None,
+            )
+            if idx is None:
+                break
+            removed = self.messages.pop(idx)
             self._estimated_tokens -= removed["tokens"]
 
     def get_messages(self) -> list[dict]:
@@ -1038,7 +1961,7 @@ class ReconnectingWebSocket:
                 delay = min(
                     self.BASE_DELAY * (2 ** self._retry_count), self.MAX_DELAY,
                 )
-                jitter = delay * 0.25 * random.random()
+                jitter = delay * random.uniform(-0.25, 0.25)
                 await asyncio.sleep(delay + jitter)
                 self._retry_count += 1
 
@@ -1078,7 +2001,7 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0, max_delay:
                     delay = getattr(e, "retry_after", None) or min(
                         base_delay * (2 ** attempt), max_delay,
                     )
-                    jitter = delay * 0.25 * random.random()
+                    jitter = delay * random.uniform(-0.25, 0.25)
                     logger.warning(
                         "%s attempt %d failed, retrying in %.1fs: %s",
                         fn.__name__, attempt + 1, delay, e,
@@ -1146,6 +2069,16 @@ def test_context_manager_compresses():
         ctx.add_message("user", f"Message number {i} " * 10)
     budget = 100 - 20
     assert ctx.token_count <= budget + 50  # may keep one extra during compression
+
+
+def test_context_manager_retains_system_prompt():
+    ctx = ContextManager(max_tokens=120, reserve_tokens=20)
+    ctx.add_message("system", "Never drop this instruction.")
+    for i in range(60):
+        ctx.add_message("user", f"Long user message {i} " * 10)
+    messages = ctx.get_messages()
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"] == "Never drop this instruction."
 
 
 def test_transcript_store_round_trip():
@@ -1295,6 +2228,9 @@ def test_reconnecting_websocket_connects():
 
 def test_reconnecting_websocket_fails_after_retries():
     rws = ReconnectingWebSocket()
+    rws.BASE_DELAY = 0.001
+    rws.MAX_DELAY = 0.001
+    rws.MAX_RETRIES = 2
 
     async def bad_connect():
         raise ConnectionError("nope")
@@ -1322,13 +2258,115 @@ function renderSystemPrompt(flags) {
 }
 
 function renderDockerfile() {
-  return `FROM python:3.12-slim
+  return `FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir uv \\
+    && uv pip install --system --no-cache -r requirements.txt
 COPY . .
 EXPOSE 8000
 CMD ["python", "server.py"]
+`;
+}
+
+function renderPytestIni() {
+  return `[pytest]
+pythonpath = .
+`;
+}
+
+function renderPyprojectToml() {
+  return `[project]
+name = "voice-agent"
+requires-python = ">=3.10"
+`;
+}
+
+function renderMakefile(orchId) {
+  const devCmd = orchId === 'livekit' ? 'agent.py dev' : 'server.py';
+  return [
+    '# Generated by callsmith. Standard dev/test/simulate entry points.',
+    '# Common commands: make install, make install-full, make test, make simulate',
+    'PYTHON ?= python3',
+    'PORT ?= 8000',
+    '',
+    '.PHONY: install install-full test dev simulate docker-build docker-run clean',
+    '',
+    'install:',
+    '\tbash install.sh test',
+    '',
+    'install-full:',
+    '\tbash install.sh full',
+    '',
+    'test:',
+    '\t$(PYTHON) -m pytest tests/ -q',
+    '',
+    'dev:',
+    '\t$(PYTHON) ' + devCmd,
+    '',
+    'simulate:',
+    '\t$(PYTHON) simulate_call.py',
+    '',
+    'docker-build:',
+    '\tdocker build -t voice-agent .',
+    '',
+    'docker-run:',
+    '\tdocker run --rm -p $(PORT):8000 --env-file .env voice-agent',
+    '',
+    'clean:',
+    '\trm -rf __pycache__ .pytest_cache .uv-cache transcripts.db',
+    '',
+  ].join('\n');
+}
+
+function renderInstallScript() {
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+MODE="\${1:-test}"
+PYTHON_BIN="\${PYTHON:-python3}"
+VENV_DIR="\${VENV_DIR:-.venv}"
+export UV_CACHE_DIR="\${UV_CACHE_DIR:-$PWD/.uv-cache}"
+
+# Fail fast on Python < 3.10 (LiveKit/Pipecat use typing.TypeAlias, PEP 604 unions, etc.)
+PY_VERSION=$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "0.0")
+if [ "$(printf '%s\\n' "3.10" "$PY_VERSION" | sort -V | head -1)" != "3.10" ]; then
+  echo "error: Python >= 3.10 required (found $PY_VERSION at $PYTHON_BIN)." >&2
+  echo "  LiveKit Agents and Pipecat use typing features added in 3.10." >&2
+  echo "  Install Python 3.11+: https://www.python.org/downloads/  or: brew install python@3.11" >&2
+  exit 1
+fi
+
+case "$MODE" in
+  test) REQ_FILES=("requirements-test.txt") ;;
+  full) REQ_FILES=("requirements.txt") ;;
+  all) REQ_FILES=("requirements-test.txt" "requirements.txt") ;;
+  *)
+    echo "Usage: bash install.sh [test|full|all]" >&2
+    echo "  test: fast scaffold validation deps only" >&2
+    echo "  full: provider SDK/runtime deps" >&2
+    echo "  all:  test + full deps" >&2
+    exit 2
+    ;;
+esac
+
+if command -v uv >/dev/null 2>&1; then
+  echo "Using uv for parallel dependency install."
+  uv venv "$VENV_DIR" --python "$PYTHON_BIN"
+  for req in "\${REQ_FILES[@]}"; do
+    uv pip install --python "$VENV_DIR/bin/python" -r "$req"
+  done
+else
+  echo "uv not found; falling back to pip. Install uv for faster parallel downloads: pipx install uv" >&2
+  "$PYTHON_BIN" -m venv "$VENV_DIR"
+  "$VENV_DIR/bin/python" -m pip install --upgrade pip
+  for req in "\${REQ_FILES[@]}"; do
+    "$VENV_DIR/bin/python" -m pip install -r "$req"
+  done
+fi
+
+echo
+echo "Done. Activate with: . $VENV_DIR/bin/activate"
 `;
 }
 
@@ -1361,11 +2399,24 @@ ${needBridge ? '**Custom bridge required** — see \`audio/bridge.py\` and \`.ca
 ## Entry point
 \`${entryFile}\`
 
-## Run
+## Fast validation
+
+Use the lightweight test install first. It avoids downloading provider SDK wheels until the generated scaffold itself is validated.
+
+\`\`\`bash
+bash install.sh test
+. .venv/bin/activate
+pytest tests/
+\`\`\`
+
+The installer uses \`uv\` for parallel downloads when available and falls back to \`pip\`.
+
+## Full runtime install
+
 \`\`\`bash
 cp .env.example .env  # fill keys
-pip install -r requirements.txt
-pytest tests/         # validate structure + state + resilience
+bash install.sh full  # installs provider SDK/runtime deps
+. .venv/bin/activate
 python ${orchId === 'livekit' ? 'agent.py' : 'server.py'}
 \`\`\`
 

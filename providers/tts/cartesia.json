@@ -23,7 +23,7 @@
     "session_start", "audio_chunk", "session_end"
   ],
   "potholes": [
-    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Cartesia defaults to 24 kHz PCM. For telephony, request output_format={encoding: pcm_mulaw, sample_rate: 8000} to skip your own encode stage, or resample + encode yourself." },
+    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Cartesia defaults to 24 kHz PCM. For telephony, request output_format={encoding: pcm_mulaw, sample_rate: 8000} to skip your own encode stage, or resample + encode yourself.", "mitigated_by": ["audio_normalization", "emit_mulaw_8000"] },
     { "id": "websocket_chunking", "severity": "warning", "note": "Audio arrives as variable-size PCM chunks over WebSocket. Buffer and chunk-align before resampling for the telephony leg." }
   ],
   "env_keys": ["CARTESIA_API_KEY"],
@@ -36,9 +36,9 @@
   },
   "cost_estimates": {
     "billing": "per_1k_chars",
-    "rate_usd": 0.065,
-    "per_minute_usd": 0.052,
-    "notes": "$0.065/1k chars at ~800 chars/min conversational pace"
+    "rate_usd": 0.040,
+    "per_minute_usd": 0.032,
+    "notes": "~$0.040/1k chars derived from plan pricing (Sonic-3.5, verified Jun 2026)"
   },
   "context7": { "library_id": "/websites/cartesia_ai", "topics": ["streaming-tts", "sonic-3.5", "output-format"] }
 }

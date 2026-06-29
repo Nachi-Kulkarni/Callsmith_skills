@@ -39,7 +39,7 @@
     {
       "id": "context_window_overflow",
       "severity": "warning",
-      "note": "GPT-4o has a 128k context window. For long calls (>30 min), implement conversation summarization or sliding window to avoid truncation."
+      "note": "GPT-5.5 has a 1M-token context window in this pack. Long calls should still use sliding-window context management plus optional summarization for predictable latency and memory."
     },
     {
       "id": "tool_call_latency",

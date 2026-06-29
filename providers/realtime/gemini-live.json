@@ -30,12 +30,14 @@
     {
       "id": "input_rate_16k_only",
       "severity": "blocker",
-      "note": "Gemini Live ingests 16 kHz PCM (audio/pcm;rate=16000). Feeding it 8 kHz μ-law telephony audio without decoding + resampling produces silent or corrupted turns."
+      "note": "Gemini Live ingests 16 kHz PCM (audio/pcm;rate=16000). Feeding it 8 kHz μ-law telephony audio without decoding + resampling produces silent or corrupted turns.",
+      "mitigated_by": ["audio_normalization"]
     },
     {
       "id": "output_rate_24k",
       "severity": "blocker",
-      "note": "Output is 24 kHz PCM. Sending raw 24 kHz frames to an 8 kHz μ-law telephony leg without resample + encode corrupts playback."
+      "note": "Output is 24 kHz PCM. Sending raw 24 kHz frames to an 8 kHz μ-law telephony leg without resample + encode corrupts playback.",
+      "mitigated_by": ["audio_normalization"]
     },
     {
       "id": "vad_auto_response",
@@ -50,7 +52,8 @@
     {
       "id": "asymmetric_sample_rates",
       "severity": "warning",
-      "note": "Input and output sample rates differ (16k in, 24k out). Build two independent resamplers; do not reuse one for both directions."
+      "note": "Input and output sample rates differ (16k in, 24k out). Build two independent resamplers; do not reuse one for both directions.",
+      "mitigated_by": ["audio_normalization"]
     }
   ],
   "env_keys": [

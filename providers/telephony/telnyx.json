@@ -23,7 +23,7 @@
     "call_initiated", "call_answered", "media_stream_connected", "media_frame", "dtmf", "media_stream_closed", "call_hangup"
   ],
   "potholes": [
-    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model." },
+    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model.", "mitigated_by": ["audio_normalization"] },
     { "id": "call_control_id", "severity": "warning", "note": "Media streams are tied to a call_control_id; use it to correlate WebSocket frames with call lifecycle events." }
   ],
   "env_keys": ["TELNYX_API_KEY"],

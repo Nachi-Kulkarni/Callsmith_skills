@@ -2,54 +2,104 @@
 
 A recipe compiler for voice AI agents.
 
-callsmith takes a short MCQ intake (surface, telephony, orchestration, model architecture, language, barge-in, business logic, tools, deployment), resolves the audio-format and lifecycle compatibility across the selected stack, and writes an **agent handoff packet** that a coding agent (Claude Code, Cursor, Codex, Gemini CLI) builds from in one pass — without rediscovering telephony potholes.
+callsmith takes a short MCQ intake (surface, telephony, orchestration, hosting ownership, model architecture, language, barge-in, audio cleanup, debug depth, voice UX, business logic, tools, safety, handoff, deployment), resolves the audio-format, lifecycle, and operational compatibility across the selected stack, and writes an **agent handoff packet** that a coding agent (Claude Code, Cursor, Codex, Gemini CLI) builds from in one pass — without rediscovering telephony potholes.
 
-> The hard part of a voice agent is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/24 kHz), turn/interruption lifecycle, and per-provider streaming quirks. callsmith carries that knowledge.
+> The hard part of a voice agent is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/24 kHz), turn/interruption lifecycle, barge-in, echo/noise cleanup ownership, and per-provider streaming quirks. callsmith carries that knowledge.
 
 ## Install
 
-**As a CLI:**
+**From a checkout (recommended for now):**
 
 ```bash
-npm install -g callsmith
+npm install -g @callsmith/cli
+callsmith --help
 ```
+
+**From a checkout:**
+
+```bash
+git clone <this-repo>
+cd callsmith
+npm install -g .        # or: npm link
+callsmith --help
+```
+
+> **Note on the npm name:** install `@callsmith/cli`. The unscoped `callsmith` package on npm is an unrelated project.
 
 **As an agent skill** (works in Claude Code, Cursor, Codex, Copilot, Gemini CLI, OpenCode, Cline, and 18+ others):
 
 ```bash
-npx skills add <owner>/callsmith
+# From a local checkout:
+npx skills add .
+# Or once published to a GitHub repo:
+npx skills add callsmith/callsmith
 ```
 
 ## Quick start
 
+This exact flow is green end-to-end (simulate passes + generated `pytest` passes):
+
 ```bash
-# 1. Take the intake (interactive menu, or write an answers file)
+# 1. Take the intake (writes a fillable template you edit, or answer interactively in a TTY)
 callsmith spec --answers voice.answers.json
 
 # 2. Compile the handoff packet into the project
-callsmith forge --answers voice.answers.json --out .
+callsmith forge --answers voice.answers.json --out ./voice-agent
 
-# 3. Inspect the compatibility matrix
+# 3. Inspect the compatibility matrix (no files written)
 callsmith check --answers voice.answers.json
 
 # 4. Generate the repo skeleton
-callsmith scaffold --answers voice.answers.json --out .
+callsmith scaffold --answers voice.answers.json --out ./voice-agent
 
-# 5. Hydrate fresh provider docs
-callsmith docs
+# 5. Write provider docs context + Context7 prompts
+callsmith docs --answers voice.answers.json --out ./voice-agent
+
+# 6. Prove the fake call lifecycle before connecting a number
+callsmith simulate --answers voice.answers.json --out ./voice-agent --scaffold ./voice-agent
+
+# 7. Run the generated tests
+cd voice-agent
+bash install.sh test
+. .venv/bin/activate
+pytest tests/
+
+# Optional maintainer release proof from the callsmith repo
+cd ..
+npm run release:check -- --skip-tests
+```
+
+Want a one-shot start? `callsmith init --preset india-support --answers voice.answers.json`.
+
+**Write protection:** `forge`, `scaffold`, `docs`, and `simulate` never silently overwrite your files. Add `--force` to overwrite, or `--dry-run` to preview what would be written.
+
+```bash
+callsmith scaffold --answers voice.answers.json --out . --dry-run    # preview
+callsmith scaffold --answers voice.answers.json --out . --force      # overwrite
 ```
 
 ## What `forge` writes
 
 ```
-callsmith.recipe.md          the handoff packet (intent, stack, audio contract, interruption, latency, build order)
-callsmith.lock.json          reproducible manifest (providers, models, compatibility, latency)
+callsmith.recipe.md          the handoff packet (intent, stack, audio contract, interruption, latency, operations, build order)
+callsmith.lock.json          reproducible manifest (providers, models, compatibility, latency, operations, UX/safety policy)
 .env.example                 required keys for the selected stack
 .callsmith/context/
   architecture.md            pipeline + flags
   audio-contract.md          THE audio transforms (or "handled natively")
   interruption.md            turn-taking + barge-in flow per provider
   latency-budget.md          per-leg latency breakdown + optimization
+  cost-estimation.md         per-leg cost table
+  conversation-state.md      context window + transcript + DTMF
+  error-handling.md          reconnect + retry + fallback policy
+  operations.md              cloud/self-hosted ownership, debug depth, audio cleanup ownership
+  voice-ux.md                endpointing/noise/echo/AGC/silence/greeting/voice/language knobs
+  tool-calling.md            timeout/retry/idempotency/tool failure speech policy
+  observability.md           call timeline + metrics requirements
+  safety-compliance.md       consent, PII, retention, opt-out, audit
+  handoff.md                 transfer/callback/ticket policy
+  local-testing.md           ngrok local PSTN/WebSocket testing instructions
+  simulation.md              fake call lifecycle pass criteria
   potholes.md                all blockers/warnings/notes from every provider
   build-order.md             implementation sequence
 ```
@@ -63,8 +113,8 @@ Two stacks, same telephony, completely different implementation burden:
 ```
 [inbound]  decode μ-law → PCM        (exotel → gemini-live)
 [inbound]  resample 8000 → 16000 Hz  (exotel → gemini-live)
-[outbound] transcode PCM → μ-law     (gemini-live → exotel)
 [outbound] resample 24000 → 8000 Hz  (gemini-live → exotel)
+[outbound] encode PCM → μ-law        (gemini-live → exotel)
 ```
 
 **Exotel + LiveKit + Gemini Live** → 0 transforms. LiveKit's SIP trunk absorbs the μ-law decode and resampling server-side; your worker sees 16 kHz PCM directly.
@@ -92,19 +142,22 @@ callsmith is both a CLI and a skill. The `SKILL.md` teaches coding agents the `s
 ## Repo layout
 
 ```
-bin/callsmith.mjs            CLI entry (spec/forge/check/scaffold/docs/context)
+bin/callsmith.mjs            CLI entry (spec/forge/check/scaffold/docs/simulate/verify-packs/context)
 src/lib/
   resolver.mjs               provider loader + menu expander + compatibility resolver + impossibility detection
   compile.mjs                answers -> recipe + lock + context files (byte-deterministic)
   scaffold.mjs               generates framework-native repo: LiveKit (AgentSession), Pipecat (Pipeline), or custom FastAPI (audio bridge + webhook)
   validate.mjs               schema validation gate for provider packs
   registry.mjs               two-tier unknown-provider resolution (registry + synthesis)
-  docs.mjs                   per-provider doc hydration via Context7
+  docs.mjs                   per-provider doc stubs + official links + Context7 prompts
+  simulate.mjs               deterministic fake call lifecycle simulator
+  verify-packs.mjs           offline provider pack freshness/staleness checks
+  release-check.mjs          package/scaffold/release-readiness checks
 data/menu.json               the MCQ intake tree (single source of truth)
 providers/                   21 provider packs (telephony, orchestration, realtime, stt, llm, tts, vad)
   _schema.json               pack shape (required: id, kind, transport, ingest, egress, directions, native_capabilities)
 scripts/gen-fixtures.mjs     generates the grid fixture matrix
-test/                        117 tests (data integrity, resolver, registry, CLI contract, docs, grid, scaffold, tier1)
+test/                        behavior tests (data integrity, resolver, registry, CLI contract, docs, grid, scaffold, tier1/tier2)
   fixtures/grid/             40 generated answer files
   fixtures/registry/         test packs for local registry lookup
 SKILL.md                     the agent skill
@@ -113,7 +166,7 @@ product_decisions.md         source-of-truth for all product decisions
 
 ## Status
 
-v1.1. **21 provider packs** (verified audio contracts + model names + latency estimates + interruption metadata), **LLM + VAD as first-class pipeline citizens**, **interruption & turn-taking resolution** (concrete per-provider barge-in flow), **latency budget modeling** (per-leg breakdown with target + verdict), **framework-native scaffolds** (LiveKit AgentSession + Pipecat Pipeline + custom FastAPI webhook), impossibility detection, unknown-provider online resolution, byte-deterministic lock, schema validation gate, 40-fixture grid, 117-test suite, CI via GitHub Actions.
+v1.3. **21 provider packs** (verified audio contracts + model names + latency/cost estimates + interruption metadata), **LLM + VAD as first-class pipeline citizens**, **interruption & turn-taking resolution**, **cloud/self-hosted operations resolution**, **audio cleanup/debug-depth contract**, **latency and cost budget modeling**, **conversation state + resilience**, **operational scaffold modules** (`operations.py`, `observability.py`, `tools.py`, `voice_ux.py`, `safety.py`, `handoff.py`, `local_test.py`, `simulate_call.py`), **`callsmith simulate` fake call lifecycle**, **`callsmith verify-packs` pack freshness checks**, **`callsmith release-check` publish-readiness checks**, **framework-native scaffolds** (LiveKit AgentSession + Pipecat PipelineWorker + custom FastAPI webhook), impossibility detection, unknown-provider online resolution, byte-deterministic lock, schema validation gate, 40-fixture grid, and CI via GitHub Actions.
 
 ## License
 

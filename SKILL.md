@@ -1,22 +1,22 @@
 ---
 name: callsmith
 description: Compile a production-ready implementation recipe for voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, scaffold, or architect a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, LLM, speech-to-speech, barge-in, or media streams. Resolves the audio bridge, interruption/turn-taking, latency budget, detects impossible stacks, and compiles a deterministic handoff packet with framework-native scaffolds so a coding agent can build the whole thing in one pass.
-argument-hint: "[spec|forge|check|scaffold|docs|context] [target]"
-allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(npm install -g callsmith), Read, Write, Edit
+argument-hint: "[spec|forge|check|scaffold|docs|simulate|verify-packs|release-check|context] [target]"
+allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(npm install -g @callsmith/cli), Read, Write, Edit
 ---
 
 # callsmith
 
-A recipe compiler for voice AI agents. It takes a short MCQ intake (surface, telephony, orchestration, architecture, realtime model / STT+LLM+TTS, VAD, language, barge-in, latency priority, business logic, tools, deployment), resolves audio-format compatibility, computes the interruption/turn-taking flow, models the latency budget, and writes an agent handoff packet: `callsmith.recipe.md` + `callsmith.lock.json` + `.callsmith/context/*`. A coding agent then builds the full system from that packet — using **framework-native code** (LiveKit Agents, Pipecat Pipeline, or custom FastAPI) — without rediscovering telephony potholes.
+A recipe compiler for voice AI agents. It takes a short MCQ intake (surface, telephony, orchestration, hosting ownership, architecture, realtime model / STT+LLM+TTS, VAD, language, barge-in, audio cleanup, debug depth, voice UX, latency priority, business logic, tools, handoff, safety, deployment), resolves audio-format and operational compatibility, computes the interruption/turn-taking flow, models the latency budget, and writes an agent handoff packet: `callsmith.recipe.md` + `callsmith.lock.json` + `.callsmith/context/*`. A coding agent then builds the full system from that packet — using **framework-native code** (LiveKit Agents, Pipecat PipelineWorker, or custom FastAPI) — without rediscovering telephony potholes.
 
-The hard part of voice agents is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/24 kHz), turn/interruption lifecycle, VAD configuration, and per-provider streaming quirks. callsmith carries that knowledge so the implementer does not have to.
+The hard part of voice agents is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/24 kHz), turn/interruption lifecycle, VAD configuration, echo/noise cleanup ownership, and per-provider streaming quirks. callsmith carries that knowledge so the implementer does not have to.
 
 ## Setup check
 
 Run this before anything else. If the CLI is missing, install it.
 
 ```bash
-command -v callsmith >/dev/null 2>&1 && echo "Installed" || npm install -g callsmith
+command -v callsmith >/dev/null 2>&1 && echo "Installed" || npm install -g @callsmith/cli
 ```
 
 In a checkout of the callsmith repo itself, the CLI runs without a global install:
@@ -42,15 +42,24 @@ callsmith check --answers voice.answers.json
 # 4. Generate the framework-native repo skeleton
 callsmith scaffold --answers voice.answers.json --out .
 
-# 5. Hydrate fresh provider docs into .callsmith/docs/
+# 5. Write provider docs context + Context7 prompts into .callsmith/docs/
 callsmith docs --answers voice.answers.json --out .
+
+# 6. Run the deterministic fake-call lifecycle simulator
+callsmith simulate --answers voice.answers.json --out .
+
+# 7. Check provider pack freshness/staleness guards
+callsmith verify-packs
+
+# 8. Maintainer release proof (package + generated golden path)
+callsmith release-check --skip-tests
 ```
 
 ### What forge writes
 
 ```
-callsmith.recipe.md          # the handoff packet (intent, stack, audio contract, interruption, latency, cost, conversation state, error handling, build order)
-callsmith.lock.json          # reproducible manifest (providers, models, compatibility, latency, cost)
+callsmith.recipe.md          # the handoff packet (intent, stack, audio contract, interruption, latency, cost, operations, build order)
+callsmith.lock.json          # reproducible manifest (providers, models, compatibility, latency, cost, voice UX, safety)
 .env.example                 # required keys for the selected stack
 .callsmith/context/
   architecture.md            # pipeline + flags (includes LLM, VAD)
@@ -60,8 +69,16 @@ callsmith.lock.json          # reproducible manifest (providers, models, compati
   cost-estimation.md         # per-leg cost table + scale projections
   conversation-state.md      # context window strategy + transcript schema + DTMF wiring
   error-handling.md          # WebSocket recovery + rate-limit backoff + fallback chains
+  operations.md              # cloud/self-hosted ownership, debug depth, audio cleanup ownership
+  voice-ux.md                # endpointing/noise/echo/AGC/silence/greeting/voice/language knobs
+  tool-calling.md            # timeout/retry/idempotency/tool failure speech policy
+  observability.md           # timeline traces + metrics requirements
+  safety-compliance.md       # consent, PII, retention, opt-out, audit
+  handoff.md                 # transfer/callback/ticket policy
+  local-testing.md           # ngrok local PSTN/WebSocket testing
+  simulation.md              # fake call lifecycle pass criteria
   potholes.md                # all blockers/warnings/notes from every provider
-  build-order.md             # implementation sequence (10 steps including state + resilience)
+  build-order.md             # implementation sequence including state, resilience, tools, safety, observability, simulation
 ```
 
 ## Commands
@@ -72,10 +89,13 @@ callsmith.lock.json          # reproducible manifest (providers, models, compati
 | `forge --answers f [--out d]` | Compile answers into the handoff packet (recipe + lock + context) |
 | `check --answers f` | Print the compatibility matrix (transforms, blockers, latency, cost, interruption). Exits non-zero if blockers remain |
 | `scaffold --answers f [--out d]` | Generate the framework-native repo skeleton |
-| `docs --answers f [--out d]` | Hydrate provider docs via Context7 into `.callsmith/docs/` |
+| `docs --answers f [--out d]` | Write provider doc stubs, official links, and Context7 prompts into `.callsmith/docs/` |
+| `simulate --answers f [--out d] [--scaffold d]` | Run a deterministic fake call lifecycle: start/media/STT or realtime/interrupt/DTMF/tool/TTS/reconnect/hangup |
+| `verify-packs [--json]` | Run offline provider pack freshness/staleness checks |
+| `release-check [--full-installs] [--skip-tests] [--json]` | Run package/scaffold/release-readiness checks |
 | `context` | Preflight: report whether a recipe is loaded in the cwd |
 
-## The 15 menu groups
+## The 22 menu groups
 
 | # | Group | Options |
 |---|---|---|
@@ -83,17 +103,24 @@ callsmith.lock.json          # reproducible manifest (providers, models, compati
 | 2 | **Architecture** | Realtime speech-to-speech, Cascaded STT→LLM→TTS, Hybrid |
 | 3 | **Telephony** (conditional) | Exotel, Twilio, Plivo, Telnyx, Vonage |
 | 4 | **Orchestration** | LiveKit Agents, Pipecat, Custom FastAPI |
-| 5 | **Realtime model** (conditional) | Gemini Live (`gemini-3.1-flash-live-preview`), OpenAI Realtime (`gpt-realtime-2`) |
-| 6 | **STT** (conditional) | Deepgram (Nova-3), AssemblyAI (`universal-3-5-pro`) |
-| 7 | **LLM** (conditional) | OpenAI (`gpt-5.5`), Anthropic (`claude-sonnet-4-6`), Google (`gemini-3.5-flash`) |
-| 8 | **TTS** (conditional) | ElevenLabs (`eleven_v3`), Cartesia (`sonic-3.5`), Sarvam (`bulbul:v3`) |
-| 9 | **VAD** | Silero VAD, Deepgram Endpointing, WebRTC VAD |
-| 10 | **Language** | English, Hindi, Hinglish, Tamil, Kannada, Multilingual |
-| 11 | **Barge-in** | Required (full-duplex), Optional (best-effort), Disabled (half-duplex) |
-| 12 | **Latency priority** | Ultra-low, Balanced, Low-cost, Highest-reliability |
-| 13 | **Business logic** | FAQ, Support, Lead qual, Booking, Collections, Interview |
-| 14 | **Tools** | None, Webhook, OpenAPI spec, MCP server, Database |
-| 15 | **Deployment** | Local, Railway, Render, Fly.io, Kubernetes |
+| 5 | **Hosting model** | Managed cloud, Cloud edge + self-hosted worker, Self-hosted |
+| 6 | **Realtime model** (conditional) | Gemini Live (`gemini-3.1-flash-live-preview`), OpenAI Realtime (`gpt-realtime-2`) |
+| 7 | **STT** (conditional) | Deepgram (Nova-3), AssemblyAI (`universal-3-5-pro`) |
+| 8 | **LLM** (conditional) | OpenAI (`gpt-5.5`), Anthropic (`claude-sonnet-4-6`), Google (`gemini-3.5-flash`) |
+| 9 | **TTS** (conditional) | ElevenLabs (`eleven_v3`), Cartesia (`sonic-3.5`), Sarvam (`bulbul:v3`) |
+| 10 | **VAD** | Silero VAD, Deepgram Endpointing, WebRTC VAD |
+| 11 | **Language** | English, Hindi, Hinglish, Tamil, Kannada, Multilingual |
+| 12 | **Barge-in** | Required (full-duplex), Optional (best-effort), Disabled (half-duplex) |
+| 13 | **Operational profile** | Support balanced, Fast IVR, Careful slow |
+| 14 | **Audio enhancement** | Provider/framework default, Voice focus, Raw/lowest latency, Self-hosted DSP |
+| 15 | **Debug profile** | Production timeline, Forensic, Lean metrics only |
+| 16 | **Latency priority** | Ultra-low, Balanced, Low-cost, Highest-reliability |
+| 17 | **Business logic** | FAQ, Support, Lead qual, Booking, Collections, Interview |
+| 18 | **Tools** | None, Webhook, OpenAPI spec, MCP server, Database |
+| 19 | **Human handoff** | None, Transfer, Callback, Ticket |
+| 20 | **Recording consent** | No recording, Announce, Explicit |
+| 21 | **Transcript retention** | Ephemeral, 7 days, 30 days, 90 days |
+| 22 | **Deployment** | Local, Railway, Render, Fly.io, Kubernetes |
 
 ## Framework-native scaffolds
 
@@ -101,14 +128,22 @@ The scaffold generates code that uses the actual framework APIs — not a generi
 
 **LiveKit Agents**: generates `agent.py` with `AgentSession`, `Agent`, `TurnHandlingOptions(turn_detection=MultilingualModel())`, `silero.VAD.load()`, and inference or plugin-based model wiring.
 
-**Pipecat**: generates `bot.py` with `Pipeline([transport.input(), stt, context_aggregator.user(), llm, tts, transport.output(), context_aggregator.assistant()])`, `PipelineTask`, `PipelineRunner`, `TwilioFrameSerializer`, `SileroVADAnalyzer` + `server.py` with webhook + WebSocket handler.
+**Pipecat**: generates `bot.py` with `Pipeline([transport.input(), dtmf_aggregator, stt, user_aggregator, llm, tts, transport.output(), assistant_aggregator])`, `PipelineWorker`, `PipelineRunner`, `TwilioFrameSerializer`, `SileroVADAnalyzer`, `PipecatTraceObserver` + `server.py` with webhook + WebSocket handler.
 
 **Custom FastAPI**: generates `server.py` with webhook endpoint + WebSocket media handler (includes DTMF parsing, TranscriptStore logging, ReconnectingWebSocket pattern) + `audio/bridge.py` with μ-law codecs and resampler (only when transforms are needed).
 
 All scaffolds also generate:
 - **`state.py`** — `ContextManager` (sliding-window token tracking against the LLM's context window), `TranscriptStore` (SQLite persistence for every turn), `DTMFHandler` (keypad digit collection with inter-digit timeout).
 - **`resilience.py`** — `ReconnectingWebSocket` (exponential backoff reconnection), `retry_with_backoff` (rate-limit handling decorator), `FallbackConfig` (per-leg provider fallback chains).
-- **`tests/test_state.py`** + **`tests/test_resilience.py`** — validates all three modules round-trip correctly.
+- **`operations.py`** — hosting ownership, effective cloud/self-hosted model, debug profile, trace sampling, audio cleanup ownership.
+- **`observability.py`** — `CallTrace`, LiveKit session event hooks, Pipecat observer adapter, JSONL trace writer.
+- **`tools.py`** — `ToolRegistry`, timeout/retry wrapper, idempotency keys, webhook/OpenAPI/MCP/database stubs, safe failure speech.
+- **`voice_ux.py`** — endpointing, audio enhancement, noise cancellation, echo cancellation, automatic gain control, silence, max duration, greeting, speaking speed, language fallback.
+- **`safety.py`** — consent prompt policy, PII redaction, retention, opt-out detection, audit logging.
+- **`handoff.py`** — human transfer/callback/ticket summary and escalation policy.
+- **`local_test.py`** — ngrok command and webhook/WSS URL derivation for local PSTN testing.
+- **`simulate_call.py`** — provider-free fake call lifecycle simulator.
+- **`tests/test_state.py`**, **`tests/test_resilience.py`**, and **`tests/test_operational_modules.py`** — validate generated modules round-trip correctly.
 
 ## Cost estimation
 
@@ -155,7 +190,7 @@ The recipe and scaffold address four resilience concerns:
 Do not improvise an architecture. Run the intake, then compile.
 
 1. Read the menu: `callsmith spec`.
-2. Map the user's intent to the 15 menu groups. Ask only what the user has not already specified, 2-3 questions at a time.
+2. Map the user's intent to the 22 menu groups. Ask only what the user has not already specified, 2-3 questions at a time.
 3. Write the answers object to a file (keys = group ids, values = option ids).
 4. Run `callsmith forge --answers <file> --out .`.
 5. Read `callsmith.recipe.md` and `.callsmith/context/audio-contract.md` **and** `.callsmith/context/interruption.md` before writing any code.

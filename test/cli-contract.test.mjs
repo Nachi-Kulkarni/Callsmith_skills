@@ -33,7 +33,82 @@ test('forge exits non-zero on malformed JSON answers', () => {
     'error message should mention JSON/parse');
 });
 
+test('forge exits non-zero on invalid non-provider answers', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'cs-test-')), 'answers.json');
+  writeFileSync(file, JSON.stringify({
+    surface: 'inbound_pstn',
+    architecture: 'not_a_real_architecture',
+    telephony: 'twilio',
+    orchestration: 'livekit',
+    realtime_model: 'gemini_live',
+    language: 'english',
+    barge_in: 'required',
+    latency: 'balanced',
+    business_logic: 'support',
+    tools: 'webhook',
+    deployment: 'railway',
+  }, null, 2));
+  const result = runCli(['forge', '--answers', file]);
+  assert.notEqual(result.exitCode, 0, 'invalid MCQ answers must not forge');
+  assert.match(result.stderr + result.stdout, /invalid answer.*architecture/i,
+    'error message should name the invalid group');
+});
+
+test('forge exits non-zero when a visible required answer is omitted', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'cs-test-')), 'answers.json');
+  writeFileSync(file, JSON.stringify({
+    surface: 'inbound_pstn',
+    architecture: 'realtime_s2s',
+    telephony: 'twilio',
+    orchestration: 'livekit',
+    realtime_model: 'gemini_live',
+    language: 'english',
+    barge_in: 'required',
+    latency: 'balanced',
+    business_logic: 'support',
+    tools: 'webhook',
+    deployment: 'railway',
+  }, null, 2));
+  const result = runCli(['forge', '--answers', file]);
+  assert.notEqual(result.exitCode, 0, 'missing visible answers must not forge');
+  assert.match(result.stderr + result.stdout, /missing required answer.*vad/i);
+});
+
+test('forge exits non-zero on hidden conflicting answers', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'cs-test-')), 'answers.json');
+  writeFileSync(file, JSON.stringify({
+    surface: 'inbound_pstn',
+    architecture: 'realtime_s2s',
+    telephony: 'twilio',
+    orchestration: 'livekit',
+    realtime_model: 'gemini_live',
+    stt: 'deepgram',
+    llm: 'gpt_4o',
+    tts: 'elevenlabs',
+    vad: 'silero',
+    language: 'english',
+    barge_in: 'required',
+    latency: 'balanced',
+    business_logic: 'support',
+    tools: 'webhook',
+    deployment: 'railway',
+  }, null, 2));
+  const result = runCli(['forge', '--answers', file]);
+  assert.notEqual(result.exitCode, 0, 'hidden conflicting answers must not forge');
+  assert.match(result.stderr + result.stdout, /not valid for the selected route|stt/i);
+});
+
 test('unknown command exits non-zero', () => {
   const result = runCli(['froge'], { out: false });
   assert.notEqual(result.exitCode, 0, 'unknown command must not exit 0');
+});
+
+test('spec --answers writes an executable route-specific template', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cs-test-'));
+  const file = join(dir, 'voice.answers.json');
+  const spec = runCli(['spec', '--answers', file], { out: false });
+  assert.equal(spec.exitCode, 0, 'spec template command must succeed');
+  const forge = runCli(['forge', '--answers', file]);
+  assert.equal(forge.exitCode, 0,
+    'fresh template should forge without hidden conflicting answers:\n' + forge.stderr);
 });

@@ -1,12 +1,49 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadMenu, loadProviders, expandAnswers, resolve } from './resolver.mjs';
+import { createSafeWriter } from './safe-write.mjs';
 
-const VERSION = '1.1.0';
+const VERSION = '1.3.0';
 
-function write(file, content) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, content);
+// Maps each known env key to the dashboard where a developer can retrieve it.
+// Shown as comments in the generated .env.example so a stranger can fill it in
+// without hunting for the right console.
+const ENV_DASHBOARDS = {
+  EXOTEL_API_KEY: 'https://my.exotel.com/settings/api-key',
+  EXOTEL_ACCOUNT_SID: 'https://my.exotel.com/settings/api-key',
+  EXOTEL_SUBDOMAIN: 'https://my.exotel.com',
+  TWILIO_ACCOUNT_SID: 'https://console.twilio.com',
+  TWILIO_AUTH_TOKEN: 'https://console.twilio.com',
+  TWILIO_APP_SID: 'https://console.twilio.com/us1/develop/voice/manage/apps',
+  PLIVO_AUTH_ID: 'https://console.plivo.com/account/',
+  PLIVO_AUTH_TOKEN: 'https://console.plivo.com/account/',
+  TELNYX_API_KEY: 'https://portal.telnyx.com/#/app/api-keys',
+  VONAGE_API_KEY: 'https://dashboard.nexmo.com/settings',
+  VONAGE_API_SECRET: 'https://dashboard.nexmo.com/settings',
+  VONAGE_APPLICATION_ID: 'https://dashboard.nexmo.com/applications',
+  LIVEKIT_URL: 'https://cloud.livekit.io/projects',
+  LIVEKIT_API_KEY: 'https://cloud.livekit.io/projects/p/settings/keys',
+  LIVEKIT_API_SECRET: 'https://cloud.livekit.io/projects/p/settings/keys',
+  DEEPGRAM_API_KEY: 'https://console.deepgram.com/api-keys',
+  ASSEMBLYAI_API_KEY: 'https://www.assemblyai.com/app/account',
+  OPENAI_API_KEY: 'https://platform.openai.com/api-keys',
+  ANTHROPIC_API_KEY: 'https://console.anthropic.com/settings/keys',
+  GOOGLE_API_KEY: 'https://aistudio.google.com/apikey',
+  GEMINI_API_KEY: 'https://aistudio.google.com/apikey',
+  ELEVENLABS_API_KEY: 'https://elevenlabs.io/app/settings/api-keys',
+  CARTESIA_API_KEY: 'https://app.cartesia.ai/keys',
+  SARVAM_API_KEY: 'https://dashboard.sarvam.ai/api-keys',
+};
+
+function renderEnvExample(envKeys) {
+  const lines = ['# Callsmith-generated environment template.', '# Fill in values from the linked dashboards, then: cp .env.example .env', ''];
+  for (const key of envKeys) {
+    const url = ENV_DASHBOARDS[key];
+    if (url) lines.push(`# Get this from: ${url}`);
+    lines.push(`${key}=`);
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 export function compile(rawAnswers, outDir, opts = {}) {
@@ -16,21 +53,28 @@ export function compile(rawAnswers, outDir, opts = {}) {
   const answers = expandAnswers(rawAnswers, menu);
   const result = resolve(answers, providers);
   const { flags, providers: sel, labels } = answers;
-  const root = path.resolve(outDir);
+  const writer = createSafeWriter(outDir, { force: opts.force === true, dryRun: opts.dryRun === true });
+  const write = (rel, content) => writer.w(rel, content);
 
-  write(path.join(root, '.callsmith/context/architecture.md'), renderArchitecture(result, flags, sel, labels));
-  write(path.join(root, '.callsmith/context/audio-contract.md'), renderAudioContract(result));
-  write(path.join(root, '.callsmith/context/potholes.md'), renderPotholes(result));
-  write(path.join(root, '.callsmith/context/build-order.md'), renderBuildOrder(result, sel, flags));
-  write(path.join(root, '.callsmith/context/interruption.md'), renderInterruption(result));
-  write(path.join(root, '.callsmith/context/latency-budget.md'), renderLatencyBudget(result));
-  write(path.join(root, '.callsmith/context/cost-estimation.md'), renderCostEstimation(result));
-  write(path.join(root, '.callsmith/context/conversation-state.md'), renderConversationState(result, sel, providers));
-  write(path.join(root, '.callsmith/context/error-handling.md'), renderErrorHandling(result, sel));
+  write('.callsmith/context/architecture.md', renderArchitecture(result, flags, sel, labels));
+  write('.callsmith/context/audio-contract.md', renderAudioContract(result));
+  write('.callsmith/context/potholes.md', renderPotholes(result));
+  write('.callsmith/context/build-order.md', renderBuildOrder(result, sel, flags));
+  write('.callsmith/context/interruption.md', renderInterruption(result));
+  write('.callsmith/context/latency-budget.md', renderLatencyBudget(result));
+  write('.callsmith/context/cost-estimation.md', renderCostEstimation(result));
+  write('.callsmith/context/conversation-state.md', renderConversationState(result, sel, providers));
+  write('.callsmith/context/error-handling.md', renderErrorHandling(result, sel));
+  write('.callsmith/context/operations.md', renderOperations(result));
+  write('.callsmith/context/voice-ux.md', renderVoiceUx(flags));
+  write('.callsmith/context/tool-calling.md', renderToolCalling(flags, sel, providers));
+  write('.callsmith/context/observability.md', renderObservability(result, flags, sel));
+  write('.callsmith/context/safety-compliance.md', renderSafetyCompliance(flags));
+  write('.callsmith/context/handoff.md', renderHandoff(flags));
+  write('.callsmith/context/local-testing.md', renderLocalTesting(flags, sel));
+  write('.callsmith/context/simulation.md', renderSimulationPlan(result, flags, sel));
 
-  write(path.join(root, '.env.example'),
-    '# Callsmith-generated environment template.\n' +
-    result.envKeys.map(k => `${k}=`).join('\n') + '\n');
+  write('.env.example', renderEnvExample(result.envKeys));
 
   const lock = {
     callsmith_version: VERSION,
@@ -47,26 +91,77 @@ export function compile(rawAnswers, outDir, opts = {}) {
     },
     latency: result.latency,
     cost: result.cost,
+    operations: result.operations,
+    voice_ux: voiceUxConfig(flags),
+    safety: safetyConfig(flags),
+    handoff: flags.handoff || 'ticket',
+    local_testing: {
+      ngrok: flags.needs_telephony ? 'required for local PSTN webhook testing' : 'optional for browser/app callbacks',
+      port: 8000,
+    },
     resolved_providers: resolved,
   };
-  write(path.join(root, 'callsmith.lock.json'), JSON.stringify(lock, null, 2) + '\n');
+  write('callsmith.lock.json', JSON.stringify(lock, null, 2) + '\n');
 
-  write(path.join(root, 'callsmith.recipe.md'), renderRecipe(result, flags, sel, labels, lock, resolved, providers));
+  write('callsmith.recipe.md', renderRecipe(result, flags, sel, labels, lock, resolved, providers));
 
-  return { lock, result, files: [
+  const fileList = [
     'callsmith.recipe.md', 'callsmith.lock.json', '.env.example',
     '.callsmith/context/architecture.md', '.callsmith/context/audio-contract.md',
     '.callsmith/context/potholes.md', '.callsmith/context/build-order.md',
     '.callsmith/context/interruption.md', '.callsmith/context/latency-budget.md',
     '.callsmith/context/cost-estimation.md', '.callsmith/context/conversation-state.md',
     '.callsmith/context/error-handling.md',
-  ] };
+    '.callsmith/context/operations.md',
+    '.callsmith/context/voice-ux.md', '.callsmith/context/tool-calling.md',
+    '.callsmith/context/observability.md', '.callsmith/context/safety-compliance.md',
+    '.callsmith/context/handoff.md', '.callsmith/context/local-testing.md',
+    '.callsmith/context/simulation.md',
+  ];
+  return {
+    lock,
+    result,
+    files: fileList,
+    root: writer.root,
+    collisions: writer.collisions,
+    overwritten: writer.overwritten,
+    manifest: writer.manifest,
+    dryRun: writer.dryRun,
+  };
+}
+
+export function voiceUxConfig(flags) {
+  return {
+    endpointing: flags.endpointing || 'balanced',
+    endpointing_ms: flags.endpointing_ms ?? 600,
+    interruption_sensitivity: flags.interruption_sensitivity || 'normal',
+    audio_enhancement: flags.audio_enhancement || 'provider_native',
+    noise_cancellation: flags.noise_cancellation || 'standard',
+    echo_cancellation: flags.echo_cancellation || 'provider_native',
+    automatic_gain_control: flags.automatic_gain_control || 'provider_native',
+    silence_timeout_ms: flags.silence_timeout_ms ?? 15000,
+    max_call_duration_sec: flags.max_call_duration_sec ?? 1800,
+    greeting_mode: flags.greeting_mode || 'immediate',
+    voice_profile: flags.voice_profile || 'warm',
+    speaking_speed: flags.speaking_speed ?? 1.0,
+    language_fallback: flags.language_fallback || 'auto_then_confirm',
+  };
+}
+
+export function safetyConfig(flags) {
+  return {
+    recording_consent: flags.recording_consent || 'announce',
+    transcript_retention_days: flags.transcript_retention_days ?? 30,
+    pii_redaction: true,
+    audit_tool_actions: !!(flags.tools && flags.tools !== 'none'),
+  };
 }
 
 function stackLine(labels, key, fallback) { return labels[key] || fallback || '—'; }
 
 function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers = {}) {
   const { transforms, blockers, notes, potholes } = result;
+  const ops = result.operations;
   const needsBridge = transforms.length > 0;
   const unverified = (resolved || []).filter(r => !r.verified);
   const lines = [];
@@ -90,9 +185,28 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers
   lines.push(`- **Direction:** ${flags.direction || 'n/a'}`);
   lines.push(`- **Language:** ${flags.language || 'en'}`);
   lines.push(`- **Barge-in:** ${flags.barge_in}`);
+  lines.push(`- **Hosting model:** ${ops.hosting_label} (${ops.infrastructure_owner})`);
+  if (ops.requested_hosting_model !== ops.effective_hosting_model) {
+    lines.push(`- **Requested hosting:** ${ops.requested_hosting_model} -> effective ${ops.effective_hosting_model}`);
+  }
+  lines.push(`- **Debug profile:** ${ops.debug_profile} (${ops.trace_level})`);
+  lines.push(`- **Endpointing:** ${flags.endpointing || 'balanced'} (${flags.endpointing_ms ?? 600}ms)`);
+  lines.push(`- **Interruption sensitivity:** ${flags.interruption_sensitivity || 'normal'}`);
+  lines.push(`- **Audio enhancement:** ${flags.audio_enhancement || 'provider_native'}`);
+  lines.push(`- **Noise cancellation:** ${flags.noise_cancellation || 'standard'}`);
+  lines.push(`- **Echo cancellation:** ${flags.echo_cancellation || 'provider_native'}`);
+  lines.push(`- **Automatic gain control:** ${flags.automatic_gain_control || 'provider_native'}`);
+  lines.push(`- **Silence timeout:** ${flags.silence_timeout_ms ?? 15000}ms`);
+  lines.push(`- **Max call duration:** ${flags.max_call_duration_sec ? `${flags.max_call_duration_sec}s` : 'no fixed cap'}`);
+  lines.push(`- **Greeting mode:** ${flags.greeting_mode || 'immediate'}`);
+  lines.push(`- **Voice profile:** ${flags.voice_profile || 'warm'} (${flags.speaking_speed ?? 1.0}x)`);
+  lines.push(`- **Language fallback:** ${flags.language_fallback || 'auto_then_confirm'}`);
   lines.push(`- **Latency priority:** ${flags.latency}`);
   lines.push(`- **Job:** ${stackLine(labels,'business_logic')}`);
   lines.push(`- **Tools:** ${flags.tools}`);
+  lines.push(`- **Human handoff:** ${flags.handoff || 'ticket'}`);
+  lines.push(`- **Recording consent:** ${flags.recording_consent || 'announce'}`);
+  lines.push(`- **Transcript retention:** ${flags.transcript_retention_days ?? 30} days`);
   lines.push(`- **Deployment:** ${stackLine(labels,'deployment')}`);
   lines.push('');
   lines.push('## Selected stack');
@@ -186,13 +300,47 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers
   lines.push('');
   lines.push('See [.callsmith/context/error-handling.md](.callsmith/context/error-handling.md) for implementation details.');
   lines.push('');
+  lines.push('## Operations & maintainability');
+  lines.push('');
+  lines.push(`- **Runtime ownership:** ${ops.hosting_label}; owner = ${ops.infrastructure_owner}.`);
+  lines.push(`- **Debugging:** ${ops.debug_note}`);
+  lines.push(`- **Trace sampling:** ${ops.trace_sampling}; debug audio window = ${ops.retain_debug_audio_sec}s.`);
+  if (ops.adjustments.length) {
+    for (const item of ops.adjustments) lines.push(`- **Adjustment:** ${item}`);
+  }
+  for (const item of ops.responsibilities) lines.push(`- ${item}`);
+  lines.push('');
+  lines.push('Audio cleanup ownership:');
+  lines.push('');
+  for (const feature of ops.audio_features) {
+    lines.push(`- **${feature.feature}:** ${feature.mode}; owner = ${feature.owner}. ${feature.action}`);
+  }
+  lines.push('');
+  lines.push('See [.callsmith/context/operations.md](.callsmith/context/operations.md) for operational responsibilities and debug settings.');
+  lines.push('');
+  lines.push('## Operational levers');
+  lines.push('');
+  lines.push('- **Voice UX tuning:** endpointing, interruption sensitivity, audio enhancement, noise cancellation, echo cancellation, gain control, silence timeout, greeting mode, speaking speed, and language fallback are locked in [.callsmith/context/voice-ux.md](.callsmith/context/voice-ux.md).');
+  lines.push('- **Tool calling:** generated `tools.py` must use timeout, retry, idempotency, and safe speech fallback policies from [.callsmith/context/tool-calling.md](.callsmith/context/tool-calling.md).');
+  lines.push('- **Observability:** generated `observability.py` must trace STT, LLM, TTS, interruption, DTMF, tools, reconnects, dropped frames, and cost from [.callsmith/context/observability.md](.callsmith/context/observability.md).');
+  lines.push('- **Safety/compliance:** recording consent, PII redaction, retention, opt-out/DNC, and audit log policy live in [.callsmith/context/safety-compliance.md](.callsmith/context/safety-compliance.md).');
+  lines.push('- **Human handoff:** transfer/callback/ticket summary policy lives in [.callsmith/context/handoff.md](.callsmith/context/handoff.md).');
+  lines.push('- **Local PSTN testing:** use ngrok instructions in [.callsmith/context/local-testing.md](.callsmith/context/local-testing.md).');
+  lines.push('- **Simulation:** run `callsmith simulate --answers <answers.json>` and compare against [.callsmith/context/simulation.md](.callsmith/context/simulation.md).');
+  lines.push('');
   lines.push('## Blockers & potholes');
   lines.push('');
-  if (blockers.length === 0 && potholes.filter(p => p.severity === 'blocker').length === 0) {
+  const activePotholes = potholes.filter(p => !p.mitigated);
+  const mitigatedPotholes = potholes.filter(p => p.mitigated);
+  if (blockers.length === 0 && activePotholes.filter(p => p.severity === 'blocker').length === 0) {
     lines.push('No blockers detected for this stack. Review warnings in [.callsmith/context/potholes.md](.callsmith/context/potholes.md).');
   } else {
     for (const b of blockers) lines.push(`- **[BLOCKER]** ${b.note}`);
-    for (const p of potholes.filter(p => p.severity === 'blocker')) lines.push(`- **[BLOCKER / ${p.source}]** ${p.note}`);
+    for (const p of activePotholes.filter(p => p.severity === 'blocker')) lines.push(`- **[BLOCKER / ${p.source}]** ${p.note}`);
+  }
+  if (mitigatedPotholes.length) {
+    lines.push('');
+    lines.push(`**Mitigated by native layer** (${mitigatedPotholes.length} provider concern(s) resolved — see [.callsmith/context/potholes.md](.callsmith/context/potholes.md) for which layer handles each).`);
   }
   lines.push('');
   lines.push('## Build order (follow in sequence)');
@@ -201,9 +349,9 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers
   lines.push('');
   lines.push('## Required docs');
   lines.push('');
-  lines.push('Hydrate provider docs before coding:');
+  lines.push('Write provider docs context before coding:');
   lines.push('```bash');
-  lines.push('callsmith docs   # fetches fresh slices into .callsmith/docs/');
+  lines.push('callsmith docs --answers <answers.json>   # writes stubs + Context7 prompts into .callsmith/docs/');
   lines.push('```');
   lines.push('');
   lines.push('## Agent instructions');
@@ -216,8 +364,16 @@ function renderRecipe(result, flags, sel, labels, lock, resolved = [], providers
   lines.push('5. `.callsmith/context/cost-estimation.md`');
   lines.push('6. `.callsmith/context/conversation-state.md`');
   lines.push('7. `.callsmith/context/error-handling.md`');
-  lines.push('8. `.callsmith/context/potholes.md`');
-  lines.push('9. `.callsmith/context/build-order.md`');
+  lines.push('8. `.callsmith/context/operations.md`');
+  lines.push('9. `.callsmith/context/voice-ux.md`');
+  lines.push('10. `.callsmith/context/tool-calling.md`');
+  lines.push('11. `.callsmith/context/observability.md`');
+  lines.push('12. `.callsmith/context/safety-compliance.md`');
+  lines.push('13. `.callsmith/context/handoff.md`');
+  lines.push('14. `.callsmith/context/local-testing.md`');
+  lines.push('15. `.callsmith/context/simulation.md`');
+  lines.push('16. `.callsmith/context/potholes.md`');
+  lines.push('17. `.callsmith/context/build-order.md`');
   lines.push('');
   lines.push('Do not invent unsupported audio formats. Do not skip transcoding if the audio-contract requires it. Do not assume telephony frame boundaries align with model frames.');
   lines.push('');
@@ -266,10 +422,21 @@ function renderPotholes(result) {
   const L = ['# Potholes', ''];
   const order = ['blocker', 'warning', 'note'];
   for (const sev of order) {
-    const items = result.potholes.filter(p => p.severity === sev);
+    const items = result.potholes.filter(p => p.severity === sev && !p.mitigated);
     if (!items.length) continue;
     L.push(`## ${sev}`);
     for (const p of items) L.push(`- **[${p.source}]** ${p.note}`);
+    L.push('');
+  }
+  const mitigated = result.potholes.filter(p => p.mitigated);
+  if (mitigated.length) {
+    L.push('## Mitigated by native layer');
+    L.push('');
+    L.push('These provider-level concerns are resolved by a selected native layer — no action required in your code:');
+    L.push('');
+    for (const p of mitigated) {
+      L.push(`- **[${p.source}]** ${p.note}  _(mitigated by ${p.mitigatedBy})_`);
+    }
     L.push('');
   }
   return L.join('\n') + '\n';
@@ -288,9 +455,13 @@ function renderBuildOrder(result, sel, flags) {
   L.push('5. **Model session** — connect realtime/STT+LLM+TTS; wire interruption handling and tool calling.');
   L.push('6. **Conversation state** — wire `state.py` (ContextManager, TranscriptStore, DTMFHandler) into the session. See `.callsmith/context/conversation-state.md`.');
   L.push('7. **Error handling & resilience** — wire `resilience.py` (reconnection, retry, fallback). See `.callsmith/context/error-handling.md`.');
-  L.push('8. **Business logic & tools** — implement the job and tool calls.');
-  L.push('9. **Observability** — log inbound, post-transcode, model output, and outbound streams separately.');
-  L.push('10. **E2E test** — fake call simulator covering call lifecycle + barge-in + DTMF + reconnection.');
+  L.push('8. **Operations contract** — load `operations.py`; confirm hosting ownership, debug depth, trace sampling, and audio cleanup ownership. See `.callsmith/context/operations.md`.');
+  L.push('9. **Voice UX tuning** — load `voice_ux.py`; enforce endpointing, audio cleanup, silence timeout, greeting mode, language fallback, and max call duration.');
+  L.push('10. **Business logic & tools** — wire `tools.py`; every side-effecting call needs timeout, retry, idempotency, and audit logging.');
+  L.push('11. **Safety & handoff** — wire `safety.py` and `handoff.py`; handle consent, PII redaction, retention, opt-out/DNC, and escalation summary.');
+  L.push('12. **Observability** — wire `observability.py`; log inbound, post-transcode, model output, outbound streams, tools, interruption, reconnect, and cost separately.');
+  L.push('13. **Local PSTN test** — use `local_test.py` and ngrok to expose the local webhook/WebSocket before production deployment work.');
+  L.push('14. **E2E simulation** — run `callsmith simulate` and generated `simulate_call.py` covering call lifecycle + barge-in + DTMF + tools + reconnection.');
   return L.join('\n') + '\n';
 }
 
@@ -456,11 +627,19 @@ function renderConversationState(result, sel, providers) {
     L.push('from pipecat.processors.aggregators.dtmf_aggregator import DTMFAggregator');
     L.push('');
     L.push('dtmf = DTMFAggregator(timeout=5.0, prefix="Keypad input: ")');
+    L.push('user_aggregator, assistant_aggregator = LLMContextAggregatorPair(');
+    L.push('    context,');
+    L.push('    user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),');
+    L.push(')');
     L.push('pipeline = Pipeline([');
     L.push('    transport.input(),');
     L.push('    dtmf,  # collects DTMF before STT');
     L.push('    stt,');
-    L.push('    ...');
+    L.push('    user_aggregator,');
+    L.push('    llm,');
+    L.push('    tts,');
+    L.push('    transport.output(),');
+    L.push('    assistant_aggregator,');
     L.push('])');
     L.push('```');
   } else if (orchId === 'livekit') {
@@ -468,8 +647,12 @@ function renderConversationState(result, sel, providers) {
     L.push('```python');
     L.push('from livekit.agents.tasks import GetDtmfTask');
     L.push('');
-    L.push('# Collect 4-digit PIN with 10s timeout');
-    L.push('result = await GetDtmfTask(max_digits=4, timeout=10.0).run(session)');
+    L.push('# Collect 4-digit PIN with 10s per-digit timeout');
+    L.push('result = await GetDtmfTask(');
+    L.push('    num_digits=4,');
+    L.push('    dtmf_input_timeout=10.0,');
+    L.push('    chat_ctx=session.current_agent.chat_ctx,');
+    L.push(').run(session)');
     L.push('pin = result.user_input');
     L.push('```');
   } else {
@@ -627,5 +810,276 @@ function renderErrorHandling(result, sel) {
   L.push('for turn in transcript:');
   L.push('    ctx.add_message(turn["role"], turn["content"])');
   L.push('```');
+  return L.join('\n') + '\n';
+}
+
+function renderOperations(result) {
+  const ops = result.operations;
+  const L = ['# Operations & Maintainability', ''];
+  L.push('This file records who owns the runtime behaviors that usually decide whether a voice agent is maintainable after launch.');
+  L.push('');
+  L.push('## Hosting ownership');
+  L.push('');
+  L.push('| Item | Value |');
+  L.push('|---|---|');
+  L.push(`| Requested hosting | ${ops.requested_hosting_model} |`);
+  L.push(`| Effective hosting | ${ops.effective_hosting_model} |`);
+  L.push(`| Runtime label | ${ops.hosting_label} |`);
+  L.push(`| Infrastructure owner | ${ops.infrastructure_owner} |`);
+  L.push(`| Orchestration | ${ops.orchestration || 'n/a'} |`);
+  L.push('');
+  if (ops.adjustments.length) {
+    L.push('## Resolver adjustments');
+    L.push('');
+    for (const item of ops.adjustments) L.push(`- ${item}`);
+    L.push('');
+  }
+  L.push('## Responsibilities');
+  L.push('');
+  for (const item of ops.responsibilities) L.push(`- ${item}`);
+  L.push('');
+  L.push('## Audio cleanup ownership');
+  L.push('');
+  L.push('| Feature | Mode | Owner | Action |');
+  L.push('|---|---|---|---|');
+  for (const feature of ops.audio_features) {
+    L.push(`| ${feature.feature} | ${feature.mode} | ${feature.owner} | ${feature.action} |`);
+  }
+  L.push('');
+  L.push('## Debug profile');
+  L.push('');
+  L.push('| Lever | Value |');
+  L.push('|---|---|');
+  L.push(`| Profile | ${ops.debug_profile} |`);
+  L.push(`| Trace level | ${ops.trace_level} |`);
+  L.push(`| Trace sampling | ${ops.trace_sampling} |`);
+  L.push(`| Debug audio window | ${ops.retain_debug_audio_sec}s |`);
+  L.push('');
+  L.push(ops.debug_note);
+  L.push('');
+  L.push('## Production review checklist');
+  L.push('');
+  L.push('- Confirm whether raw/debug audio retention is legal for the selected consent and retention policy.');
+  L.push('- Keep one trace id across telephony, orchestration, STT/realtime, LLM, TTS, tools, and handoff.');
+  L.push('- Log turn state transitions separately from transcript text; many voice bugs are timing bugs, not language bugs.');
+  L.push('- Add a regression call for barge-in, long silence, background noise, echo, tool timeout, reconnect, and human handoff.');
+  L.push('- Re-run provider docs hydration before changing audio cleanup, endpointing, or provider SDK versions.');
+  return L.join('\n') + '\n';
+}
+
+function renderVoiceUx(flags) {
+  const ux = voiceUxConfig(flags);
+  const L = ['# Voice UX Tuning', ''];
+  L.push('These are runtime knobs, not documentation-only notes. Generated `voice_ux.py` exposes the same values as a typed config object.');
+  L.push('');
+  L.push('| Lever | Value | Runtime behavior |');
+  L.push('|---|---|---|');
+  L.push(`| Endpointing | ${ux.endpointing} (${ux.endpointing_ms}ms) | Controls how quickly a user turn is closed after silence. |`);
+  L.push(`| Interruption sensitivity | ${ux.interruption_sensitivity} | Controls how aggressively barge-in flushes playback. |`);
+  L.push(`| Audio enhancement | ${ux.audio_enhancement} | Selects provider-native cleanup, voice-focus, raw low-latency, or self-hosted DSP. |`);
+  L.push(`| Noise cancellation | ${ux.noise_cancellation} | Controls noise suppression strategy. |`);
+  L.push(`| Echo cancellation | ${ux.echo_cancellation} | Controls acoustic echo cancellation ownership/strength. |`);
+  L.push(`| Automatic gain control | ${ux.automatic_gain_control} | Controls volume normalization behavior. |`);
+  L.push(`| Silence timeout | ${ux.silence_timeout_ms}ms | Reprompt after caller silence. |`);
+  L.push(`| Max call duration | ${ux.max_call_duration_sec || 'none'}s | End or hand off calls that exceed the cap. |`);
+  L.push(`| Greeting mode | ${ux.greeting_mode} | Determines whether the agent speaks first. |`);
+  L.push(`| Voice profile | ${ux.voice_profile} (${ux.speaking_speed}x) | Preferred speaking style and speed. |`);
+  L.push(`| Language fallback | ${ux.language_fallback} | How to recover when caller language differs from the selected language. |`);
+  L.push('');
+  L.push('## Implementation expectations');
+  L.push('');
+  L.push('- `voice_ux.py` must be loaded by the session entry point.');
+  L.push('- Apply audio cleanup in exactly one layer. Double noise suppression or double AGC can create clipped speech and false barge-in.');
+  L.push('- Silence and max-duration checks should run on every user/agent state transition.');
+  L.push('- If `greeting_mode` is `wait_for_user`, do not generate an opening reply until the first user turn.');
+  L.push('- If `language_fallback` is `ask_caller`, the first uncertain language turn should ask the caller which language they prefer.');
+  return L.join('\n') + '\n';
+}
+
+function renderToolCalling(flags, sel, providers) {
+  const L = ['# Tool Calling', ''];
+  const toolMode = flags.tools || 'none';
+  L.push(`Selected tool mode: **${toolMode}**.`);
+  L.push('');
+  if (toolMode === 'none') {
+    L.push('No external tools are required. Generated `tools.py` still includes a registry so the agent can add tools later without changing the scaffold shape.');
+  } else {
+    L.push('Generated `tools.py` must provide:');
+    L.push('');
+    L.push('- A `ToolRegistry` with timeout and retry wrappers.');
+    L.push('- Idempotency keys for side-effecting calls.');
+    L.push('- Safe speech policy when a tool fails or times out.');
+    L.push('- Audit metadata for tool name, latency, status, and redacted arguments.');
+    L.push('- A stub for the selected integration mode.');
+  }
+  L.push('');
+  L.push('## Framework notes');
+  L.push('');
+  if (sel.orchestration?.id === 'livekit') {
+    L.push('- LiveKit function tools should use `@function_tool()` on the `Agent` subclass, with `RunContext` as the first runtime argument.');
+  } else if (sel.orchestration?.id === 'pipecat') {
+    L.push('- Pipecat tools should be exposed through the selected LLM service/tool adapter and traced through `observability.py`.');
+  } else {
+    L.push('- Custom FastAPI stacks should call tools from the WebSocket/session handler after the model chooses an action.');
+  }
+  L.push('');
+  L.push('## Failure speech policy');
+  L.push('');
+  L.push('When a tool fails, do not expose stack traces, provider names, secrets, or raw HTTP errors to the caller. Say a short recovery phrase and either retry, hand off, or continue with available information.');
+  return L.join('\n') + '\n';
+}
+
+function renderObservability(result, flags, sel) {
+  const L = ['# Observability', ''];
+  const ops = result.operations;
+  L.push('Generated `observability.py` creates a per-call timeline and summary metrics. This is the main debug surface for live calls.');
+  L.push(`Debug profile: **${ops.debug_profile}**. Trace level: **${ops.trace_level}**. Trace sampling: **${ops.trace_sampling}**. Debug audio window: **${ops.retain_debug_audio_sec}s**.`);
+  L.push('');
+  L.push('## Required events');
+  L.push('');
+  for (const event of [
+    'call_started',
+    'media_frame_in',
+    'stt_partial',
+    'stt_final',
+    'llm_first_token',
+    'tts_first_audio',
+    'agent_audio_out',
+    'interruption_started',
+    'interruption_ended',
+    'dtmf',
+    'tool_started',
+    'tool_finished',
+    'reconnect_started',
+    'reconnect_finished',
+    'dropped_frame',
+    'call_ended',
+  ]) {
+    L.push(`- \`${event}\``);
+  }
+  L.push('');
+  L.push('## Metrics');
+  L.push('');
+  L.push('- STT time to first partial and final.');
+  L.push('- LLM time to first token.');
+  L.push('- TTS time to first audio.');
+  L.push('- First response latency.');
+  L.push('- Interruption count and duration.');
+  L.push('- Dropped frame count.');
+  L.push('- WebSocket reconnect count.');
+  L.push('- Tool latency and failure count.');
+  L.push('- Audio cleanup mode, VAD false-trigger count, and interruption outcome.');
+  L.push(`- Estimated cost per minute: $${result.cost.total_per_minute_usd.toFixed(4)}.`);
+  L.push('');
+  L.push('## Framework hooks');
+  L.push('');
+  if (sel.orchestration?.id === 'livekit') {
+    L.push('- Attach to LiveKit `AgentSession` state events such as `user_state_changed` and `agent_state_changed`.');
+  } else if (sel.orchestration?.id === 'pipecat') {
+    L.push('- Attach a Pipecat `BaseObserver` to the pipeline worker/task with metrics enabled.');
+  } else {
+    L.push('- Emit trace events directly from the FastAPI WebSocket handler and audio bridge.');
+  }
+  return L.join('\n') + '\n';
+}
+
+function renderSafetyCompliance(flags) {
+  const safety = safetyConfig(flags);
+  const L = ['# Safety & Compliance', ''];
+  L.push('| Lever | Value |');
+  L.push('|---|---|');
+  L.push(`| Recording consent | ${safety.recording_consent} |`);
+  L.push(`| Transcript retention | ${safety.transcript_retention_days} days |`);
+  L.push(`| PII redaction | ${safety.pii_redaction ? 'enabled' : 'disabled'} |`);
+  L.push(`| Tool audit logging | ${safety.audit_tool_actions ? 'enabled' : 'disabled'} |`);
+  L.push('');
+  L.push('## Required behavior');
+  L.push('');
+  L.push('- Announce or request recording consent before recording when configured.');
+  L.push('- Redact phone numbers, emails, long account numbers, and card-like numbers before logs leave the process.');
+  L.push('- Honor opt-out / do-not-call language by ending the sales/collections flow and logging the preference.');
+  L.push('- Apply transcript retention to local and remote stores.');
+  L.push('- Audit every tool action with a redacted argument summary and idempotency key.');
+  L.push('');
+  L.push('This is not legal advice. Treat the generated policy as an implementation guardrail and verify jurisdiction-specific requirements before production.');
+  return L.join('\n') + '\n';
+}
+
+function renderHandoff(flags) {
+  const mode = flags.handoff || 'ticket';
+  const L = ['# Human Handoff', ''];
+  L.push(`Selected handoff mode: **${mode}**.`);
+  L.push('');
+  L.push('## Escalation triggers');
+  L.push('');
+  L.push('- Caller asks for a person.');
+  L.push('- The agent reaches low confidence on an important answer.');
+  L.push('- A side-effecting tool fails repeatedly.');
+  L.push('- Safety, compliance, billing, cancellation, or complaint policy requires a human.');
+  L.push('- The call reaches max duration or repeated silence.');
+  L.push('');
+  L.push('## Handoff summary');
+  L.push('');
+  L.push('Generated `handoff.py` should summarize caller identity, intent, attempted actions, unresolved question, tool results, sentiment/risk, and recommended next action.');
+  return L.join('\n') + '\n';
+}
+
+function renderLocalTesting(flags, sel) {
+  const L = ['# Local Testing With ngrok', ''];
+  L.push('Production deployment is out of scope for this recipe, but local PSTN/WebSocket testing needs a public HTTPS/WSS URL.');
+  L.push('');
+  L.push('## Run locally');
+  L.push('');
+  L.push('```bash');
+  L.push('python server.py');
+  L.push('ngrok http 8000');
+  L.push('```');
+  L.push('');
+  L.push('Use the ngrok HTTPS URL as your provider webhook base URL. Use the matching WSS URL for media streams.');
+  L.push('');
+  if (flags.needs_telephony) {
+    const telephony = sel.telephony?.id || 'telephony';
+    L.push(`For ${telephony}, point the voice webhook to \`https://<ngrok-domain>/voice\` or the provider-specific generated route, and the media stream URL to \`wss://<ngrok-domain>/ws\`.`);
+  } else {
+    L.push('For browser/app testing, ngrok is optional unless a third-party callback must reach the local process.');
+  }
+  L.push('');
+  L.push('Generated `local_test.py` prints the derived webhook and WebSocket URLs so users do not have to hand-edit them.');
+  return L.join('\n') + '\n';
+}
+
+function renderSimulationPlan(result, flags, sel) {
+  const L = ['# End-to-End Simulation Plan', ''];
+  L.push('`callsmith simulate` runs a deterministic fake call against the selected architecture. It does not call paid APIs.');
+  L.push('');
+  L.push('## Covered lifecycle');
+  L.push('');
+  for (const item of [
+    'start event',
+    'media frames',
+    'STT partial/final or realtime input',
+    'interruption/barge-in',
+    'DTMF',
+    'tool call',
+    'TTS/model audio output',
+    'transcript persistence check',
+    'reconnect path',
+    'hangup',
+    'audio transform/sample-rate assertions',
+  ]) {
+    L.push(`- ${item}`);
+  }
+  L.push('');
+  L.push('## Expected audio path');
+  L.push('');
+  if (result.transforms.length) {
+    for (const t of result.transforms) L.push(`- [${t.direction}] ${t.step} (${t.from} -> ${t.to})`);
+  } else {
+    L.push('- Native framework/provider audio normalization. No custom bridge expected.');
+  }
+  L.push('');
+  L.push('## Pass condition');
+  L.push('');
+  L.push('The simulation passes when every required lifecycle event is present, generated scaffold files are present when `--scaffold` is supplied, and all audio-path expectations match the compiled contract.');
   return L.join('\n') + '\n';
 }

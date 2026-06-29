@@ -13,6 +13,7 @@ const BASE = {
   architecture: 'realtime_s2s',
   orchestration: 'livekit',
   realtime_model: 'gemini_live',
+  vad: 'silero',
   language: 'english',
   barge_in: 'required',
   latency: 'balanced',
@@ -61,6 +62,34 @@ test('forge synthesizes a pack when provider is not in registry', () => {
   const recipe = readFileSync(join(result.outDir, 'callsmith.recipe.md'), 'utf8');
   assert.match(recipe, /UNVERIFIED/i, 'synthesized provider must be stamped UNVERIFIED');
   assert.match(recipe, /globex-voice/i, 'synthesized provider id must appear in recipe');
+});
+
+test('forge synthesizes an unknown LLM provider in cascaded mode', () => {
+  const answers = writeAnswers({
+    surface: 'inbound_pstn',
+    architecture: 'cascaded',
+    telephony: 'twilio',
+    orchestration: 'pipecat',
+    stt: 'deepgram',
+    llm: 'acme-llm',
+    tts: 'elevenlabs',
+    vad: 'silero',
+    language: 'english',
+    barge_in: 'required',
+    latency: 'balanced',
+    business_logic: 'support',
+    tools: 'webhook',
+    deployment: 'railway',
+  });
+  const result = runCli(['forge', '--answers', answers], {
+    env: { CALLSMITH_REGISTRY_SKIP: '1' },
+  });
+  assert.equal(result.exitCode, 0, 'unknown LLM should synthesize like other provider roles');
+  const lock = JSON.parse(readFileSync(join(result.outDir, 'callsmith.lock.json'), 'utf8'));
+  const entry = lock.resolved_providers.find(p => p.id === 'acme-llm');
+  assert.ok(entry, 'lock must record synthesized LLM');
+  assert.equal(entry.role, 'llm');
+  assert.equal(entry.verified, false);
 });
 
 test('lock records synthesized provider as unverified', () => {

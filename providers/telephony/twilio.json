@@ -29,7 +29,8 @@
     {
       "id": "8khz_mulaw_narrowband",
       "severity": "blocker",
-      "note": "Default Media Stream is μ-law 8 kHz. Decode + resample before any realtime model or STT."
+      "note": "Default Media Stream is μ-law 8 kHz. Decode + resample before any realtime model or STT.",
+      "mitigated_by": ["audio_normalization"]
     },
     {
       "id": "sampleRate_param_for_pcm16k",

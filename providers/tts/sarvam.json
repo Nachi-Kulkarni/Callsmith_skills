@@ -24,7 +24,7 @@
   ],
   "potholes": [
     { "id": "streaming_latency", "severity": "warning", "note": "Sarvam TTS is optimized for Indian languages but may have higher latency than Cartesia/ElevenLabs for English. Use the WebSocket streaming API (not REST) for real-time." },
-    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Sarvam defaults to 24000 Hz output. Telephony leg needs 8000 Hz μ-law — set speech_sample_rate=8000 or resample + encode yourself." }
+    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Sarvam defaults to 24000 Hz output. Telephony leg needs 8000 Hz μ-law — set speech_sample_rate=8000 or resample + encode yourself.", "mitigated_by": ["audio_normalization"] }
   ],
   "env_keys": ["SARVAM_API_KEY"],
   "doc_urls": ["https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"],

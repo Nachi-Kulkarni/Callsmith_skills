@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadProviders, loadMenu } from '../src/lib/resolver.mjs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadProviders, loadMenu, expandAnswers } from '../src/lib/resolver.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const FIXTURES_DIR = join(HERE, 'fixtures');
 
 test('every pack declares a non-empty directions array with valid values', () => {
   for (const [id, pack] of Object.entries(loadProviders())) {
@@ -65,6 +71,19 @@ test('all provider model names are pinned — staleness guard', () => {
   }
 });
 
+test('menu labels do not advertise stale model names', () => {
+  const menu = loadMenu();
+  const stale = [];
+  for (const group of menu.groups) {
+    for (const option of group.options) {
+      if (/\bNova-2\b/.test(option.label) || /\bGPT-4o\b/.test(option.label)) {
+        stale.push(`${group.id}.${option.id}: ${option.label}`);
+      }
+    }
+  }
+  assert.deepEqual(stale, [], 'menu has stale model labels:\n' + stale.join('\n'));
+});
+
 test('telephony audio contracts match verified docs — staleness guard', () => {
   const providers = loadProviders();
   // μ-law 8kHz providers (verified via Context7 + live docs)
@@ -78,4 +97,26 @@ test('telephony audio contracts match verified docs — staleness guard', () => 
   assert.equal(providers['vonage'].egress.format, 'pcm', 'Vonage egress must be pcm (L16), not mulaw');
   assert.equal(providers['vonage'].egress.sample_rate, 16000, 'Vonage default rate must be 16kHz');
   assert.equal(providers['vonage'].ingest.format, 'pcm', 'Vonage ingest must be pcm (L16), not mulaw');
+});
+
+test('every fixture survives strict-mode expansion (regression guard for menu changes)', () => {
+  const menu = loadMenu();
+  const collect = (dir) => {
+    const out = [];
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) out.push(...collect(p));
+      else if (name.endsWith('.answers.json')) out.push(p);
+    }
+    return out;
+  };
+  const fixtures = collect(FIXTURES_DIR);
+  assert.ok(fixtures.length > 0, 'fixtures must exist');
+  for (const f of fixtures) {
+    const raw = JSON.parse(readFileSync(f, 'utf8'));
+    assert.doesNotThrow(
+      () => expandAnswers(raw, menu, { strict: true }),
+      `fixture ${f.replace(FIXTURES_DIR, 'fixtures')} must survive strict-mode expansion`,
+    );
+  }
 });

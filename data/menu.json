@@ -52,6 +52,18 @@
       ]
     },
     {
+      "id": "hosting_model",
+      "title": "Who should own the realtime media infrastructure?",
+      "help": "This decides the operations tradeoff. Managed cloud gives more native media features and less maintenance. Self-hosted gives control but you own scaling, deploys, audio cleanup, and debugging.",
+      "required": false,
+      "default": "managed_cloud",
+      "options": [
+        { "id": "managed_cloud", "label": "Managed cloud", "blurb": "Provider/cloud owns media rooms, SIP/WebRTC edge, and most runtime features. Higher platform cost, lowest maintenance.", "maps": { "hosting_model": "managed_cloud", "infrastructure_owner": "provider", "feature_surface": "provider_native" } },
+        { "id": "hybrid_worker", "label": "Cloud edge + self-hosted worker", "blurb": "Provider handles edge media; your worker owns business logic, traces, tools, and deploy reliability.", "maps": { "hosting_model": "hybrid_worker", "infrastructure_owner": "shared", "feature_surface": "framework_native" } },
+        { "id": "self_hosted", "label": "Self-hosted", "blurb": "You host the media worker/bridge. Lowest platform fee, but you own codec paths, noise/echo cleanup, scaling, and incident response.", "maps": { "hosting_model": "self_hosted", "infrastructure_owner": "team", "feature_surface": "app_owned" } }
+      ]
+    },
+    {
       "id": "realtime_model",
       "title": "Which realtime speech-to-speech model?",
       "when": { "mode": ["realtime", "hybrid"] },
@@ -67,7 +79,7 @@
       "when": { "mode": ["cascaded", "hybrid"] },
       "default": "deepgram",
       "options": [
-        { "id": "deepgram",    "label": "Deepgram (Nova-2)", "blurb": "Streaming 16k PCM. Fast, accurate.", "maps": { "provider": "deepgram", "kind": "stt" } },
+        { "id": "deepgram",    "label": "Deepgram (Nova-3)", "blurb": "Streaming 16k PCM. Fast, accurate.", "maps": { "provider": "deepgram", "kind": "stt" } },
         { "id": "assemblyai",  "label": "AssemblyAI",        "blurb": "Streaming + universal real-time.", "maps": { "provider": "assemblyai", "kind": "stt" } }
       ]
     },
@@ -128,6 +140,43 @@
       ]
     },
     {
+      "id": "operational_profile",
+      "title": "Which operational profile fits best?",
+      "help": "A preset of endpointing, interruption sensitivity, noise handling, silence timeout, call-duration cap, greeting, voice style, and language fallback. Pick the closest fit; every value is overridable later in the generated voice_ux.py.",
+      "required": false,
+      "default": "support_default",
+      "options": [
+        { "id": "support_default", "label": "Support (balanced)", "blurb": "Balanced endpointing, normal interruption, warm voice, 30-min cap. Default for support and booking.", "maps": { "endpointing": "balanced", "endpointing_ms": 600, "interruption_sensitivity": "normal", "noise_cancellation": "standard", "silence_timeout_ms": 15000, "max_call_duration_sec": 1800, "greeting_mode": "immediate", "voice_profile": "warm", "speaking_speed": 1.0, "language_fallback": "auto_then_confirm" } },
+        { "id": "fast_ivr", "label": "Fast IVR (aggressive)", "blurb": "Quick turn closure, high interruption sensitivity, faster speech, 10-min cap. Short transactional calls.", "maps": { "endpointing": "aggressive", "endpointing_ms": 350, "interruption_sensitivity": "high", "noise_cancellation": "voice_focus", "silence_timeout_ms": 8000, "max_call_duration_sec": 600, "greeting_mode": "immediate", "voice_profile": "fast", "speaking_speed": 1.12, "language_fallback": "strict" } },
+        { "id": "careful_slow", "label": "Careful (slow)", "blurb": "Conservative endpointing, low interruption, slower speech, 60-min cap, ask caller for language. Hesitant callers.", "maps": { "endpointing": "conservative", "endpointing_ms": 900, "interruption_sensitivity": "low", "noise_cancellation": "standard", "silence_timeout_ms": 30000, "max_call_duration_sec": 3600, "greeting_mode": "wait_for_user", "voice_profile": "slow", "speaking_speed": 0.9, "language_fallback": "ask_caller" } }
+      ]
+    },
+    {
+      "id": "audio_enhancement",
+      "title": "How much audio cleanup should the agent use?",
+      "help": "This covers noise suppression, echo cancellation, and automatic gain control. The resolver records who owns each feature for the selected hosting/orchestration stack.",
+      "required": false,
+      "default": "provider_native",
+      "options": [
+        { "id": "provider_native", "label": "Provider/framework default", "blurb": "Use native WebRTC/SIP/framework cleanup when available. Good default for production.", "maps": { "audio_enhancement": "provider_native", "noise_cancellation": "standard", "echo_cancellation": "provider_native", "automatic_gain_control": "provider_native" } },
+        { "id": "voice_focus", "label": "Voice focus", "blurb": "More aggressive speech isolation for noisy callers. Watch for clipped soft speech.", "maps": { "audio_enhancement": "voice_focus", "noise_cancellation": "voice_focus", "echo_cancellation": "aggressive", "automatic_gain_control": "adaptive" } },
+        { "id": "raw_low_latency", "label": "Raw / lowest latency", "blurb": "Disable cleanup for controlled devices or lab testing. Lowest latency, least forgiving.", "maps": { "audio_enhancement": "raw_low_latency", "noise_cancellation": "off", "echo_cancellation": "off", "automatic_gain_control": "off" } },
+        { "id": "self_hosted_dsp", "label": "Self-hosted DSP", "blurb": "Your app owns cleanup modules. Required when custom hosting needs explicit DSP controls.", "maps": { "audio_enhancement": "self_hosted_dsp", "noise_cancellation": "self_hosted", "echo_cancellation": "self_hosted", "automatic_gain_control": "self_hosted" } }
+      ]
+    },
+    {
+      "id": "debug_profile",
+      "title": "How deep should production debugging be?",
+      "help": "Voice bugs are timing bugs. Pick how much trace detail and temporary audio evidence the generated project should keep.",
+      "required": false,
+      "default": "production_trace",
+      "options": [
+        { "id": "production_trace", "label": "Production timeline", "blurb": "Per-call event timeline, latency, interruption, tool, reconnect, and cost metrics. No raw audio retained.", "maps": { "debug_profile": "production_trace", "trace_level": "timeline", "trace_sampling": 1, "retain_debug_audio_sec": 0 } },
+        { "id": "forensic", "label": "Forensic", "blurb": "Frame-level trace plus short redacted audio capture window for hard barge-in/noise/echo bugs.", "maps": { "debug_profile": "forensic", "trace_level": "frame_and_audio", "trace_sampling": 1, "retain_debug_audio_sec": 60 } },
+        { "id": "lean", "label": "Lean metrics only", "blurb": "Aggregate metrics with lower trace sampling. Cheapest and quietest, but harder to debug incidents.", "maps": { "debug_profile": "lean", "trace_level": "metrics", "trace_sampling": 0.1, "retain_debug_audio_sec": 0 } }
+      ]
+    },
+    {
       "id": "latency",
       "title": "What is the priority?",
       "default": "balanced",
@@ -161,6 +210,41 @@
         { "id": "openapi", "label": "OpenAPI spec",        "maps": { "tools": "openapi" } },
         { "id": "mcp",     "label": "MCP server",          "maps": { "tools": "mcp" } },
         { "id": "db",      "label": "Database / Supabase", "maps": { "tools": "db" } }
+      ]
+    },
+    {
+      "id": "human_handoff",
+      "title": "What should happen when the agent cannot safely continue?",
+      "required": false,
+      "default": "ticket",
+      "options": [
+        { "id": "none", "label": "No human handoff", "maps": { "handoff": "none" } },
+        { "id": "transfer", "label": "Transfer live call", "maps": { "handoff": "transfer" } },
+        { "id": "callback", "label": "Schedule callback", "maps": { "handoff": "callback" } },
+        { "id": "ticket", "label": "Create support ticket", "maps": { "handoff": "ticket" } }
+      ]
+    },
+    {
+      "id": "recording_consent",
+      "title": "How should recording consent be handled?",
+      "required": false,
+      "default": "announce",
+      "options": [
+        { "id": "none", "label": "No recording", "maps": { "recording_consent": "none" } },
+        { "id": "announce", "label": "Announce recording", "maps": { "recording_consent": "announce" } },
+        { "id": "explicit", "label": "Require explicit consent", "maps": { "recording_consent": "explicit" } }
+      ]
+    },
+    {
+      "id": "transcript_retention",
+      "title": "How long should transcripts be retained?",
+      "required": false,
+      "default": "thirty_days",
+      "options": [
+        { "id": "ephemeral", "label": "Ephemeral", "maps": { "transcript_retention_days": 0 } },
+        { "id": "seven_days", "label": "7 days", "maps": { "transcript_retention_days": 7 } },
+        { "id": "thirty_days", "label": "30 days", "maps": { "transcript_retention_days": 30 } },
+        { "id": "ninety_days", "label": "90 days", "maps": { "transcript_retention_days": 90 } }
       ]
     },
     {

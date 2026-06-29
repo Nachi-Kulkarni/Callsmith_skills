@@ -4,6 +4,7 @@
   "telephony": "exotel",
   "orchestration": "custom_fastapi",
   "realtime_model": "gemini_live",
+  "vad": "silero",
   "language": "hinglish",
   "barge_in": "required",
   "latency": "ultra",

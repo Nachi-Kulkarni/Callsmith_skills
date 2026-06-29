@@ -46,11 +46,11 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 | R3 | **Soft difficulty still forges** | A stack that's merely hard (e.g. needs 4 audio transforms) still forges, with `[BLOCKER]` warnings the user reads. Only true impossibilities refuse. |
 | R4 | **`check` mirrors this** | `check` exits non-zero when any impossibility or unresolved blocker is present; exits 0 on a clean/blocked-only stack. |
 
-### Provider scope (v1.1)
+### Provider scope (v1.3)
 
 | ID | Decision | Detail |
 |---|---|---|
-| P1 | **All major providers** | v1.1 ships 21 verified packs, not golden-path-only. |
+| P1 | **All major providers** | v1.3 ships 21 verified packs, not golden-path-only. |
 | P2 | **Confirmed list** | See §4 below. |
 | P3 | **Unknown provider → online resolution (two-tier)** ✅ | **Implemented.** When answers reference a provider with no installed pack: **(1) registry lookup** — fetch from a community pack registry (`CALLSMITH_REGISTRY` env, default GitHub raw URL; supports `file://`/local paths for testing); **(2) dynamic synthesis fallback** — build a transient pack with sensible defaults + blocker pothole. Registry packs pass validation and are `verified: true`. Synthesized packs are stamped **`UNVERIFIED PROVIDER — validate before shipping`** in the recipe (prominent header) + lock `resolved_providers` array. `CALLSMITH_REGISTRY_SKIP=1` forces synthesis for testing. |
 
@@ -67,8 +67,8 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 | ID | Decision | Detail |
 |---|---|---|
 | Q1 | **Pack schema = hard gate** | Every pack validates against `providers/_schema.json`. CI fails on any invalid pack. A missing field is a build error. Critical with 21 packs drifting. |
-| Q2 | **Scaffolded tests run in CI** | The generated repo's pytest passing IS a callsmith guarantee. CI does: scaffold → `pip install -r requirements.txt` → `pytest`, per fixture. |
-| Q3 | **Model staleness = test guard now** | A test pins current model names (`gpt-5.5`, `claude-sonnet-4-6`, `gemini-3.5-flash`, `gemini-3.1-flash-live-preview`, `gpt-realtime-2`, `nova-3`, `eleven_v3`, `sonic-3.5`). Scheduled CI re-verification against live docs/APIs is a **v1.x** addition. |
+| Q2 | **Scaffolded tests run in CI** | The generated repo's pytest passing IS a callsmith guarantee. CI runs scaffold pytest with the fast test dependency set. Maintainers run `callsmith release-check --full-installs` before publish to install every unique generated runtime `requirements.txt` set. |
+| Q3 | **Model staleness = test guard + pack verifier** | Tests pin current model names (`gpt-5.5`, `claude-sonnet-4-6`, `gemini-3.5-flash`, `gemini-3.1-flash-live-preview`, `gpt-realtime-2`, `nova-3`, `eleven_v3`, `sonic-3.5`). `callsmith verify-packs` adds an offline freshness/staleness check for docs URLs, model pinning, cost data, Context7 coverage, lifecycle, and menu refs. |
 
 ### CLI contract
 
@@ -94,11 +94,11 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 
 | ID | Decision | Detail |
 |---|---|---|
-| L1 | **LLM as first-class pipeline citizen** ✅ | **Implemented.** LLM providers (OpenAI GPT-4o, Anthropic Claude Sonnet 4, Google Gemini 2.5 Flash) are in the menu, resolver pipeline, lock, recipe, scaffold, and staleness guard. `detectImpossibilities` refuses cascaded stacks without an LLM. |
+| L1 | **LLM as first-class pipeline citizen** ✅ | **Implemented.** LLM providers (OpenAI GPT-5.5, Anthropic Claude Sonnet 4.6, Google Gemini 3.5 Flash) are in the menu, resolver pipeline, lock, recipe, scaffold, and staleness guard. `detectImpossibilities` refuses cascaded stacks without an LLM. |
 | L2 | **VAD as first-class pipeline citizen** ✅ | **Implemented.** VAD providers (Silero, Deepgram Endpointing, WebRTC VAD) are in the menu, resolver pipeline, lock, recipe, and scaffold. VAD drives the interruption section of the recipe. |
 | L3 | **Interruption & turn-taking section** ✅ | **Implemented.** Every provider pack carries an `interruption` block (mechanism + description + code_hint). The resolver assembles these into a concrete, ordered interruption flow per stack. Recipe includes a dedicated "Interruption & turn-taking" section + `.callsmith/context/interruption.md` with end-to-end flow. |
 | L4 | **Latency budget modeling** ✅ | **Implemented.** Every provider pack carries `latency_estimates` (per-leg ms). The resolver computes a total budget, compares against a target (500/800/1200ms by latency priority), and produces a verdict. Recipe includes a latency table + `.callsmith/context/latency-budget.md` with optimization tips. Lock includes `latency` object. |
-| L5 | **Framework-native scaffolds** ✅ | **Implemented.** Scaffolds now use the actual framework APIs: **LiveKit** generates `agent.py` with `AgentSession`, `Agent`, `TurnHandlingOptions`, `silero.VAD.load()`; **Pipecat** generates `bot.py` with `Pipeline`, `PipelineTask`, `DeepgramSTTService`, `OpenAILLMService`, `TwilioFrameSerializer`, `SileroVADAnalyzer`, `LLMContextAggregatorPair` + `server.py` with webhook + WebSocket handler; **Custom FastAPI** generates webhook server + audio bridge with codecs/resampler. Tests verify framework-specific structure via AST analysis. |
+| L5 | **Framework-native scaffolds** ✅ | **Implemented.** Scaffolds use actual framework APIs: **LiveKit** generates `agent.py` with `AgentSession`, `Agent`, `TurnHandlingOptions`, `silero.VAD.load()` plus session tracing hooks; **Pipecat** generates `bot.py` with `Pipeline`, `PipelineWorker`, `DeepgramSTTService`, `OpenAILLMService`, `TwilioFrameSerializer`, `SileroVADAnalyzer`, `LLMContextAggregatorPair`, `PipecatTraceObserver` + `server.py` with webhook + WebSocket handler; **Custom FastAPI** generates webhook server + audio bridge with codecs/resampler. Tests verify framework-specific structure via AST analysis. |
 
 ### Tier 2 — Cost, state, resilience
 
@@ -108,15 +108,31 @@ Every guarantee maps to one of these layers. The decision for each layer is lock
 | T2-2 | **Conversation state management** ✅ | **Implemented.** Scaffold generates `state.py` with: (1) `ContextManager` — sliding-window token tracking against the LLM's context window; (2) `TranscriptStore` — SQLite-backed persistence for every turn (call_id, timestamp, role, content, tokens, metadata); (3) `DTMFHandler` — keypad digit collection with inter-digit timeout. Framework-specific DTMF wiring: Pipecat uses `DTMFAggregator`, LiveKit uses `GetDtmfTask`, Custom parses from WebSocket events. |
 | T2-3 | **Error handling & resilience** ✅ | **Implemented.** Scaffold generates `resilience.py` with: (1) `ReconnectingWebSocket` — exponential backoff (1s→2s→4s→8s→16s, max 30s) with ±25% jitter, max 5 retries, `ConnectionState` machine; (2) `retry_with_backoff` decorator — honors `Retry-After` header, exponential backoff on 429/5xx, max 3 retries; (3) `FallbackConfig` — per-leg fallback chain registration. Context file includes framework-specific patterns (LiveKit `FallbackAdapter`, Pipecat `on_connection_error`, custom manual fallback). |
 
+### Tier 3 — Live-call proof and operational levers
+
+| ID | Feature | Status |
+|---|---|---|
+| T3-1 | **End-to-end call simulator** ✅ | **Implemented.** `callsmith simulate --answers <file> [--scaffold dir]` emits `.callsmith/simulation/trace.jsonl` + `report.json` and covers start, media frames, STT/realtime turn, interruption, DTMF, tool call, TTS/model output, transcript persistence, reconnect, hangup, and audio-path assertions. Scaffold also generates `simulate_call.py`. |
+| T3-2 | **Observability pack** ✅ | **Implemented.** Scaffold generates `observability.py` with `CallTrace`, LiveKit session event hooks, Pipecat `BaseObserver` adapter, counters, first-latency metrics, tool metrics, reconnect/dropped-frame/interruption tracking, and JSONL output. |
+| T3-3 | **Tool-calling implementation** ✅ | **Implemented.** Scaffold generates `tools.py` with `ToolRegistry`, timeout/retry wrapper, idempotency keys, webhook/OpenAPI/MCP/database stubs, safe failure speech, and tool result metadata. |
+| T3-4 | **Voice UX tuning knobs** ✅ | **Implemented.** Intake + lock + `voice_ux.py` cover endpointing, interruption sensitivity, audio enhancement, noise cancellation, echo cancellation, automatic gain control, silence timeout, max call duration, greeting mode, speaking speed, voice profile, and language fallback. |
+| T3-5 | **Operations ownership profile** ✅ | **Implemented.** Intake + lock + `.callsmith/context/operations.md` + generated `operations.py` capture managed-cloud vs self-hosted ownership, effective resolver adjustments, debug profile, trace sampling, short debug-audio window, and who owns noise/echo/AGC cleanup. |
+| T3-6 | **Human handoff** ✅ | **Implemented.** Intake + context + `handoff.py` cover live transfer, callback, support ticket, escalation triggers, and handoff summaries. |
+| T3-7 | **Safety/compliance layer** ✅ | **Implemented.** Intake + context + `safety.py` cover recording consent, transcript retention, PII redaction, opt-out/DNC phrase detection, and audit logging for tool actions. |
+| T3-8 | **Local PSTN testing via ngrok** ✅ | **Implemented.** `local-testing.md` + `local_test.py` derive `ngrok http 8000`, provider webhook URL, media WebSocket URL, and `/health` check for generated FastAPI servers. Full production deployment control plane remains out of scope. |
+| T3-9 | **Provider pack verification job** ✅ | **Implemented.** `callsmith verify-packs [--json]` checks installed packs and menu refs offline. It fails on CI-breaking stale claims and warns on incomplete docs-refresh metadata. |
+| T3-10 | **Release readiness check** ✅ | **Implemented.** `callsmith release-check` validates npm pack contents, provider packs, golden spec/forge/check/scaffold/docs/simulate flow, generated fast install, generated pytest, and optionally `--full-installs` for every unique generated runtime requirements set. |
+
 ### Versioning & roadmap
 
 | ID | Decision | Detail |
 |---|---|---|
 | V1 | **v1.0 shipped** | Full matrix + tests + green CI. 117 tests across 10 files. |
 | V2 | **v1.1 = Tier 1 completeness** | LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds. 21 provider packs. |
-| V3 | **v1.2 = Tier 2 completeness** | Cost estimation, conversation state management (ContextManager + TranscriptStore + DTMFHandler), error handling & resilience (ReconnectingWebSocket + retry_with_backoff + FallbackConfig). 144 tests across 12 files. |
-| V4 | **TypeScript scaffold deferred** | Python is the v1.x target (AI/voice ecosystem is Python-native). TS scaffold lands if demand appears. |
-| V5 | **Hosting: personal account for now** | Repo under personal GitHub + personal npm scope. CI via GitHub Actions. Transferable to a dedicated org later if it grows. |
+| V3 | **v1.2 = Tier 2 completeness** | Cost estimation, conversation state management (ContextManager + TranscriptStore + DTMFHandler), error handling & resilience (ReconnectingWebSocket + retry_with_backoff + FallbackConfig). Covered by the Node behavior suite plus generated scaffold pytest checks. |
+| V4 | **v1.3 = Live-call proof + operations** | Fake call simulator, observability pack, tool calling, voice UX tuning knobs, safety/compliance, handoff, local ngrok testing, and provider-pack verification. |
+| V5 | **TypeScript scaffold deferred** | Python is the v1.x target (AI/voice ecosystem is Python-native). TS scaffold lands if demand appears. |
+| V6 | **Hosting: scoped package** | Publish as `@callsmith/cli` with `publishConfig.access=public`; keep the `callsmith` binary name. The unscoped npm package is unrelated. |
 
 ---
 
@@ -130,7 +146,7 @@ Confirmed list. Each = research + verified pack + schema test + fixtures.
 | **Orchestration** | LiveKit, Pipecat, custom-FastAPI |
 | **Realtime** | Gemini Live, OpenAI Realtime |
 | **STT** | Deepgram, AssemblyAI |
-| **LLM** | OpenAI (GPT-4o), Anthropic (Claude Sonnet 4), Google (Gemini 2.5 Flash) |
+| **LLM** | OpenAI (GPT-5.5), Anthropic (Claude Sonnet 4.6), Google (Gemini 3.5 Flash) |
 | **TTS** | ElevenLabs, Cartesia, Sarvam |
 | **VAD** | Silero VAD, Deepgram Endpointing, WebRTC VAD |
 
@@ -189,8 +205,12 @@ This is the bridge to the test plan and TDD execution. Each behavior below is on
 ### Layer 5 — Scaffold correctness
 - **B21.** A custom-FastAPI scaffold's audio bridge round-trips 8 kHz μ-law → 16 kHz PCM → 8 kHz μ-law.
 - **B22.** A LiveKit scaffold's bridge is a passthrough (no resampling).
-- **B23.** Every fixture's scaffold: `pip install -r requirements.txt && pytest` passes.
+- **B23.** Every fixture's scaffold pytest passes on the fast dependency set; release certification runs `callsmith release-check --full-installs` to install every unique generated runtime `requirements.txt` set.
 - **B24.** Scaffolded `requirements.txt` matches the selected providers' `env_keys`/dependencies.
+- **B24a.** Scaffold generates operational modules (`observability.py`, `tools.py`, `voice_ux.py`, `safety.py`, `handoff.py`, `local_test.py`, `simulate_call.py`) and generated pytest validates them.
+- **B24b.** `callsmith simulate` emits a passing fake-call report for a valid stack and validates scaffold file presence when `--scaffold` is supplied.
+- **B24c.** `callsmith verify-packs` exits zero when there are no pack failures and reports warnings separately from failures.
+- **B24d.** `callsmith release-check` validates npm pack contents, provider packs, a generated golden stack, and optional full dependency installs.
 
 ### Layer 6 — Agent-skill
 - **B25.** recipe.md contains every section `SKILL.md` tells the agent to read (contract ↔ skill consistency).
@@ -213,7 +233,7 @@ This is the bridge to the test plan and TDD execution. Each behavior below is on
 
 ## 8. How this doc is used
 
-1. **Test plan derives from §6.** Each behavior B1–B32+ maps to tests (144 total, all green).
+1. **Test plan derives from §6.** Each behavior B1–B32+ maps to behavior tests and generated scaffold checks.
 2. **§5 gaps are all resolved** (G1–G9). Retained for history.
 3. **§Tier 1 features** (L1–L5) track the voice-agent completeness work: LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds.
 4. **Decisions are living.** When a decision changes, update this doc AND the test it maps to. A green test that contradicts this doc is a bug.

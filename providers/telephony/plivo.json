@@ -23,7 +23,7 @@
     "call_answered", "media_stream_start", "media_frame", "dtmf", "media_stream_end", "call_hangup"
   ],
   "potholes": [
-    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model." },
+    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model.", "mitigated_by": ["audio_normalization"] },
     { "id": "xml_element_stream", "severity": "warning", "note": "Plivo uses XML elements to start streaming; the WebSocket connects only after the XML element is processed. Handle the async bridge." }
   ],
   "env_keys": ["PLIVO_AUTH_ID", "PLIVO_AUTH_TOKEN"],
