@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "india-exotel-hinglish",
+  "title": "India Exotel Hinglish support",
+  "domain": "banking",
+  "stakes": "payment",
+  "seed_mode": "poisoned",
+  "arms": [
+    "BASE",
+    "WITH"
+  ]
+}

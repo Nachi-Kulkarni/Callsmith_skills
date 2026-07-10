@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "livekit-native-short-circuit",
+  "title": "LiveKit native audio short-circuit",
+  "domain": "general",
+  "stakes": "lead",
+  "seed_mode": "poisoned",
+  "arms": [
+    "BASE",
+    "WITH"
+  ]
+}

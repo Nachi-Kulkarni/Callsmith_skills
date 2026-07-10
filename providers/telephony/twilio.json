@@ -2,6 +2,14 @@
   "id": "twilio",
   "kind": "telephony",
   "label": "Twilio (Voice + Media Streams)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://www.twilio.com/docs/voice/tutorials/how-carry-out-phone-conversations-media-streams"
+    ]
+  },
   "transport": "websocket",
   "ingest": {
     "format": "mulaw",
@@ -72,6 +80,21 @@
   "latency_estimates": {
     "media_rtt_ms": 80
   },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 80,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "mark_clear",
     "description": "Twilio supports mark/clear events on Media Streams. Attach a 'mark' with an ID when sending audio; on interruption, send 'clear' with that mark ID to immediately stop playback.",

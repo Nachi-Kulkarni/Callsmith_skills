@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "sealed": {
+    "surface": {
+      "one_of": [
+        "inbound_pstn"
+      ]
+    },
+    "recording_consent": {
+      "min": "announce"
+    },
+    "transcript_retention": {
+      "min": "thirty_days"
+    },
+    "human_handoff": {
+      "one_of": [
+        "transfer"
+      ]
+    },
+    "telephony": {
+      "one_of": [
+        "twilio"
+      ]
+    }
+  },
+  "physics": {
+    "require_possible": true
+  },
+  "traps": [
+    "no_pstn_to_web",
+    "no_ticket_on_urgent",
+    "no_synthesis",
+    "no_deleted_generators",
+    "no_consent_none_regulated"
+  ],
+  "contract_domain": "medical"
+}

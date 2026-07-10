@@ -1,287 +1,161 @@
 ---
 name: callsmith
-description: Compile a production-ready implementation recipe for voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, scaffold, or architect a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, LLM, speech-to-speech, barge-in, or media streams. Resolves the audio bridge, interruption/turn-taking, latency budget, detects impossible stacks, and compiles a deterministic handoff packet with framework-native scaffolds so a coding agent can build the whole thing in one pass.
-argument-hint: "[spec|forge|check|scaffold|docs|simulate|verify-packs|release-check|context] [target]"
-allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(npm install -g github:Nachi-Kulkarni/Callsmith_skills), Read, Write, Edit
+description: Design production voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, architect, or harden a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, barge-in, or media streams. You are the compiler: dig deeper, apply hard floors, load provider packs for physics, write a short handoff contract, then implement. callsmith validates packs/physics — it does not generate the app.
+argument-hint: "[audit|critique|latency|ttft|harden|check|packs] [target]"
+allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Read, Write, Edit
 ---
 
 # callsmith
 
-A recipe compiler for voice AI agents. It takes a short MCQ intake (surface, telephony, orchestration, hosting ownership, architecture, realtime model / STT+LLM+TTS, VAD, language, barge-in, audio cleanup, debug depth, voice UX, latency priority, business logic, tools, handoff, safety, deployment), resolves audio-format and operational compatibility, computes the interruption/turn-taking flow, models the latency budget, and writes an agent handoff packet: `callsmith.recipe.md` + `callsmith.lock.json` + `.callsmith/context/*`. A coding agent then builds the full system from that packet — using **framework-native code** (LiveKit Agents, Pipecat PipelineWorker, or custom FastAPI) — without rediscovering telephony potholes.
+**You are the compiler.** callsmith teaches you to design production voice agents; packs, floors, and evals verify what you must not invent.
 
-The hard part of voice agents is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/24 kHz), turn/interruption lifecycle, VAD configuration, echo/noise cleanup ownership, and per-provider streaming quirks. callsmith carries that knowledge so the implementer does not have to.
+> The agent compiles. callsmith validates the physics, floors, and eval bar.
 
-## Setup check
+Constitution: `product_decisions.md`. Wedge: pack physics inspect + floor receipts + contract validate + eval gate.
 
-Run this before anything else. If the CLI is missing, install it.
+Not a scaffold generator. Not a 22-question coverage machine. You converse, dig deeper, load **provider packs**, **rewrite** floor violations, write one **handoff contract**, then implement with framework-native code (LiveKit / Pipecat / custom).
 
-```bash
-command -v callsmith >/dev/null 2>&1 && echo "Installed" || npm install -g github:Nachi-Kulkarni/Callsmith_skills
-```
+The hard part is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM), barge-in, echo ownership, per-provider quirks — plus regulated floors (consent, retention, handoff).
 
-In a checkout of the callsmith repo itself, the CLI runs without a global install:
+## Setup
 
 ```bash
-node bin/callsmith.mjs --help
+# Prefer local checkout verification CLI
+if [ -f bin/callsmith.mjs ]; then
+  node bin/callsmith.mjs doctor
+elif command -v callsmith >/dev/null 2>&1; then
+  callsmith doctor
+else
+  echo "Optional: install CLI for pack validate/check — skill works without full generation CLI"
+fi
 ```
 
-## Core workflow
+Primary install for users: `npx skills add Nachi-Kulkarni/Callsmith_skills` then invoke `/callsmith`.
 
-The build is `spec -> forge -> (check) -> scaffold`. Intake produces an answers file; forge compiles it; check inspects the matrix; scaffold emits the repo skeleton.
+## Command routing (playbooks)
+
+| Argument | Load |
+|---|---|
+| `audit` | `reference/audit.md` |
+| `critique` | `reference/critique.md` |
+| `latency` | `reference/latency.md` |
+| `ttft` | `reference/ttft.md` |
+| `harden` | `reference/harden.md` |
+
+These are agent modes, not generators.
+
+## Your job (compile loop)
+
+1. **Converse** — dig deeper on vague intent (domain, surface, language, compliance, tools, handoff stakes).
+2. **Load packs** — for each provider under consideration, read `providers/<kind>/<id>.json` (or `callsmith pack show <id>`). Do not invent sample rates, barge-in mechanics, or potholes.
+3. **Apply floors** — load `reference/policy.md` and rewrite design when defaults violate policy. Change **answers fields**, not only prose. Tell the user before → after.
+4. **Normalize vocabulary** — every policy/stack field uses the canonical option IDs in `reference/policy.md`. Free-form synonyms fail tools and gates.
+5. **Physics check** — if the user has answers JSON, run `callsmith check --answers <file>`. Unknown providers: **do not synthesize** — research, write a pack, or refuse to ship.
+6. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
+7. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md` when CLI available.
+8. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
+9. **Quality modes** — audit / critique / harden / latency as needed. Use ttft only to isolate the LLM leg.
+
+Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
+Not menu coverage 1.0.
+
+## Canonical answers vocabulary (do not freestyle)
+
+Before writing `voice.answers.json`, **load `reference/policy.md`**. It is the single canonical table for surface, architecture, policy, language, provider answer IDs → pack IDs, and channel constraints. Use its exact tokens; omit nonexistent provider legs and never use `"none"` as a provider ID.
+
+The recurring benchmark failures are free-form synonyms such as `warm_transfer`, `whatsapp_async`, `english_and_hindi`, and invented product IDs. Map natural language to the reference vocabulary before running `check`.
+
+## Hard floors — fix, do not only flag
+
+**Acknowledging a risk is not handling it.** Load and apply the domain defaults in `reference/policy.md`. Rewrite `recording_consent`, `transcript_retention`, and `human_handoff` in both answers and receipt. A below-default design needs the explicit named risk-acceptance record defined by `reference/contract.md`. Tool-changing actions need a durable authenticated interface and recorded failure/idempotency behavior.
+
+## Handoff contract (required sections)
+
+Write a **non-empty** single markdown file (default `callsmith.recipe.md`). Missing file, empty body, or a missing/invalid `json callsmith-contract` receipt is a fail. Use the exact schema and canonical values in `reference/contract.md`; the receipt must match `voice.answers.json`.
+
+1. Intent / use case
+2. Stack (providers + why) — use real pack/menu ids
+3. Audio path (transforms or native ownership — from packs)
+4. Interruption / barge-in ownership
+5. Floors applied (consent, retention, handoff, tools) + any overrides — **must match answers**
+6. Latency/cost note (one quantified tradeoff with a **digit**: ms or $/min)
+7. Build notes for implementation
+
+**Contract ↔ answers consistency:** if the contract discusses consent/retention/handoff, the answers fields must already meet floors. Prose “HIPAA may apply” + `recording_consent: none` is flag-only theater (fail).
+
+The receipt records the policy basis, jurisdiction for regulated domains, installed provider pack IDs, and a percentile `turn_gap_ms` SLO. Callsmith floors are conservative product defaults, not legal advice. A below-default design requires a named explicit-risk acceptance and reason; never silently weaken it.
+
+Optional: keep `voice.answers.json` for `callsmith check` — values must use **canonical ids** above, not free-form prose.
+
+## Progressive disclosure
+
+| Stage | Load |
+|---|---|
+| Start | User brief + this skill + floors |
+| Choosing providers | Only relevant `providers/**/*.json` |
+| Physics | `callsmith check` or pack fields (ingest/egress/interruption) |
+| Quality | `reference/audit.md`, `reference/latency.md`, etc. |
+| Implement | Framework docs + pack potholes for chosen stack |
 
 ```bash
-# 1. Take the intake (see the menu, or write an answers file)
-callsmith spec --answers voice.answers.json
-
-# 2. Compile the handoff packet into the project
-callsmith forge --answers voice.answers.json --out .
-
-# 3. Inspect the compatibility matrix without writing files
-callsmith check --answers voice.answers.json
-
-# 4. Generate the framework-native repo skeleton
-callsmith scaffold --answers voice.answers.json --out .
-
-# 5. Write provider docs context + Context7 prompts into .callsmith/docs/
-callsmith docs --answers voice.answers.json --out .
-
-# 6. Run the deterministic fake-call lifecycle simulator
-callsmith simulate --answers voice.answers.json --out .
-
-# 7. Check provider pack freshness/staleness guards
-callsmith verify-packs
-
-# 8. Maintainer release proof (package + generated golden path)
-callsmith release-check --skip-tests
+callsmith packs
+callsmith pack show twilio
+callsmith pack validate
+callsmith check --answers voice.answers.json   # optional answers file
+callsmith contract validate --file callsmith.recipe.md --domain medical
+callsmith doctor
 ```
 
-### What forge writes
+## Verification CLI (facts only)
 
-```
-callsmith.recipe.md          # the handoff packet (intent, stack, audio contract, interruption, latency, cost, operations, build order)
-callsmith.lock.json          # reproducible manifest (providers, models, compatibility, latency, cost, voice UX, safety)
-.env.example                 # required keys for the selected stack
-.callsmith/context/
-  architecture.md            # pipeline + flags (includes LLM, VAD)
-  audio-contract.md          # THE audio transforms (or "handled natively")
-  interruption.md            # per-provider interruption flow (VAD -> cancel -> flush -> clear)
-  latency-budget.md          # per-leg latency breakdown + optimization tips
-  cost-estimation.md         # per-leg cost table + scale projections
-  conversation-state.md      # context window strategy + transcript schema + DTMF wiring
-  error-handling.md          # WebSocket recovery + rate-limit backoff + fallback chains
-  operations.md              # cloud/self-hosted ownership, debug depth, audio cleanup ownership
-  voice-ux.md                # endpointing/noise/echo/AGC/silence/greeting/voice/language knobs
-  tool-calling.md            # timeout/retry/idempotency/tool failure speech policy
-  observability.md           # timeline traces + metrics requirements
-  safety-compliance.md       # consent, PII, retention, opt-out, audit
-  handoff.md                 # transfer/callback/ticket policy
-  local-testing.md           # ngrok local PSTN/WebSocket testing
-  simulation.md              # fake call lifecycle pass criteria
-  potholes.md                # all blockers/warnings/notes from every provider
-  build-order.md             # implementation sequence including state, resilience, tools, safety, observability, simulation
-```
-
-## Commands
-
-| Command | Description |
+| Command | Purpose |
 |---|---|
-| `spec [--answers f]` | Print the intake menu, or emit a fillable answers template |
-| `forge --answers f [--out d]` | Compile answers into the handoff packet (recipe + lock + context) |
-| `check --answers f` | Print the compatibility matrix (transforms, blockers, latency, cost, interruption). Exits non-zero if blockers remain |
-| `scaffold --answers f [--out d]` | Generate the framework-native repo skeleton |
-| `docs --answers f [--out d]` | Write provider doc stubs, official links, and Context7 prompts into `.callsmith/docs/` |
-| `simulate --answers f [--out d] [--scaffold d]` | Run a deterministic fake call lifecycle: start/media/STT or realtime/interrupt/DTMF/tool/TTS/reconnect/hangup |
-| `verify-packs [--json]` | Run offline provider pack freshness/staleness checks |
-| `release-check [--full-installs] [--skip-tests] [--json]` | Run package/scaffold/release-readiness checks |
-| `context` | Preflight: report whether a recipe is loaded in the cwd |
+| `packs` / `pack show` / `pack validate` | Stdlib inspection |
+| `verify-packs` | Evidence dates, expiry, provenance shape, and CI safety |
+| `check --answers f` | Transforms, impossibilities, latency/cost from packs |
+| `contract validate --file f [--domain …]` | Semantic policy/provider/turn-gap receipt + explanatory sections |
+| `doctor` | Install health |
 
-## The 22 menu groups
+**Removed (do not call):** `init`, `forge`, `scaffold`, `simulate`, `intake`, `docs`, `spec`, `release-check`. Generation is your job.
 
-| # | Group | Options |
-|---|---|---|
-| 1 | **Surface** | Inbound PSTN, Outbound PSTN, Web voice, App-to-app, WhatsApp voice |
-| 2 | **Architecture** | Realtime speech-to-speech, Cascaded STT→LLM→TTS, Hybrid |
-| 3 | **Telephony** (conditional) | Exotel, Twilio, Plivo, Telnyx, Vonage |
-| 4 | **Orchestration** | LiveKit Agents, Pipecat, Custom FastAPI |
-| 5 | **Hosting model** | Managed cloud, Cloud edge + self-hosted worker, Self-hosted |
-| 6 | **Realtime model** (conditional) | Gemini Live (`gemini-3.1-flash-live-preview`), OpenAI Realtime (`gpt-realtime-2`) |
-| 7 | **STT** (conditional) | Deepgram (Nova-3), AssemblyAI (`universal-3-5-pro`) |
-| 8 | **LLM** (conditional) | OpenAI (`gpt-5.5`), Anthropic (`claude-sonnet-4-6`), Google (`gemini-3.5-flash`) |
-| 9 | **TTS** (conditional) | ElevenLabs (`eleven_v3`), Cartesia (`sonic-3.5`), Sarvam (`bulbul:v3`) |
-| 10 | **VAD** | Silero VAD, Deepgram Endpointing, WebRTC VAD |
-| 11 | **Language** | English, Hindi, Hinglish, Tamil, Kannada, Multilingual |
-| 12 | **Barge-in** | Required (full-duplex), Optional (best-effort), Disabled (half-duplex) |
-| 13 | **Operational profile** | Support balanced, Fast IVR, Careful slow |
-| 14 | **Audio enhancement** | Provider/framework default, Voice focus, Raw/lowest latency, Self-hosted DSP |
-| 15 | **Debug profile** | Production timeline, Forensic, Lean metrics only |
-| 16 | **Latency priority** | Ultra-low, Balanced, Low-cost, Highest-reliability |
-| 17 | **Business logic** | FAQ, Support, Lead qual, Booking, Collections, Interview |
-| 18 | **Tools** | None, Webhook, OpenAPI spec, MCP server, Database |
-| 19 | **Human handoff** | None, Transfer, Callback, Ticket |
-| 20 | **Recording consent** | No recording, Announce, Explicit |
-| 21 | **Transcript retention** | Ephemeral, 7 days, 30 days, 90 days |
-| 22 | **Deployment** | Local, Railway, Render, Fly.io, Kubernetes |
+## Provider packs (21)
 
-## Framework-native scaffolds
+Discover installed packs with `callsmith packs`; load only the selected files. Each pack carries audio ingress/egress, interruption, potholes, evidence-labeled planning inputs, environment keys, and dated sources.
 
-The scaffold generates code that uses the actual framework APIs — not a generic skeleton.
+## Audio contract (why this exists)
 
-**LiveKit Agents**: generates `agent.py` with `AgentSession`, `Agent`, `TurnHandlingOptions(turn_detection=MultilingualModel())`, `silero.VAD.load()`, and inference or plugin-based model wiring.
+- Telephony is usually **μ-law 8 kHz** (Vonage often L16 16 kHz). Decode/resample unless orchestration normalizes natively (e.g. LiveKit SIP).
+- Realtime models often use **asymmetric rates** (e.g. 16 kHz in / 24 kHz out).
+- **Barge-in** = flush outbound + cancel in-flight TTS/model; mechanism differs per provider.
+- WebSocket frames split mid-syllable — reassemble by byte budget, not message boundary.
+- WebSocket close ≠ telephony hangup — one session state machine for both.
 
-**Pipecat**: generates `bot.py` with `Pipeline([transport.input(), dtmf_aggregator, stt, user_aggregator, llm, tts, transport.output(), assistant_aggregator])`, `PipelineWorker`, `PipelineRunner`, `TwilioFrameSerializer`, `SileroVADAnalyzer`, `PipecatTraceObserver` + `server.py` with webhook + WebSocket handler.
+Exotel + custom FastAPI + Gemini Live → often **4 transforms**.
+Exotel + LiveKit + Gemini Live → often **0 transforms**.
+That difference lives in packs — not in model marketing docs.
 
-**Custom FastAPI**: generates `server.py` with webhook endpoint + WebSocket media handler (includes DTMF parsing, TranscriptStore logging, ReconnectingWebSocket pattern) + `audio/bridge.py` with μ-law codecs and resampler (only when transforms are needed).
+## Anti-patterns
 
-All scaffolds also generate:
-- **`state.py`** — `ContextManager` (sliding-window token tracking against the LLM's context window), `TranscriptStore` (SQLite persistence for every turn), `DTMFHandler` (keypad digit collection with inter-digit timeout).
-- **`resilience.py`** — `ReconnectingWebSocket` (exponential backoff reconnection), `retry_with_backoff` (rate-limit handling decorator), `FallbackConfig` (per-leg provider fallback chains).
-- **`operations.py`** — hosting ownership, effective cloud/self-hosted model, debug profile, trace sampling, audio cleanup ownership.
-- **`observability.py`** — `CallTrace`, LiveKit session event hooks, Pipecat observer adapter, JSONL trace writer.
-- **`tools.py`** — `ToolRegistry`, timeout/retry wrapper, idempotency keys, webhook/OpenAPI/MCP/database stubs, safe failure speech.
-- **`voice_ux.py`** — endpointing, audio enhancement, noise cancellation, echo cancellation, automatic gain control, silence, max duration, greeting, speaking speed, language fallback.
-- **`safety.py`** — consent prompt policy, PII redaction, retention, opt-out detection, audit logging.
-- **`handoff.py`** — human transfer/callback/ticket summary and escalation policy.
-- **`local_test.py`** — ngrok command and webhook/WSS URL derivation for local PSTN testing.
-- **`simulate_call.py`** — provider-free fake call lifecycle simulator.
-- **`tests/test_state.py`**, **`tests/test_resilience.py`**, and **`tests/test_operational_modules.py`** — validate generated modules round-trip correctly.
+- Invent sample rates / barge-in without a pack
+- Only flag floors without rewriting the design
+- Ticket-only handoff on urgent payment/medical/collections
+- Webhook for booking without OpenAPI comparison
+- Assume orchestration always normalizes audio
+- Synthesize unknown providers
+- **Free-form enum synonyms** (`warm_transfer`, `whatsapp_async`, `english_and_hindi`, …)
+- **`"telephony": "none"`** (or other `"none"` provider ids) instead of omitting the key
+- Empty `callsmith.recipe.md` or contract that contradicts answers
+- PSTN stack for pure WhatsApp voice-note briefs (or reverse)
+- Cascaded default when brief requires ultra-low-latency app voice
+- Custom FastAPI + claim “0 transforms” without pack proof
+- Treat scaffold/sim green as product (removed)
+- Mix input formats into a realtime model
+- Equate WS close with hangup
+- Skip transcript/consent on regulated flows
 
-## Cost estimation
+## Asking style
 
-Every provider pack carries `cost_estimates` with billing model + normalized per-minute USD. The recipe includes:
-
-- A per-leg cost table (telephony, orchestration, VAD, STT, LLM, TTS)
-- Scale projections: per-hour, per-1k calls (5-min avg)
-- Per-leg detail with billing model explanation
-
-Cost assumptions: ~250 tokens/min LLM, ~800 chars/min TTS, 5-min avg call. Always verify at provider sites.
-
-## Conversation state management
-
-The recipe and scaffold address three state concerns:
-
-1. **Context window management**: `ContextManager` tracks token count and enforces a sliding window. System prompt is always retained. When approaching `max_tokens - reserve_tokens`, oldest messages are dropped. Uses the LLM's actual `context_window` from the provider pack.
-
-2. **Transcript persistence**: `TranscriptStore` logs every turn to SQLite (`transcripts.db`). Schema: call_id, timestamp, role, content, tokens, metadata. Enables crash recovery — on restart, load transcript back into ContextManager.
-
-3. **DTMF handling**: Framework-specific wiring:
-   - **Pipecat**: `DTMFAggregator` in pipeline between `transport.input()` and `stt`
-   - **LiveKit**: `GetDtmfTask` for IVR-style digit collection
-   - **Custom**: parse `dtmf` events from WebSocket messages
-
-## Error handling & resilience
-
-The recipe and scaffold address four resilience concerns:
-
-1. **WebSocket drop recovery**: `ReconnectingWebSocket` with exponential backoff (1s→2s→4s→8s→16s, max 30s) and ±25% jitter. Max 5 retries. `ConnectionState` machine: CONNECTED → DISCONNECTED → RECONNECTING → CONNECTED/FAILED.
-
-2. **Rate-limit backoff**: `retry_with_backoff` decorator honors `Retry-After` header. Exponential backoff on 429/5xx. Max 3 retries. Applied to LLM/STT/TTS API calls.
-
-3. **Fallback chains**: `FallbackConfig` registers primary + fallback per pipeline leg. Framework-specific:
-   - **LiveKit**: `stt.FallbackAdapter([deepgram.STT(), assemblyai.STT()])`
-   - **Pipecat**: `@tts.event_handler("on_connection_error")` for auto-reconnect logging
-   - **Custom**: manual `FallbackConfig.register("stt", "deepgram", "assemblyai")`
-
-4. **Tool call timeouts**: 5s default. On timeout, respond with holding message and retry asynchronously.
-
-## How to use callsmith when building for a user
-
-### When the user describes a voice agent in prose
-
-Do not improvise an architecture. Run the intake, then compile.
-
-1. Read the menu: `callsmith spec`.
-2. Map the user's intent to the 22 menu groups. Ask only what the user has not already specified, 2-3 questions at a time.
-3. Write the answers object to a file (keys = group ids, values = option ids).
-4. Run `callsmith forge --answers <file> --out .`.
-5. Read `callsmith.recipe.md` and `.callsmith/context/audio-contract.md` **and** `.callsmith/context/interruption.md` before writing any code.
-
-### When the user already has answers or a partial stack
-
-Run `callsmith check` first. It surfaces: the audio contract (transforms), interruption flow (per-provider barge-in steps), latency budget (per-leg breakdown + verdict), and blockers. If it reports transforms, those are non-negotiable implementation steps.
-
-### When scaffolding
-
-Only scaffold after `forge` has written `callsmith.recipe.md`. The scaffold uses the framework's native APIs — do not replace framework classes with custom implementations unless the recipe explicitly requires a custom bridge.
-
-## The audio contract (why this skill exists)
-
-Voice agents fail at the audio boundary. The recurring traps callsmith encodes:
-
-- Telephony media streams are **μ-law 8 kHz narrowband** (except Vonage, which streams L16 PCM 16 kHz). A decode + resample stage is mandatory unless a native layer does it.
-- Realtime models use **asymmetric rates** (e.g. Gemini Live: 16 kHz in, 24 kHz out). Two independent resamplers are required.
-- **Barge-in** requires flushing the outbound buffer and cancelling in-flight model/TTS output. Each provider has a different mechanism (Twilio: mark/clear, Vonage: action:clear, LiveKit: TurnHandlingOptions, Pipecat: InterruptionFrame). The recipe's interruption section spells out the exact flow.
-- WebSocket frames split/coalesce audio arbitrarily. Reassemble by byte budget, not message boundary.
-
-## Interruption & turn-taking
-
-The recipe includes a dedicated "Interruption & turn-taking" section with concrete, ordered steps for the selected stack:
-
-1. **VAD detection** — Silero/Deepgram/WebRTC VAD detects user speech
-2. **Framework cancellation** — Pipecat fires InterruptionFrame; LiveKit cancels via TurnHandlingOptions
-3. **LLM stream cancel** — cancel the in-flight streaming completion
-4. **TTS output stop** — close the TTS WebSocket, discard buffered audio
-5. **Media playback stop** — provider-specific (Twilio: clear event, Vonage: action:clear)
-
-Each step includes the provider's `interruption` block with mechanism name, description, and code hint.
-
-## Latency budget
-
-The recipe includes a latency table summing per-leg estimates:
-
-| Leg | Example |
-|---|---|
-| Telephony media round-trip | 80 ms |
-| Orchestration pipeline overhead | 20-30 ms |
-| VAD processing | 10-30 ms |
-| STT time to first transcript | 300-350 ms (cascaded) |
-| LLM time to first token | 350-450 ms (cascaded) |
-| TTS time to first audio | 150-250 ms (cascaded) |
-| Realtime model response start | 450-500 ms (realtime) |
-
-Total is compared against a target (500ms ultra / 800ms balanced / 1200ms reliability) with a verdict.
-
-## Impossibility detection
-
-`forge` exits non-zero and produces no recipe if:
-
-- **Missing mandatory leg** — cascaded without STT/TTS/LLM, or realtime without a model.
-- **Surface/direction mismatch** — outbound job with inbound-only telephony.
-- **Unknown provider that can't be resolved** — (P3 resolves most unknowns via registry/synthesis).
-
-## Unknown provider resolution (P3)
-
-When answers reference a provider not in the installed packs, callsmith resolves it online:
-
-1. **Registry lookup** — fetches from a community pack registry (`CALLSMITH_REGISTRY` env). Registry packs are validated and marked `verified: true`.
-2. **Dynamic synthesis fallback** — builds a transient pack with sensible defaults + a blocker pothole. Stamped **`UNVERIFIED PROVIDER`** in the recipe header.
-
-## Determinism
-
-`callsmith.lock.json` is byte-deterministic: same answers → identical lock. No timestamps, no nondeterminism.
-
-## Provider packs (21 total)
-
-| Layer | Providers |
-|---|---|
-| Telephony (5) | Exotel, Twilio, Plivo, Telnyx, Vonage |
-| Orchestration (3) | LiveKit, Pipecat, Custom FastAPI |
-| Realtime (2) | Gemini Live (`gemini-3.1-flash-live-preview`), OpenAI Realtime (`gpt-realtime-2`) |
-| STT (2) | Deepgram (`nova-3`), AssemblyAI (`universal-3-5-pro`) |
-| LLM (3) | OpenAI (`gpt-5.5`), Anthropic (`claude-sonnet-4-6`), Google (`gemini-3.5-flash`) |
-| TTS (3) | ElevenLabs (`eleven_v3`), Cartesia (`sonic-3.5`), Sarvam (`bulbul:v3`) |
-| VAD (3) | Silero VAD, Deepgram Endpointing, WebRTC VAD |
-
-Each pack declares: audio ingest/egress format, transport, lifecycle events, potholes, latency estimates, cost estimates, interruption mechanism, env keys, doc URLs, and Context7 library IDs.
-
-## Anti-patterns to avoid
-
-- Do not write audio conversion code without reading `.callsmith/context/audio-contract.md` first.
-- Do not implement interruption without reading `.callsmith/context/interruption.md` — each provider has a different mechanism.
-- Do not replace framework classes (AgentSession, Pipeline) with custom implementations unless the recipe explicitly requires a custom bridge.
-- Do not assume the orchestration framework normalizes audio — verify it appears in the recipe's notes.
-- Do not mix input formats on a realtime model (e.g. feed both 24 kHz PCM and μ-law to OpenAI Realtime).
-- Do not treat WebSocket close and telephony hangup as the same event; map both to one session state machine.
-- Do not ignore the context window — long calls overflow. Use `ContextManager` from `state.py`.
-- Do not skip transcript logging — `TranscriptStore` enables crash recovery and debugging.
-- Do not hardcode retry logic — use `retry_with_backoff` from `resilience.py` instead.
-- Do not configure fallback providers without reading `.callsmith/context/error-handling.md`.
+- 2–3 focused questions at a time
+- Natural language → map to concrete stack decisions
+- Prefer pack-backed tradeoffs over generic “use LiveKit” vibes
+- After floor rewrites, state before → after

@@ -2,6 +2,15 @@
   "id": "gemini-live",
   "kind": "realtime",
   "label": "Gemini Live (gemini-3.1-flash-live-preview)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://ai.google.dev/gemini-api/docs/live",
+      "https://ai.google.dev/api/multimodal-live"
+    ]
+  },
   "model": "gemini-3.1-flash-live-preview",
   "transport": "websocket",
   "ingest": {
@@ -80,6 +89,21 @@
   "latency_estimates": {
     "response_start_ms": 500
   },
+  "latency_evidence": [
+    {
+      "metric": "response_start_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 500,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "server_vad_interrupt",
     "description": "Gemini Live has built-in server-side VAD. On user interrupt, the server emits interruption_detected. Stop playing queued output and flush the outbound buffer immediately.",

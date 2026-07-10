@@ -2,6 +2,14 @@
   "id": "telnyx",
   "kind": "telephony",
   "label": "Telnyx",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://developers.telnyx.com/docs/voice"
+    ]
+  },
   "transport": "websocket",
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
@@ -29,6 +37,21 @@
   "env_keys": ["TELNYX_API_KEY"],
   "doc_urls": ["https://developers.telnyx.com/docs/voice"],
   "latency_estimates": { "media_rtt_ms": 80 },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 80,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "stop_media_frames",
     "description": "Stop sending audio frames to the Call Control media stream. Telnyx media socket does not support explicit clear.",

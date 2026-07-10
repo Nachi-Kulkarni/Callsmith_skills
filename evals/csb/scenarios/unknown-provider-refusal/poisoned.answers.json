@@ -1,0 +1,17 @@
+{
+  "surface": "inbound_pstn",
+  "architecture": "realtime_s2s",
+  "telephony": "acme-tel",
+  "orchestration": "livekit",
+  "realtime_model": "gemini_live",
+  "vad": "silero",
+  "language": "english",
+  "barge_in": "required",
+  "latency": "balanced",
+  "business_logic": "lead_qual",
+  "tools": "webhook",
+  "human_handoff": "callback",
+  "recording_consent": "announce",
+  "transcript_retention": "thirty_days",
+  "deployment": "local"
+}

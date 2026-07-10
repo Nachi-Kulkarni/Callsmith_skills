@@ -2,6 +2,17 @@
   "id": "openai",
   "kind": "llm",
   "label": "OpenAI (GPT-5.5)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://platform.openai.com/docs/api-reference/chat/streaming",
+      "https://platform.openai.com/docs/guides/function-calling",
+      "https://platform.openai.com/docs/models",
+      "https://platform.openai.com/docs/pricing"
+    ]
+  },
   "transport": "http",
   "model": "gpt-5.5",
   "streaming": true,
@@ -24,6 +35,21 @@
   "latency_estimates": {
     "ttft_ms": 400
   },
+  "latency_evidence": [
+    {
+      "metric": "ttft_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 400,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "stream_cancel",
     "description": "On interruption, cancel the in-flight streaming completion. Discard buffered tokens that haven't reached TTS yet.",
@@ -58,7 +84,7 @@
     "billing": "per_minute",
     "rate_usd": 0.002,
     "per_minute_usd": 0.002,
-    "notes": "Est. ~250 tokens/min at GPT-5.5 pricing ($3/1M in, $15/1M out)"
+    "notes": "Architecture-planning allowance derived from an assumed 250 tokens/min; verify the pinned model and current account pricing before use."
   },
   "context7": {
     "library_id": "/openai/openai-python",

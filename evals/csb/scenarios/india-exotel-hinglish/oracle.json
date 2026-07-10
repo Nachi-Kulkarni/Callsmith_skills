@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "sealed": {
+    "surface": {
+      "one_of": [
+        "inbound_pstn"
+      ]
+    },
+    "language": {
+      "one_of": [
+        "hinglish",
+        "multilingual",
+        "hindi"
+      ]
+    },
+    "telephony": {
+      "one_of": [
+        "exotel"
+      ]
+    },
+    "recording_consent": {
+      "min": "explicit"
+    },
+    "transcript_retention": {
+      "min": "thirty_days"
+    },
+    "human_handoff": {
+      "one_of": [
+        "transfer"
+      ]
+    }
+  },
+  "physics": {
+    "require_possible": true
+  },
+  "traps": [
+    "no_pstn_to_web",
+    "no_ticket_on_urgent",
+    "no_synthesis",
+    "no_deleted_generators",
+    "no_consent_none_regulated"
+  ],
+  "contract_domain": "banking"
+}

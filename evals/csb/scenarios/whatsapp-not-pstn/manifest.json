@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "whatsapp-not-pstn",
+  "title": "WhatsApp voice notes not PSTN",
+  "domain": "general",
+  "stakes": "async",
+  "seed_mode": "poisoned",
+  "arms": [
+    "BASE",
+    "WITH"
+  ]
+}

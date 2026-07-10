@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "collections-outbound",
+  "title": "Outbound collections compliance",
+  "domain": "collections",
+  "stakes": "payment",
+  "seed_mode": "poisoned",
+  "arms": [
+    "BASE",
+    "WITH"
+  ]
+}

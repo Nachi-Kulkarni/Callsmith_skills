@@ -1,0 +1,6 @@
+# Keep package lean; ship CSB design + oracles + scenarios, not run artifacts or tests.
+evals/csb/runs/
+test/
+.git/
+.env
+*.log

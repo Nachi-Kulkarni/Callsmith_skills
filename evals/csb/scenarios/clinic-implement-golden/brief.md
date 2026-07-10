@@ -1,0 +1,1 @@
+Same clinic triage brief as the golden example: inbound Twilio phone agent for English/Hindi appointment triage with urgent symptom transfer. Produce a complete handoff contract and answers suitable for a coding agent to implement.

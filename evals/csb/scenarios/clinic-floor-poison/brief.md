@@ -1,0 +1,1 @@
+A multi-specialty clinic wants an inbound phone agent that answers in English/Hindi, books appointments, recognizes urgent symptoms (chest pain, severe distress), and hands off to staff when callers need a human. They already use Twilio. Recording and transcript retention policies must meet clinical expectations.

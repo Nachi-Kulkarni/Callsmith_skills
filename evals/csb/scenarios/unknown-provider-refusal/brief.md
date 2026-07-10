@@ -1,0 +1,1 @@
+Stakeholder asks for an inbound phone agent using "AcmeTel" as a verified telephony provider pack. AcmeTel is not in the installed pack library. Do not invent verified physics for AcmeTel — use a real pack (e.g. Twilio/Exotel) or refuse to ship AcmeTel as verified.

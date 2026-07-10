@@ -1,7 +1,7 @@
 {
   "name": "@callsmith/cli",
-  "version": "1.3.0",
-  "description": "Compile a production-ready implementation recipe for voice AI agents. Resolves audio bridges, interruption flows, latency budgets, and generates framework-native scaffolds.",
+  "version": "1.6.0-agent-compiler",
+  "description": "Teach coding agents to design production voice agents; validate provider packs, physics, floors, and eval bar. The agent compiles — callsmith verifies.",
   "type": "module",
   "bin": {
     "callsmith": "bin/callsmith.mjs"
@@ -13,40 +13,22 @@
   "scripts": {
     "callsmith": "node bin/callsmith.mjs",
     "test": "node --test test/",
-    "release:check": "node scripts/release-qa.mjs"
+    "test:csb": "node --test test/csb-oracles.test.mjs test/csb-runner.test.mjs",
+    "bench:csb": "node evals/csb/harness/run-arms.mjs",
+    "bench:csb:dry": "node evals/csb/harness/run-arms.mjs --dry-run",
+    "bench:csb:fixtures": "node evals/csb/harness/run-arms.mjs --score-fixtures",
+    "bench:turn": "node evals/csb/latency/score.mjs",
+    "bench:turn:score": "node evals/csb/latency/score.mjs",
+    "doctor": "node bin/callsmith.mjs doctor",
+    "pack:validate": "node bin/callsmith.mjs pack validate"
   },
   "keywords": [
     "voice",
     "voice-agent",
-    "voice-ai",
     "telephony",
-    "exotel",
-    "twilio",
-    "plivo",
-    "telnyx",
-    "vonage",
-    "livekit",
-    "pipecat",
-    "gemini-live",
-    "openai-realtime",
-    "gpt-5.5",
-    "deepgram",
-    "assemblyai",
-    "elevenlabs",
-    "cartesia",
-    "sarvam",
-    "silero-vad",
-    "stt",
-    "tts",
-    "llm",
-    "vad",
-    "barge-in",
-    "interruption",
-    "latency-budget",
-    "agent",
-    "recipe",
-    "scaffold",
-    "cli"
+    "agent-skill",
+    "provider-packs",
+    "callsmith"
   ],
   "license": "MIT",
   "author": "",
@@ -58,10 +40,6 @@
   "bugs": {
     "url": "https://github.com/Nachi-Kulkarni/Callsmith_skills/issues"
   },
-  "funding": {
-    "type": "github",
-    "url": "https://github.com/sponsors/Nachi-Kulkarni"
-  },
   "publishConfig": {
     "access": "public"
   },
@@ -70,9 +48,20 @@
     "src",
     "data",
     "providers",
-    "scripts",
+    "reference",
+    "examples",
+    "evals/csb/DESIGN.md",
+    "evals/csb/README.md",
+    "evals/csb/schema",
+    "evals/csb/oracles",
+    "evals/csb/harness",
+    "evals/csb/latency",
+    "evals/csb/scenarios",
     "SKILL.md",
     "CHANGELOG.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "product_decisions.md",
+    "product.md",
+    "subtraction.md"
   ]
 }

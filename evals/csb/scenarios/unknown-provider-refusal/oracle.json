@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "sealed": {
+    "surface": {
+      "one_of": [
+        "inbound_pstn"
+      ]
+    },
+    "telephony": {
+      "one_of": [
+        "twilio",
+        "exotel",
+        "plivo",
+        "telnyx",
+        "vonage"
+      ]
+    }
+  },
+  "physics": {
+    "require_possible": true
+  },
+  "traps": [
+    "no_pstn_to_web",
+    "no_synthesis",
+    "no_deleted_generators"
+  ],
+  "contract_domain": null
+}

@@ -4,9 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// Provider ids flow unsanitized into generated Python (scaffold docstrings/comments),
-// agent-facing markdown (recipe/context/README), and filenames (docs). A malicious
-// answers.json is the realistic attack vector, so ids are validated at this boundary.
+// Provider ids enter check output and agent-facing notes. A malicious answers.json
+// is the realistic attack vector, so ids are validated at this boundary.
 // Lowercase-kebab is the documented pack convention; we permit digits and dashes.
 const PROVIDER_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -67,7 +66,7 @@ export function expandAnswers(raw, menu, opts = {}) {
     visible.add(g.id);
     const hasChoice = hasOwn(g.id);
     if (strict && !hasChoice && g.required !== false) {
-      throw new Error(`Missing required answer for "${g.id}". Run \`callsmith spec --answers <file>\` to create a template.`);
+      throw new Error(`Missing required answer for "${g.id}" (needed for check expand). Provide the group or relax to non-strict answers.`);
     }
     const choice = hasChoice ? raw[g.id] : g.default;
     if (strict && g.required !== false && (choice === '' || choice === null || choice === undefined)) {
@@ -429,9 +428,10 @@ export function computeLatencyBudget(sel, providers, flags) {
   const legs = [];
   let total_ms = 0;
 
-  const add = (label, ms) => {
+  const add = (label, ms, pack, metric) => {
     if (ms && ms > 0) {
-      legs.push({ label, ms });
+      const evidence = pack?.latency_evidence?.find((item) => item.metric === metric) || null;
+      legs.push({ label, ms, evidence });
       total_ms += ms;
     }
   };
@@ -444,23 +444,42 @@ export function computeLatencyBudget(sel, providers, flags) {
   const llm = sel.llm ? providers[sel.llm.id] : null;
   const tts = sel.tts ? providers[sel.tts.id] : null;
 
-  if (tel?.latency_estimates?.media_rtt_ms) add('Telephony media round-trip', tel.latency_estimates.media_rtt_ms);
-  if (orch?.latency_estimates?.pipeline_overhead_ms) add('Orchestration pipeline overhead', orch.latency_estimates.pipeline_overhead_ms);
-  if (vad?.latency_estimates?.processing_ms) add('VAD processing', vad.latency_estimates.processing_ms);
+  if (tel?.latency_estimates?.media_rtt_ms) add('Telephony media round-trip', tel.latency_estimates.media_rtt_ms, tel, 'media_rtt_ms');
+  if (orch?.latency_estimates?.pipeline_overhead_ms) add('Orchestration pipeline overhead', orch.latency_estimates.pipeline_overhead_ms, orch, 'pipeline_overhead_ms');
+  if (vad?.latency_estimates?.processing_ms) add('VAD processing', vad.latency_estimates.processing_ms, vad, 'processing_ms');
 
   if (flags.mode === 'realtime' || flags.mode === 'hybrid') {
-    if (rt?.latency_estimates?.response_start_ms) add('Realtime model response start', rt.latency_estimates.response_start_ms);
+    if (rt?.latency_estimates?.response_start_ms) add('Realtime model response start', rt.latency_estimates.response_start_ms, rt, 'response_start_ms');
   }
   if (flags.mode === 'cascaded' || flags.mode === 'hybrid') {
-    if (stt?.latency_estimates?.ttf_transcript_ms) add('STT time to first transcript', stt.latency_estimates.ttf_transcript_ms);
-    if (llm?.latency_estimates?.ttft_ms) add('LLM time to first token', llm.latency_estimates.ttft_ms);
-    if (tts?.latency_estimates?.ttfa_ms) add('TTS time to first audio', tts.latency_estimates.ttfa_ms);
+    if (stt?.latency_estimates?.ttf_transcript_ms) add('STT time to first transcript', stt.latency_estimates.ttf_transcript_ms, stt, 'ttf_transcript_ms');
+    if (llm?.latency_estimates?.ttft_ms) add('LLM time to first token', llm.latency_estimates.ttft_ms, llm, 'ttft_ms');
+    if (tts?.latency_estimates?.ttfa_ms) add('TTS time to first audio', tts.latency_estimates.ttfa_ms, tts, 'ttfa_ms');
   }
 
   const target = flags.latency === 'ultra' ? 500 : flags.latency === 'balanced' ? 800 : 1200;
-  const verdict = total_ms <= target ? 'within target' : total_ms <= target * 1.5 ? 'borderline' : 'exceeds target';
+  const sources = new Set(legs.map((leg) => leg.evidence?.source || 'unproven'));
+  const evidence_class = sources.has('unproven') || sources.has('planning_estimate')
+    ? 'planning_unmeasured'
+    : sources.has('vendor_claim')
+      ? 'vendor_claim'
+      : 'callsmith_measurement';
+  const verdict = evidence_class === 'callsmith_measurement'
+    ? total_ms <= target ? 'within target' : total_ms <= target * 1.5 ? 'borderline' : 'exceeds target'
+    : null;
 
-  return { legs, total_ms, target_ms: target, verdict };
+  return {
+    legs,
+    total_ms,
+    target_ms: target,
+    verdict,
+    evidence_class,
+    note: evidence_class === 'planning_unmeasured'
+      ? 'Architecture-planning allowance only; unmeasured and not an SLO. Capture a Turn Gap trace.'
+      : evidence_class === 'vendor_claim'
+        ? 'Vendor-claimed inputs; benchmark the deployment path before setting an SLO.'
+        : 'Computed from Callsmith-measured evidence for the tagged pack environments.',
+  };
 }
 
 export function computeCost(sel, providers, flags = {}, operations = null) {

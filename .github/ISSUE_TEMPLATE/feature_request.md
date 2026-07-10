@@ -1,14 +1,18 @@
 ---
 name: Feature request
-about: Suggest a new provider, capability, or generated-project improvement
+about: Provider pack, floor, skill, or eval improvement
 labels: enhancement
 ---
 
 ## What problem does this solve?
-<!-- The user-facing problem, not the implementation. "I want to use Vonage but callsmith doesn't model its DTMF lifecycle." -->
+<!-- User-facing problem, not implementation. -->
 
 ## Proposed change
-<!-- A new provider pack, a menu option, a scaffold module, a resolver rule, etc. -->
+<!-- Prefer: new/updated provider pack, floor rule, skill/playbook text, eval scenario, or thin verification CLI. -->
+
+## Constitution check
+Does this strengthen **pack physics inspect + floor receipts + contract validate + eval gate**?
+(See `product_decisions.md`. Do not request scaffold/forge/simulate resurrection.)
 
 ## Provider / stack context (if applicable)
-<!-- Which provider(s) and stack does this touch? Include model IDs, doc links, or sample contracts if you have them. -->
+<!-- Model IDs, doc links, sample audio contracts. -->

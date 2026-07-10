@@ -1,239 +1,251 @@
-# callsmith — Product Decisions
+# callsmith — Product Decisions (Canon)
 
-> Source of truth for what callsmith IS, what it GUARANTEES, and how those guarantees become tests.
-> Derived from a three-round grilling session (2026-06-25). Every line below is a committed decision unless marked **[OPEN]**.
-> This doc drives the test plan: each guarantee in here becomes one or more behavior tests, built TDD.
+> **Sole constitutional source of truth.** If any other doc conflicts with this file, **this file wins.**
+>
+> Regime: **agent compiler + deterministic fact verifier** — not scaffold generator, not second architecture brain.
 
----
-
-## 1. Product identity
-
-**callsmith compiles a verified implementation contract for a voice AI agent.**
-
-A user answers an MCQ intake. callsmith resolves provider compatibility, then emits a **recipe** (`callsmith.recipe.md` + `callsmith.lock.json`) that a coding agent consumes to build the whole system in one pass. A **scaffold** (runnable repo skeleton) is a derived convenience layered on top.
-
-| Aspect | Decision | Status |
-|---|---|---|
-| Primary deliverable | **The recipe is the source of truth.** `recipe.md` + `lock.json` is canonical; the scaffold is derived. | DECIDED |
-| Where test effort concentrates | Layer 3 (artifacts) is the heaviest-tested layer. Scaffold correctness is tested but secondary. | DECIDED |
-| Consumer | A coding agent (via `SKILL.md`) is the primary reader of the recipe. | DECIDED |
+Every line below is a committed decision unless marked **[OPEN]**.
 
 ---
 
-## 2. The test pyramid (6 layers)
+## 1. Identity
 
-Every guarantee maps to one of these layers. The decision for each layer is locked below.
+**callsmith teaches coding agents to design production voice agents, while deterministic tools verify facts the agent must not invent.**
 
-| # | Layer | What it proves | callsmith decision |
-|---|---|---|---|
-| 1 | **Data integrity** | every pack validates vs `_schema.json`; menu well-formed; no dangling refs | **Hard CI gate** — invalid pack fails the build |
-| 2 | **Resolver logic** | audio matrix, when-groups, native short-circuits, impossibility detection | **Strict** — refuses hard impossibilities (4 conditions) |
-| 3 | **Artifacts** | recipe.md + lock.json reflect resolver truth; byte-deterministic | **Heaviest test weight**; lock is fully deterministic |
-| 4 | **CLI contract** | exit codes, help, errors on bad input; `check` clean vs blocked | **Public contract** — exit codes are part of the API |
-| 5 | **Scaffold correctness** | generated repo parses, deps match, μ-law bridge round-trips | **Runs per-fixture in CI** (scaffold → pip install → pytest) |
-| 6 | **Agent-skill** | SKILL.md → an agent produces a runnable plan | **Recipe-structure assertions + manual checklist** |
-
----
-
-## 3. Decision register
-
-### Resolver contract
-
-| ID | Decision | Detail |
-|---|---|---|
-| R1 | **Refuse hard impossibilities** | `forge` exits non-zero and produces NO recipe when a stack is impossible. |
-| R2 | **Four impossibility conditions** | `forge` refuses if ANY of: (a) **no audio path** — telephony format can't reach model format and no layer converts it; (b) **surface/direction mismatch** — e.g. inbound-only telephony for an outbound job; (c) **missing mandatory leg** — e.g. cascaded stack with no STT, or realtime with no realtime model; (d) **conflicting native capabilities** — two providers claim incompatible native modes. |
-| R3 | **Soft difficulty still forges** | A stack that's merely hard (e.g. needs 4 audio transforms) still forges, with `[BLOCKER]` warnings the user reads. Only true impossibilities refuse. |
-| R4 | **`check` mirrors this** | `check` exits non-zero when any impossibility or unresolved blocker is present; exits 0 on a clean/blocked-only stack. |
-
-### Provider scope (v1.3)
-
-| ID | Decision | Detail |
-|---|---|---|
-| P1 | **All major providers** | v1.3 ships 21 verified packs, not golden-path-only. |
-| P2 | **Confirmed list** | See §4 below. |
-| P3 | **Unknown provider → online resolution (two-tier)** ✅ | **Implemented.** When answers reference a provider with no installed pack: **(1) registry lookup** — fetch from a community pack registry (`CALLSMITH_REGISTRY` env, default GitHub raw URL; supports `file://`/local paths for testing); **(2) dynamic synthesis fallback** — build a transient pack with sensible defaults + blocker pothole. Registry packs pass validation and are `verified: true`. Synthesized packs are stamped **`UNVERIFIED PROVIDER — validate before shipping`** in the recipe (prominent header) + lock `resolved_providers` array. `CALLSMITH_REGISTRY_SKIP=1` forces synthesis for testing. |
-
-### Artifacts & determinism
-
-| ID | Decision | Detail |
-|---|---|---|
-| D1 | **Lock is byte-deterministic** | `generated_at` is removed from `lock.json` (or made injectable for tests). Same answers → byte-identical lock. |
-| D2 | **Reproducible builds** | Byte-determinism enables snapshot tests and reproducible builds — a core "lock" promise. |
-| D3 | **Recipe reflects resolver truth** | recipe.md content is asserted against the resolver's output, not internal maps. |
-
-### Quality gates
-
-| ID | Decision | Detail |
-|---|---|---|
-| Q1 | **Pack schema = hard gate** | Every pack validates against `providers/_schema.json`. CI fails on any invalid pack. A missing field is a build error. Critical with 21 packs drifting. |
-| Q2 | **Scaffolded tests run in CI** | The generated repo's pytest passing IS a callsmith guarantee. CI runs scaffold pytest with the fast test dependency set. Maintainers run `callsmith release-check --full-installs` before publish to install every unique generated runtime `requirements.txt` set. |
-| Q3 | **Model staleness = test guard + pack verifier** | Tests pin current model names (`gpt-5.5`, `claude-sonnet-4-6`, `gemini-3.5-flash`, `gemini-3.1-flash-live-preview`, `gpt-realtime-2`, `nova-3`, `eleven_v3`, `sonic-3.5`). `callsmith verify-packs` adds an offline freshness/staleness check for docs URLs, model pinning, cost data, Context7 coverage, lifecycle, and menu refs. |
-
-### CLI contract
-
-| ID | Decision | Detail |
-|---|---|---|
-| C1 | **`check` exit code is public** | `check` exits non-zero on impossibility/unresolved blockers; 0 otherwise. (Currently broken — see §5.) |
-| C2 | **`forge` exit code is public** | `forge` exits non-zero on hard impossibility; 0 otherwise. |
-| C3 | **Bad-input handling** | callsmith must catch with a clear error + non-zero exit: **missing required answer** (e.g. no telephony), **conflicting choices** (e.g. realtime + STT), **unknown command / bad flags** (e.g. `callsmith froge` or `forge` with no `--answers`). |
-| C4 | **Interactive `spec` TTY — tested via template + resolver only** | `spec --answers out.json` (template) and when-group routing are automated. The interactive numbered prompts are a thin wrapper, tested manually. No PTY-harness in the suite. |
-
-### Test architecture
-
-| ID | Decision | Detail |
-|---|---|---|
-| T1 | **Tests drive through the CLI subprocess → artifacts** | Tests spawn `callsmith forge/check/scaffold` and assert on the produced files. Truest E2E, refactor-proof. |
-| T2 | **Fixture strategy = grid of golden pairings + edges (~40)** | NOT full cartesian (~100+ is unmaintainable). The grid = the golden corridor + each provider's canonical pairing + known edge cases. ~40 checked-in fixtures. Every provider appears in at least its canonical pairing. |
-| T3 | **Agent-skill = recipe-structure assertions + manual checklist** | A test asserts every recipe.md contains the sections an agent needs (audio contract, build order, potholes, required env). A human checklist covers the full agent run. |
-| T4 | **Docs-fetch testing** ✅ | **Implemented.** `test/docs.test.mjs` (11 tests) asserts stubs contain frozen audio contracts (format, sample rate, transport), env keys, lifecycle events, potholes, Context7 commands, and official doc URLs — all offline. Live fetch is best-effort and verified manually. |
-| T5 | **Fixture creation = generator + checked-in goldens** | A script generates `answers.json` for each grid combo from the provider list; outputs are checked in, reviewed, and regeneratable when packs change. Not hand-written, not runtime-only. |
-| T6 | **Impossibility detection via extended pack schema** | Each pack declares supported `directions` (inbound/outbound) and `surfaces`; native capabilities carry explicit conflict annotations. Clean, testable rules. Ripples a small metadata addition to all 21 packs. (Backs R2b/R2d.) |
-
-### Tier 1 features (voice-agent completeness)
-
-| ID | Decision | Detail |
-|---|---|---|
-| L1 | **LLM as first-class pipeline citizen** ✅ | **Implemented.** LLM providers (OpenAI GPT-5.5, Anthropic Claude Sonnet 4.6, Google Gemini 3.5 Flash) are in the menu, resolver pipeline, lock, recipe, scaffold, and staleness guard. `detectImpossibilities` refuses cascaded stacks without an LLM. |
-| L2 | **VAD as first-class pipeline citizen** ✅ | **Implemented.** VAD providers (Silero, Deepgram Endpointing, WebRTC VAD) are in the menu, resolver pipeline, lock, recipe, and scaffold. VAD drives the interruption section of the recipe. |
-| L3 | **Interruption & turn-taking section** ✅ | **Implemented.** Every provider pack carries an `interruption` block (mechanism + description + code_hint). The resolver assembles these into a concrete, ordered interruption flow per stack. Recipe includes a dedicated "Interruption & turn-taking" section + `.callsmith/context/interruption.md` with end-to-end flow. |
-| L4 | **Latency budget modeling** ✅ | **Implemented.** Every provider pack carries `latency_estimates` (per-leg ms). The resolver computes a total budget, compares against a target (500/800/1200ms by latency priority), and produces a verdict. Recipe includes a latency table + `.callsmith/context/latency-budget.md` with optimization tips. Lock includes `latency` object. |
-| L5 | **Framework-native scaffolds** ✅ | **Implemented.** Scaffolds use actual framework APIs: **LiveKit** generates `agent.py` with `AgentSession`, `Agent`, `TurnHandlingOptions`, `silero.VAD.load()` plus session tracing hooks; **Pipecat** generates `bot.py` with `Pipeline`, `PipelineWorker`, `DeepgramSTTService`, `OpenAILLMService`, `TwilioFrameSerializer`, `SileroVADAnalyzer`, `LLMContextAggregatorPair`, `PipecatTraceObserver` + `server.py` with webhook + WebSocket handler; **Custom FastAPI** generates webhook server + audio bridge with codecs/resampler. Tests verify framework-specific structure via AST analysis. |
-
-### Tier 2 — Cost, state, resilience
-
-| ID | Feature | Status |
-|---|---|---|
-| T2-1 | **Cost estimation per stack** ✅ | **Implemented.** Every provider pack carries `cost_estimates` with billing model + normalized per-minute USD. Resolver `computeCost()` sums per-leg costs. Recipe includes cost table + `.callsmith/context/cost-estimation.md` with per-leg detail + scale projections (per-hour, per-1k-calls). Lock includes `cost` object. `check` command shows cost summary. |
-| T2-2 | **Conversation state management** ✅ | **Implemented.** Scaffold generates `state.py` with: (1) `ContextManager` — sliding-window token tracking against the LLM's context window; (2) `TranscriptStore` — SQLite-backed persistence for every turn (call_id, timestamp, role, content, tokens, metadata); (3) `DTMFHandler` — keypad digit collection with inter-digit timeout. Framework-specific DTMF wiring: Pipecat uses `DTMFAggregator`, LiveKit uses `GetDtmfTask`, Custom parses from WebSocket events. |
-| T2-3 | **Error handling & resilience** ✅ | **Implemented.** Scaffold generates `resilience.py` with: (1) `ReconnectingWebSocket` — exponential backoff (1s→2s→4s→8s→16s, max 30s) with ±25% jitter, max 5 retries, `ConnectionState` machine; (2) `retry_with_backoff` decorator — honors `Retry-After` header, exponential backoff on 429/5xx, max 3 retries; (3) `FallbackConfig` — per-leg fallback chain registration. Context file includes framework-specific patterns (LiveKit `FallbackAdapter`, Pipecat `on_connection_error`, custom manual fallback). |
-
-### Tier 3 — Live-call proof and operational levers
-
-| ID | Feature | Status |
-|---|---|---|
-| T3-1 | **End-to-end call simulator** ✅ | **Implemented.** `callsmith simulate --answers <file> [--scaffold dir]` emits `.callsmith/simulation/trace.jsonl` + `report.json` and covers start, media frames, STT/realtime turn, interruption, DTMF, tool call, TTS/model output, transcript persistence, reconnect, hangup, and audio-path assertions. Scaffold also generates `simulate_call.py`. |
-| T3-2 | **Observability pack** ✅ | **Implemented.** Scaffold generates `observability.py` with `CallTrace`, LiveKit session event hooks, Pipecat `BaseObserver` adapter, counters, first-latency metrics, tool metrics, reconnect/dropped-frame/interruption tracking, and JSONL output. |
-| T3-3 | **Tool-calling implementation** ✅ | **Implemented.** Scaffold generates `tools.py` with `ToolRegistry`, timeout/retry wrapper, idempotency keys, webhook/OpenAPI/MCP/database stubs, safe failure speech, and tool result metadata. |
-| T3-4 | **Voice UX tuning knobs** ✅ | **Implemented.** Intake + lock + `voice_ux.py` cover endpointing, interruption sensitivity, audio enhancement, noise cancellation, echo cancellation, automatic gain control, silence timeout, max call duration, greeting mode, speaking speed, voice profile, and language fallback. |
-| T3-5 | **Operations ownership profile** ✅ | **Implemented.** Intake + lock + `.callsmith/context/operations.md` + generated `operations.py` capture managed-cloud vs self-hosted ownership, effective resolver adjustments, debug profile, trace sampling, short debug-audio window, and who owns noise/echo/AGC cleanup. |
-| T3-6 | **Human handoff** ✅ | **Implemented.** Intake + context + `handoff.py` cover live transfer, callback, support ticket, escalation triggers, and handoff summaries. |
-| T3-7 | **Safety/compliance layer** ✅ | **Implemented.** Intake + context + `safety.py` cover recording consent, transcript retention, PII redaction, opt-out/DNC phrase detection, and audit logging for tool actions. |
-| T3-8 | **Local PSTN testing via ngrok** ✅ | **Implemented.** `local-testing.md` + `local_test.py` derive `ngrok http 8000`, provider webhook URL, media WebSocket URL, and `/health` check for generated FastAPI servers. Full production deployment control plane remains out of scope. |
-| T3-9 | **Provider pack verification job** ✅ | **Implemented.** `callsmith verify-packs [--json]` checks installed packs and menu refs offline. It fails on CI-breaking stale claims and warns on incomplete docs-refresh metadata. |
-| T3-10 | **Release readiness check** ✅ | **Implemented.** `callsmith release-check` validates npm pack contents, provider packs, golden spec/forge/check/scaffold/docs/simulate flow, generated fast install, generated pytest, and optionally `--full-installs` for every unique generated runtime requirements set. |
-
-### Versioning & roadmap
-
-| ID | Decision | Detail |
-|---|---|---|
-| V1 | **v1.0 shipped** | Full matrix + tests + green CI. 117 tests across 10 files. |
-| V2 | **v1.1 = Tier 1 completeness** | LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds. 21 provider packs. |
-| V3 | **v1.2 = Tier 2 completeness** | Cost estimation, conversation state management (ContextManager + TranscriptStore + DTMFHandler), error handling & resilience (ReconnectingWebSocket + retry_with_backoff + FallbackConfig). Covered by the Node behavior suite plus generated scaffold pytest checks. |
-| V4 | **v1.3 = Live-call proof + operations** | Fake call simulator, observability pack, tool calling, voice UX tuning knobs, safety/compliance, handoff, local ngrok testing, and provider-pack verification. |
-| V5 | **TypeScript scaffold deferred** | Python is the v1.x target (AI/voice ecosystem is Python-native). TS scaffold lands if demand appears. |
-| V6 | **Hosting: scoped package** | Publish as `@callsmith/cli` with `publishConfig.access=public`; keep the `callsmith` binary name. The unscoped npm package is unrelated. |
-
----
-
-## 4. Provider matrix (21 packs)
-
-Confirmed list. Each = research + verified pack + schema test + fixtures.
-
-| Role | Providers |
+| Role | Owner |
 |---|---|
-| **Telephony** | Exotel, Twilio, Plivo, Telnyx, Vonage |
-| **Orchestration** | LiveKit, Pipecat, custom-FastAPI |
-| **Realtime** | Gemini Live, OpenAI Realtime |
-| **STT** | Deepgram, AssemblyAI |
-| **LLM** | OpenAI (GPT-5.5), Anthropic (Claude Sonnet 4.6), Google (Gemini 3.5 Flash) |
-| **TTS** | ElevenLabs, Cartesia, Sarvam |
-| **VAD** | Silero VAD, Deepgram Endpointing, WebRTC VAD |
+| Ambiguity, taste, dig-deeper dialogue, stack choice, implementation | **Agent** (skill / hooks / plugins / workflows) |
+| Provider physics (audio formats, barge-in, potholes, env keys) | **Packs** (`providers/*.json`) |
+| Non-negotiable safety / product policy | **Floors** (skill + validation) |
+| Proof of design quality | **Evals** (binary rubric + scenarios) |
+| Validation / inspection only | **Tiny CLI** (packs, physics, floors, contract, doctor) |
+
+### One-line constitution
+
+> **The agent compiles. callsmith validates the physics, floors, and eval bar.**
+
+Not: “the agent compiles everything with no ground truth.”
+Not: “the CLI compiles and the agent fills forms.”
+
+### Product wedge (P0)
+
+> **pack physics inspect + floor receipts + contract validate + eval gate**
+
+Not: lock as ship contract + scaffold/simulate proof.
+
+### Primary surfaces
+
+| Surface | Status |
+|---|---|
+| `SKILL.md` + `reference/*` | **Canon** — how agents compile |
+| `providers/**` + `_schema.json` | **Canon** — standard library of facts |
+| Hard floors | **Canon** — rewrite, do not only flag |
+| Eval harness + scenarios + rubric | **Canon** — typechecker for agent quality |
+| Handoff contract (agent-written, short) | **Canon** — outcome artifact |
+| Thin verification CLI | **Canon** — packs / check / doctor / contract validate |
+| CLI generation (`forge` / `scaffold` / `init` / `simulate` / `intake` / `docs`) | **Deleted** — exit 2 if invoked |
+| 22-group MCQ coverage law | **Demoted** — menu is expand/hint data for `check`, not completeness |
+| Byte-deterministic lock as product center | **Rejected** — not identity |
+| Dynamic unknown-provider synthesis | **Rejected** — false confidence |
+
+### +4 delta (product verdict)
+
+The +4 is **not** “we scaffolded your app.”
+
+The +4 is:
+
+> My agent no longer hallucinates voice-stack physics, skips consent/handoff floors, or ships a pretty demo that fails on PSTN reality.
+
+Irreversible when callsmith is the shared **stdlib + taste layer + eval bar** across agent sessions.
 
 ---
 
-## 5. Code findings — gaps (ALL RESOLVED)
+## 2. Hard guarantees
 
-All gaps below were identified during the initial audit and have been fixed. Retained for historical context.
+These are promises we will keep and test. Break them = ship fail.
 
-| # | Gap | Status |
+| ID | Guarantee | How it is proven |
 |---|---|---|
-| G1 | `check` never exits non-zero | ✅ Fixed — exits non-zero on blockers |
-| G2 | `forge` never refuses impossibilities | ✅ Fixed — refuses missing leg + direction mismatch |
-| G3 | `lock.json` not deterministic | ✅ Fixed — no timestamps, byte-identical |
-| G4 | No bad-input validation | ✅ Fixed — malformed JSON, missing answers, unknown command |
-| G5 | No pack schema validation gate | ✅ Fixed — `validate.mjs` + CI gate |
-| G6 | Only 8 of 15 packs | ✅ Fixed — 21 packs (telephony + orchestration + realtime + stt + llm + tts + vad) |
-| G7 | Tests implementation-coupled | ✅ Fixed — tests drive through CLI → artifacts |
-| G8 | No recipe-structure assertion | ✅ Fixed — structural assertions in forge tests |
-| G9 | Packs lack impossibility metadata | ✅ Fixed — directions + native_capabilities on all packs |
+| **G1** | **Pack integrity** — every installed provider pack validates against `providers/_schema.json` | CI hard gate on pack schema |
+| **G2** | **No fabricated provider facts** — audio/interruption/pothole claims come from packs (or user-supplied pack files), never from silent synthesis | No dynamic UNVERIFIED pack invention; unknown provider → research / add pack / block ship |
+| **G3** | **Floor policy is enforceable** — regulated domains cannot pass “aware but unchanged” | Skill rewrite rules + validation (CLI or eval) fails closed on floor violations |
+| **G4** | **Eval bar is binary and causal** — sealed gates + ablation (CSB-Δ), not essay/ceremony theater | CallsmithBench design: [`evals/csb/DESIGN.md`](./evals/csb/DESIGN.md); machine oracles + WITH−BASE lift; LLM judge weight 0 on the public score |
+| **G5** | **Handoff contract is semantic** — agent-produced contract includes a versioned structured receipt plus explanatory sections; provider, policy, jurisdiction, and turn-gap SLO choices are machine-checkable | Semantic contract validation + answers cross-check + eval gate |
+| **G6** | **Physics are checkable** — given declared providers, transforms / native short-circuits / hard impossibilities can be reported from pack data | Thin verify/inspect path (resolver-as-library or pack math), not full app generation |
+| **G7** | **Skill is the compile path** — interactive design is agent-native; no CLI wizard | Documented install + SKILL.md |
+
+### Floor policy (minimums)
+
+Same domain floors as skill/eval (non-exhaustive):
+
+| Domain signals | Consent | Retention | Handoff when stakes high |
+|---|---|---|---|
+| Medical / clinical | ≥ announce (prefer explicit) | ≥ 30d | transfer |
+| Banking / payment / KYC | explicit | ≥ 30d | transfer on payment failure |
+| Collections / debt / DNC | explicit | ≥ 90d | transfer on dispute |
+| Legal / insurance (high stakes) | ≥ announce | ≥ 90d | transfer when urgent |
+
+**Acknowledging a risk is not handling it.** Floors require rewrite (or explicit written acceptance of legal risk).
+
+### Handoff contract — required sections (G5)
+
+Agent-written (not 16 generated markdown files):
+
+1. Intent / use case
+2. Stack (providers + why)
+3. Audio path (transforms or native ownership)
+4. Interruption / barge-in ownership
+5. Floors applied (consent, retention, handoff, tools justification)
+6. Latency/cost note with a percentile `turn_gap_ms` SLO
+7. Build / implement notes for the coding agent
 
 ---
 
-## 6. From decisions → test behaviors
+## 3. Non-guarantees
 
-This is the bridge to the test plan and TDD execution. Each behavior below is one vertical slice; it reads like a spec ("callsmith can..."), drives through the CLI → artifacts, and survives internal refactors.
+We **do not** promise these. Docs and tests must not pretend otherwise.
 
-### Layer 1 — Data integrity
-- **B1.** Every pack in `providers/` validates against `_schema.json` (hard gate).
-- **B2.** Every menu option that maps to a provider resolves to an existing pack (no dangling refs).
-- **B3.** `data/menu.json` is well-formed and every `when` predicate references a real group id.
-
-### Layer 2 — Resolver logic (the impossible vs possible boundary)
-- **B4.** `forge` REFUSES (non-zero exit, no recipe) when no audio path exists.
-- **B5.** `forge` REFUSES on surface/direction mismatch.
-- **B6.** `forge` REFUSES on missing mandatory leg (cascaded w/o STT, LLM, or TTS; realtime w/o realtime model).
-- **B7.** `forge` REFUSES on conflicting native capabilities.
-- **B8.** `forge` SUCCEEDS (with `[BLOCKER]` warnings) on a hard-but-possible stack (4 transforms).
-- **B9.** A realtime stack's recipe names no STT/TTS; a cascaded stack names no realtime model (when-groups).
-
-### Layer 3 — Artifacts & determinism
-- **B10.** Same answers → byte-identical `lock.json` (snapshot).
-- **B11.** `lock.json` pins the verified, current model names (staleness guard).
-- **B12.** A LiveKit stack's recipe states no custom transcoding is needed.
-- **B13.** A custom-FastAPI stack's recipe requires decoding μ-law and resampling to 16 kHz PCM.
-- **B14.** recipe.md always contains the agent-required sections (audio contract, build order, potholes, env).
-
-### Layer 4 — CLI contract
-- **B15.** `check` exits 0 on a clean stack; non-zero on impossibility/unresolved blockers.
-- **B16.** `forge` exits non-zero on hard impossibility.
-- **B17.** Missing required answer → clear error + non-zero exit.
-- **B18.** Conflicting choices → clear error + non-zero exit.
-- **B19.** Unknown command / bad flags → clear error + non-zero exit.
-- **B20.** `spec --answers out.json` writes a fillable template with all visible groups.
-
-### Layer 5 — Scaffold correctness
-- **B21.** A custom-FastAPI scaffold's audio bridge round-trips 8 kHz μ-law → 16 kHz PCM → 8 kHz μ-law.
-- **B22.** A LiveKit scaffold's bridge is a passthrough (no resampling).
-- **B23.** Every fixture's scaffold pytest passes on the fast dependency set; release certification runs `callsmith release-check --full-installs` to install every unique generated runtime `requirements.txt` set.
-- **B24.** Scaffolded `requirements.txt` matches the selected providers' `env_keys`/dependencies.
-- **B24a.** Scaffold generates operational modules (`observability.py`, `tools.py`, `voice_ux.py`, `safety.py`, `handoff.py`, `local_test.py`, `simulate_call.py`) and generated pytest validates them.
-- **B24b.** `callsmith simulate` emits a passing fake-call report for a valid stack and validates scaffold file presence when `--scaffold` is supplied.
-- **B24c.** `callsmith verify-packs` exits zero when there are no pack failures and reports warnings separately from failures.
-- **B24d.** `callsmith release-check` validates npm pack contents, provider packs, a generated golden stack, and optional full dependency installs.
-
-### Layer 6 — Agent-skill
-- **B25.** recipe.md contains every section `SKILL.md` tells the agent to read (contract ↔ skill consistency).
-- *(manual checklist: an agent following SKILL.md + recipe produces a runnable system)*
-
-### Provider packs (per new pack, TDD)
-- **B26–B32.** For each of Plivo, Telnyx, Vonage, AssemblyAI, Sarvam, Cartesia, custom-FastAPI: a recipe referencing it resolves with the correct, verified audio contract and no false impossibility.
+| Non-guarantee | Why |
+|---|---|
+| Generated production app is correct / complete | Generation deleted; agents own implementation |
+| Fake-call simulate proves PSTN readiness | Lifecycle mock ≠ media fidelity or carrier reality |
+| Byte-identical `callsmith.lock.json` is the product center | Not identity; not shipped |
+| MCQ coverage 1.0 / 22 groups complete | Completeness = floors + intent + pack-informed physics, not menu fill rate |
+| Unknown providers auto-synthesized “safely” | Synthesis creates false confidence — **rejected** |
+| Hosted runtime, legal certification, HIPAA/PCI badge | Out of scope |
+| One true stack for a brief | Variability is the agent’s job |
 
 ---
 
-## 7. Open decisions
+## 4. Kept tools (CLI / validation spine)
 
-| ID | Item | Status |
+Deterministic **verification**, not deterministic **generation**.
+
+| Tool | Purpose | Status |
 |---|---|---|
-| T4 | Docs-fetch testing strategy | ✅ Resolved — `test/docs.test.mjs` (11 tests) asserts frozen stubs offline. |
-| P3-detail | Registry format & hosting | ✅ Resolved — `CALLSMITH_REGISTRY` env supports URL/local-path; synthesis fallback implemented. |
-| — | custom-FastAPI formalization | ✅ Resolved — exists as `providers/orchestration/custom-fastapi.json` pack. |
+| `packs` / `pack list` | Show installed provider packs | **Shipped** |
+| `pack show <id>` | Dump pack facts (audio, interruption, potholes, env) | **Shipped** |
+| `pack validate` / `verify-packs` | Schema + evidence provenance/date/expiry checks (not live source-content verification) | **Shipped** |
+| `doctor` | Install health, pack load, skill present | **Shipped** |
+| `check --answers <file>` | Physics report from pack data (transforms, impossibilities, latency, cost) | **Shipped** (thin) |
+| `contract validate --file <f> [--domain …]` | Handoff contract receipt + explanatory G5 sections | **Shipped** (semantic validation) |
+
+Exit codes on validation tools remain a public contract: non-zero on fail.
 
 ---
 
-## 8. How this doc is used
+## 5. Deleted tools (do not resurrect)
 
-1. **Test plan derives from §6.** Each behavior B1–B32+ maps to behavior tests and generated scaffold checks.
-2. **§5 gaps are all resolved** (G1–G9). Retained for history.
-3. **§Tier 1 features** (L1–L5) track the voice-agent completeness work: LLM/VAD pipeline, interruption resolution, latency budget, framework-native scaffolds.
-4. **Decisions are living.** When a decision changes, update this doc AND the test it maps to. A green test that contradicts this doc is a bug.
+| Surface | Disposition |
+|---|---|
+| `forge` | **Deleted** — agent writes the handoff contract |
+| `scaffold` / generated `agent.py` empire | **Deleted** — agent implements against packs + contract |
+| `simulate` fake lifecycle | **Deleted** — not a production proof |
+| `init` / `init --preset` | **Deleted** — use skill + optional `examples/` later |
+| `intake` coverage state machine | **Deleted** as CLI product — skill dig-deeper owns completeness |
+| `docs` / 16-file `.callsmith/context/*` | **Deleted** — one handoff contract |
+| `spec` / `explain` / `release-check` as product surfaces | **Deleted** |
+| Dynamic provider synthesis / registry invent | **Deleted** — block or require real pack |
+| Byte-deterministic lock as ship artifact | **Deleted** as product center |
+
+**Canon forbids new features** that reintroduce deleted generation surfaces.
+
+---
+
+## 6. Tests (what CI should prove)
+
+| Layer | Proves | Priority |
+|---|---|---|
+| **Pack schema** | Every pack valid; no dangling kind/id claims that matter | **Hard gate** |
+| **No synthesis** | Unknown provider path does not invent verified facts | **Hard gate** |
+| **Floor enforcement** | Skill text + validation/eval catch consent/handoff/tools skips | **Hard gate** |
+| **Skill-contract consistency** | SKILL.md required sections / floors match this file | Structure tests |
+| **Eval harness** | CSB oracles, poison fixtures, BASE/WITH arms, CSB-Δ report; legacy 28-pt optional | Harness tests + design in `evals/csb/` |
+| **Example contracts** | Golden handoff contracts for key verticals satisfy G5 | Lightweight fixtures |
+| **Physics inspect** | Pack-pair transform / impossibility reports match known cases | Thin unit/integration |
+
+### Explicitly out of product identity
+
+- Scaffold pytest matrix
+- Byte-identical lock snapshots
+- 40-stack fixture grid for codegen
+- Decision-graph bench for MCQ coverage state machine
+
+---
+
+## 7. Split brain (non-negotiable)
+
+| Layer | Deterministic? | May invent? |
+|---|---|---|
+| Agent (skill/workflows) | No | Implementation, dialogue, stack taste, codegen |
+| Packs | Yes (data) | **No** — only human/PR-reviewed pack edits |
+| Floors | Yes (policy) | **No** — override only with explicit user risk acceptance |
+| Eval rubric | Yes (binary points) | **No** — partial credit theater forbidden |
+| Validation CLI | Yes | **No** — report from packs/contract only |
+
+**Installs are top-of-funnel. Packs + floors + eval in the agent’s path is retention.**
+
+---
+
+## 8. Provider packs
+
+| Decision | Detail |
+|---|---|
+| Packs are the stdlib | Audio ingest/egress, interruption, potholes, evidence-labeled latency/cost planning inputs, env keys, source URLs |
+| Evidence expires | Every factual pack records grade, verification date, expiry, and primary sources; expired evidence fails verification |
+| Add provider = drop JSON | Validated by schema; no code change required for new facts |
+| Unknown provider | Research → write/install pack → re-validate. **Do not synthesize a fake pack.** |
+| Community packs | Allowed when schema-valid; mark verification grade honestly (verified vs community) |
+
+---
+
+## 9. Skill / teaching surfaces
+
+| Surface | Role |
+|---|---|
+| Skill | Primary compile language for coding agents |
+| Hooks **[OPEN]** | Pre-ship constraints (floors + pack load) without competing CLI generator |
+| Plugins | Packs as extensibility; future agent-runtime plugins optional |
+| Workflows | Agent multi-step: dig-deeper → contract → implement → harden → eval |
+| Playbooks (`reference/*`) | Optional modes: audit, critique, latency, ttft submetric isolation, harden |
+
+---
+
+## 10. Decision register (active)
+
+| ID | Decision | Status |
+|---|---|---|
+| C1 | Constitution: agent compiles; callsmith validates physics, floors, eval bar | **DECIDED** |
+| C2 | **This file is sole product canon** for what to build next | **DECIDED** |
+| C3 | Delete deterministic *generation*; keep deterministic *verification* | **DONE** |
+| C4 | Unknown provider synthesis is forbidden | **DECIDED** |
+| C5 | Scaffold / simulate / forge / preset-init are not product | **DONE** (removed) |
+| C6 | MCQ coverage 1.0 is not completeness | **DECIDED** |
+| C7 | Primary install path is agent skill | **DECIDED** |
+| C8 | +4 delta = no hallucinated physics / no skipped floors / no pretty-but-PSTN-dead demos | **DECIDED** |
+| C9 | Contract validate CLI shape | **DONE** — versioned receipt validates provider IDs, policy basis, jurisdiction, regulated defaults, and percentile turn-gap SLOs |
+| C10 | P0 wedge = pack inspect + floor receipts + contract validate + eval gate | **DECIDED** |
+| C11 | Companion docs (`product.md`, `subtraction.md`, README) must not contradict this file | **DECIDED** |
+
+---
+
+## 11. Working agreements
+
+1. New work starts from **this file**, not from README nostalgia or archived CLI product.
+2. **Do not** open PRs that expand scaffold templates, menu-as-law, synthesis, or lock-as-identity.
+3. **Do** put new knowledge in packs, floors, skill/playbooks, or eval scenarios.
+4. When code and this doc disagree, **this doc wins** — finish the lag.
+5. Optional companions: `product.md` (+4 / irreversibility narrative), `subtraction.md` (historical cut map). Neither overrides this file.
+
+---
+
+## Changelog of constitution
+
+| Date | Note |
+|---|---|
+| 2026-07-09 | Regime change: agent compiler + deterministic verification. |
+| 2026-07-09 | Generation code deleted (1.6.0-agent-compiler). Wedge = pack inspect + floors + contract + eval. This file sole forward canon. |
+| 2026-07-09 | `contract validate` shipped (minimal). Example: `examples/clinic-triage/`. Structure tests for floors/no-synthesis/physics. |
+| 2026-07-09 | CallsmithBench (CSB) eval design: ablation CSB-Δ, 4 sealed gates, dual oracle, core10 — `evals/csb/DESIGN.md`. |
+| 2026-07-09 | CSB Phase 1 shipped: schema v1, machine oracles, fixture scorer, CI tests. CSB-Δ unpublished until paired agent run. |
+| 2026-07-10 | Contract receipt v1 replaced keyword-only floor theater; committed contract history is the cross-session evidence trail. |

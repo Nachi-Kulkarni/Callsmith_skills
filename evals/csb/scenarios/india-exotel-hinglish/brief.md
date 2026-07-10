@@ -1,0 +1,1 @@
+An Indian fintech wants an inbound PSTN support agent on Exotel for Hinglish callers, balance questions, and payment failures that escalate to humans. They already have Exotel. Do not assume English-only STT/TTS.

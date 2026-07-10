@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "track": "controlled",
+  "run_id": "controlled-slow-v1",
+  "environment": {
+    "architecture": "cascaded",
+    "surface": "webrtc_app",
+    "transport": "webrtc",
+    "region": "test-local",
+    "runtime": "synthetic-v1",
+    "network_profile": "deterministic-local",
+    "audio_format": "pcm16-16000-mono",
+    "providers": { "stt": "fixture", "llm": "fixture", "tts": "fixture" }
+  },
+  "clock": { "type": "monotonic", "unit": "ms", "origin_id": "fixture-clock" },
+  "turns": [
+    {
+      "turn_id": "sample-1", "speech_end_ms": 1000, "speech_end_source": "labeled",
+      "eou_detected_ms": 1260, "transcript_final_ms": 1350, "llm_request_ms": 1370,
+      "llm_first_token_ms": 1720, "text_committed_ms": 1810, "tts_request_ms": 1830,
+      "tts_first_chunk_ms": 2080, "audio_first_playout_ms": 2130, "audio_first_audible_ms": 2160,
+      "quality": { "premature_cutoff": false, "false_interruption": false, "response_correct": true, "audio_underruns": 0 }
+    },
+    {
+      "turn_id": "sample-2", "speech_end_ms": 3000, "speech_end_source": "labeled",
+      "eou_detected_ms": 3290, "transcript_final_ms": 3400, "llm_request_ms": 3420,
+      "llm_first_token_ms": 3800, "text_committed_ms": 3920, "tts_request_ms": 3940,
+      "tts_first_chunk_ms": 4220, "audio_first_playout_ms": 4270, "audio_first_audible_ms": 4300,
+      "quality": { "premature_cutoff": false, "false_interruption": false, "response_correct": true, "audio_underruns": 0 }
+    },
+    {
+      "turn_id": "sample-3", "speech_end_ms": 5000, "speech_end_source": "labeled",
+      "eou_detected_ms": 5240, "transcript_final_ms": 5330, "llm_request_ms": 5350,
+      "llm_first_token_ms": 5680, "text_committed_ms": 5790, "tts_request_ms": 5810,
+      "tts_first_chunk_ms": 6050, "audio_first_playout_ms": 6100, "audio_first_audible_ms": 6130,
+      "quality": { "premature_cutoff": false, "false_interruption": false, "response_correct": true, "audio_underruns": 0 }
+    }
+  ]
+}

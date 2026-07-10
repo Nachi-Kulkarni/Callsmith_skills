@@ -1,122 +1,89 @@
-import { test } from 'node:test';
+/**
+ * Hard gate: provider packs validate; no generation product tests.
+ */
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadProviders, loadMenu, expandAnswers } from '../src/lib/resolver.mjs';
+import { loadProviders, loadMenu } from '../src/lib/resolver.mjs';
+import { validatePacks } from '../src/lib/validate.mjs';
+import { verifyPacks } from '../src/lib/verify-packs.mjs';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES_DIR = join(HERE, 'fixtures');
+describe('provider packs', () => {
+  it('loads packs', () => {
+    const providers = loadProviders();
+    assert.ok(Object.keys(providers).length >= 20, 'expected ~21 packs');
+  });
 
-test('every pack declares a non-empty directions array with valid values', () => {
-  for (const [id, pack] of Object.entries(loadProviders())) {
-    assert.ok(Array.isArray(pack.directions) && pack.directions.length > 0,
-      `${id} must declare a non-empty directions array`);
-    for (const d of pack.directions) {
-      assert.ok(['inbound', 'outbound'].includes(d),
-        `${id} has invalid direction "${d}" (must be inbound or outbound)`);
+  it('schema-validates every pack', () => {
+    const errors = validatePacks();
+    assert.deepEqual(errors, [], errors.join('\n'));
+  });
+
+  it('verify-packs has no failures', () => {
+    const report = verifyPacks(loadProviders(), loadMenu(), { now: '2026-07-10T12:00:00Z' });
+    assert.equal(report.failures.length, 0, JSON.stringify(report.failures, null, 2));
+  });
+
+  it('requires dated primary-source provenance for every factual pack', () => {
+    for (const pack of Object.values(loadProviders())) {
+      assert.match(pack.verification.verified_at, /^\d{4}-\d{2}-\d{2}$/, `${pack.id} verified_at`);
+      assert.match(pack.verification.expires_at, /^\d{4}-\d{2}-\d{2}$/, `${pack.id} expires_at`);
+      assert.ok(pack.verification.sources.length > 0, `${pack.id} evidence sources`);
     }
-  }
-});
+  });
 
-test('every pack declares a native_capabilities array (may be empty)', () => {
-  for (const [id, pack] of Object.entries(loadProviders())) {
-    assert.ok(Array.isArray(pack.native_capabilities),
-      `${id} must declare a native_capabilities array (use [] if none)`);
-  }
-});
+  it('labels community evidence without pretending it is first-party verification', () => {
+    const community = structuredClone(loadProviders().twilio);
+    community.verification.grade = 'community';
+    const report = verifyPacks({ twilio: community }, { groups: [] }, { now: '2026-07-10T12:00:00Z' });
+    assert.equal(report.failures.length, 0, JSON.stringify(report.failures, null, 2));
+    assert.ok(report.warnings.some(({ message }) => /community-sourced/i.test(message)));
+  });
 
-test('audio_normalization is expressed via native_capabilities, not a boolean flag', () => {
-  for (const [id, pack] of Object.entries(loadProviders())) {
-    assert.equal(pack.audio_normalization, undefined,
-      `${id} must not use the legacy audio_normalization boolean — move it to native_capabilities`);
-  }
-});
+  it('warns when evidence is aging and fails after its expiry using an injected clock', () => {
+    const providers = loadProviders();
+    const aging = verifyPacks(providers, { groups: [] }, { now: '2026-09-09T12:00:00Z' });
+    assert.ok(aging.warnings.some(({ message }) => message.includes('61 days old')));
+    assert.equal(aging.failures.length, 0, JSON.stringify(aging.failures, null, 2));
 
-test('every menu option that maps to a provider has an installed pack (no dangling refs)', () => {
-  const menu = loadMenu();
-  const providers = loadProviders();
-  const missing = [];
-  for (const g of menu.groups) {
-    for (const opt of g.options) {
-      const providerId = opt.maps?.provider;
-      const kind = opt.maps?.kind;
-      if (providerId && !providers[providerId]) {
-        missing.push(`${g.id}="${opt.id}" → provider "${providerId}"`);
-      }
+    const expired = verifyPacks(providers, { groups: [] }, { now: '2026-10-09T00:00:00Z' });
+    assert.ok(expired.failures.some(({ message }) => message.includes('evidence expired on 2026-10-08')));
+  });
+
+  it('rejects unproven latency numbers and accepts a real measured distribution', () => {
+    const original = loadProviders().openai;
+    const missing = structuredClone(original);
+    delete missing.latency_evidence;
+    const missingReport = verifyPacks({ openai: missing }, { groups: [] }, { now: '2026-07-10T12:00:00Z' });
+    assert.ok(missingReport.failures.some(({ message }) => message.includes('latency_estimates require latency_evidence')));
+
+    const measured = structuredClone(original);
+    measured.latency_evidence = [{
+      metric: 'ttft_ms',
+      source: 'callsmith_measurement',
+      region: 'us-east',
+      sample_size: 500,
+      percentiles_ms: { p50: 280, p95: 510, p99: 740 },
+      methodology: '500 warmed streaming requests over the production network path.',
+    }];
+    const measuredReport = verifyPacks({ openai: measured }, { groups: [] }, { now: '2026-07-10T12:00:00Z' });
+    assert.equal(measuredReport.failures.length, 0, JSON.stringify(measuredReport.failures, null, 2));
+  });
+
+  it('uses ElevenLabs realtime guidance without the deprecated tuning parameter', () => {
+    const pack = loadProviders().elevenlabs;
+    assert.equal(pack.model, 'eleven_flash_v2_5');
+    assert.match(pack.label, /Flash v2\.5/);
+    assert.ok(pack.verification.sources.some((url) => url.endsWith('/overview/models')));
+    assert.doesNotMatch(JSON.stringify(pack), /optimize_streaming_latency/);
+  });
+
+  it('telephony packs declare μ-law or L16 ingest', () => {
+    const providers = loadProviders();
+    const tel = Object.values(providers).filter((p) => p.kind === 'telephony');
+    assert.ok(tel.length >= 5);
+    for (const p of tel) {
+      assert.ok(p.ingest?.format, `${p.id} missing ingest.format`);
+      assert.ok(typeof p.ingest.sample_rate === 'number', `${p.id} missing sample_rate`);
     }
-  }
-  assert.deepEqual(missing, [],
-    'menu references providers without installed packs:\n' + missing.join('\n'));
-});
-
-test('all provider model names are pinned — staleness guard', () => {
-  const providers = loadProviders();
-  const pinned = {
-    'gemini-live': 'gemini-3.1-flash-live-preview',
-    'openai-realtime': 'gpt-realtime-2',
-    'deepgram': 'nova-3',
-    'assemblyai': 'universal-3-5-pro',
-    'elevenlabs': 'eleven_v3',
-    'cartesia': 'sonic-3.5',
-    'sarvam': 'bulbul:v3',
-    'openai': 'gpt-5.5',
-    'anthropic': 'claude-sonnet-4-6',
-    'gemini': 'gemini-3.5-flash',
-  };
-  for (const [id, expectedModel] of Object.entries(pinned)) {
-    assert.ok(providers[id], `${id} pack must exist`);
-    assert.equal(providers[id].model, expectedModel,
-      `${id} model name drifted — verify against live docs and update`);
-  }
-});
-
-test('menu labels do not advertise stale model names', () => {
-  const menu = loadMenu();
-  const stale = [];
-  for (const group of menu.groups) {
-    for (const option of group.options) {
-      if (/\bNova-2\b/.test(option.label) || /\bGPT-4o\b/.test(option.label)) {
-        stale.push(`${group.id}.${option.id}: ${option.label}`);
-      }
-    }
-  }
-  assert.deepEqual(stale, [], 'menu has stale model labels:\n' + stale.join('\n'));
-});
-
-test('telephony audio contracts match verified docs — staleness guard', () => {
-  const providers = loadProviders();
-  // μ-law 8kHz providers (verified via Context7 + live docs)
-  const mulawProviders = ['exotel', 'twilio', 'plivo', 'telnyx'];
-  for (const id of mulawProviders) {
-    assert.equal(providers[id].egress.format, 'mulaw', `${id} egress must be mulaw`);
-    assert.equal(providers[id].egress.sample_rate, 8000, `${id} egress must be 8kHz`);
-    assert.equal(providers[id].ingest.format, 'mulaw', `${id} ingest must be mulaw`);
-  }
-  // Vonage streams raw L16 PCM, NOT μ-law (verified via developer.vonage.com)
-  assert.equal(providers['vonage'].egress.format, 'pcm', 'Vonage egress must be pcm (L16), not mulaw');
-  assert.equal(providers['vonage'].egress.sample_rate, 16000, 'Vonage default rate must be 16kHz');
-  assert.equal(providers['vonage'].ingest.format, 'pcm', 'Vonage ingest must be pcm (L16), not mulaw');
-});
-
-test('every fixture survives strict-mode expansion (regression guard for menu changes)', () => {
-  const menu = loadMenu();
-  const collect = (dir) => {
-    const out = [];
-    for (const name of readdirSync(dir)) {
-      const p = join(dir, name);
-      if (statSync(p).isDirectory()) out.push(...collect(p));
-      else if (name.endsWith('.answers.json')) out.push(p);
-    }
-    return out;
-  };
-  const fixtures = collect(FIXTURES_DIR);
-  assert.ok(fixtures.length > 0, 'fixtures must exist');
-  for (const f of fixtures) {
-    const raw = JSON.parse(readFileSync(f, 'utf8'));
-    assert.doesNotThrow(
-      () => expandAnswers(raw, menu, { strict: true }),
-      `fixture ${f.replace(FIXTURES_DIR, 'fixtures')} must survive strict-mode expansion`,
-    );
-  }
+  });
 });

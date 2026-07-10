@@ -2,6 +2,17 @@
   "id": "gemini",
   "kind": "llm",
   "label": "Google (Gemini 3.5 Flash)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://ai.google.dev/gemini-api/docs/text-generation#generate-a-text-stream",
+      "https://ai.google.dev/gemini-api/docs/function-calling",
+      "https://ai.google.dev/gemini-api/docs/models",
+      "https://ai.google.dev/gemini-api/docs/pricing"
+    ]
+  },
   "transport": "http",
   "model": "gemini-3.5-flash",
   "streaming": true,
@@ -24,6 +35,21 @@
   "latency_estimates": {
     "ttft_ms": 350
   },
+  "latency_evidence": [
+    {
+      "metric": "ttft_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 350,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "stream_cancel",
     "description": "On interruption, cancel the in-flight streaming generation. Gemini's streaming API supports cancellation.",
@@ -39,7 +65,7 @@
     {
       "id": "multilingual_strength",
       "severity": "note",
-      "note": "Gemini 2.5 Flash excels at code-mixed languages (Hinglish, Spanglish). Preferred for Indian-language voice agents."
+      "note": "Gemini Flash is a candidate for code-mixed languages, but language quality and latency must be benchmarked on the deployment's representative utterance set."
     },
     {
       "id": "long_context",
@@ -58,7 +84,7 @@
     "billing": "per_minute",
     "rate_usd": 0.0001,
     "per_minute_usd": 0.0001,
-    "notes": "Est. ~250 tokens/min at 3.5 Flash pricing (~$0.10/1M in)"
+    "notes": "Architecture-planning allowance derived from an assumed 250 tokens/min; verify the pinned model and current account pricing before use."
   },
   "context7": {
     "library_id": "/google-gemini/generative-ai-python",

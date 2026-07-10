@@ -1,0 +1,1 @@
+A collections agency wants an outbound PSTN agent to contact delinquent accounts in the US, negotiate payment plans, and escalate disputes to live agents. Consent and retention must meet collections policy. They use Twilio.

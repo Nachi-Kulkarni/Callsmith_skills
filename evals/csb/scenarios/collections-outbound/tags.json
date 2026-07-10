@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "domain": "collections",
+  "surface_class": "pstn",
+  "direction": "outbound",
+  "language_force": null,
+  "stakes": "payment",
+  "regulated": true
+}

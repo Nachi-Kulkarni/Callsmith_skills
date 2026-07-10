@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# callsmith — voice-agent recipe compiler
+# callsmith — agent skill + pack verification CLI
 # One-liner installer:  curl -fsSL .../install-callsmith.sh | bash
 #
 set -euo pipefail
@@ -8,8 +8,9 @@ set -euo pipefail
 REPO="Nachi-Kulkarni/Callsmith_skills"
 BRANCH="main"
 INSTALL_DIR="${CALLSMITH_HOME:-$HOME/.callsmith}"
-BIN_DIR="${CALLSMITH_BIN:-/usr/local/bin}"
+BIN_DIR="${CALLSMITH_BIN:-$HOME/.local/bin}"
 BINARY_NAME="callsmith"
+INSTALL_METHOD="${CALLSMITH_INSTALL_METHOD:-}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -40,7 +41,8 @@ info "Node.js v$NODE_VERSION found."
 
 # --- Choose install method ---------------------------------------------------
 # Prefer npm from git if npm is available — handles PATH/manpages for us.
-if command -v npm >/dev/null 2>&1; then
+# CALLSMITH_INSTALL_METHOD=manual is also useful for offline/release tests.
+if [ "$INSTALL_METHOD" != "manual" ] && command -v npm >/dev/null 2>&1; then
   info "Installing via npm (zero npm dependencies — installs in seconds)..."
   if npm install -g "github:$REPO" 2>/dev/null; then
     :
@@ -58,10 +60,35 @@ if [ "${INSTALL_METHOD:-manual}" = "manual" ]; then
   # Download tarball
   TARBALL_URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz"
   TMPDIR="$(mktemp -d)"
-  trap 'rm -rf "$TMPDIR"' EXIT
+  INSTALL_STARTED=0
+  BACKUP_DIR="$TMPDIR/managed-backup"
+
+  cleanup() {
+    status=$?
+    if [ "$INSTALL_STARTED" = "1" ]; then
+      # A managed-path replacement failed. Restore the previous managed tree;
+      # unrelated files in CALLSMITH_HOME are never touched.
+      for required in "${REQUIRED_PATHS[@]}"; do
+        rm -rf "$INSTALL_DIR/$required"
+        if [ -e "$BACKUP_DIR/$required" ]; then
+          mkdir -p "$(dirname "$INSTALL_DIR/$required")"
+          mv "$BACKUP_DIR/$required" "$INSTALL_DIR/$required"
+        fi
+      done
+    fi
+    rm -rf "$TMPDIR"
+    exit "$status"
+  }
+  trap cleanup EXIT
 
   info "Downloading..."
-  if command -v curl >/dev/null 2>&1; then
+  if [ -n "${CALLSMITH_ARCHIVE:-}" ]; then
+    if [ ! -f "$CALLSMITH_ARCHIVE" ]; then
+      err "CALLSMITH_ARCHIVE does not exist: $CALLSMITH_ARCHIVE"
+      exit 1
+    fi
+    cp "$CALLSMITH_ARCHIVE" "$TMPDIR/callsmith.tar.gz"
+  elif command -v curl >/dev/null 2>&1; then
     curl -fsSL "$TARBALL_URL" -o "$TMPDIR/callsmith.tar.gz"
   elif command -v wget >/dev/null 2>&1; then
     wget -qO "$TMPDIR/callsmith.tar.gz" "$TARBALL_URL"
@@ -71,33 +98,88 @@ if [ "${INSTALL_METHOD:-manual}" = "manual" ]; then
   fi
 
   tar -xzf "$TMPDIR/callsmith.tar.gz" -C "$TMPDIR"
-  SRC_DIR="$TMPDIR/callsmith-$BRANCH"
+  SRC_DIR=""
+  for candidate in "$TMPDIR"/*; do
+    [ -d "$candidate" ] || continue
+    if [ -n "$SRC_DIR" ]; then
+      err "Release archive is ambiguous: multiple top-level directories"
+      exit 1
+    fi
+    SRC_DIR="$candidate"
+  done
+  if [ -z "$SRC_DIR" ]; then
+    err "Release archive is incomplete: no top-level source directory"
+    exit 1
+  fi
 
-  mkdir -p "$INSTALL_DIR"
-  cp -r "$SRC_DIR/bin" "$SRC_DIR/src" "$SRC_DIR/data" "$SRC_DIR/providers" \
-        "$SRC_DIR/package.json" "$SRC_DIR/SKILL.md" "$INSTALL_DIR/" 2>/dev/null || true
+  REQUIRED_PATHS=(
+    bin
+    src
+    data
+    providers
+    reference
+    examples
+    package.json
+    SKILL.md
+    product_decisions.md
+    product.md
+    subtraction.md
+  )
+  STAGE_DIR="$TMPDIR/stage"
+  mkdir -p "$STAGE_DIR"
+  for required in "${REQUIRED_PATHS[@]}"; do
+    if [ ! -e "$SRC_DIR/$required" ]; then
+      err "Release archive is incomplete: missing $required"
+      exit 1
+    fi
+    cp -R "$SRC_DIR/$required" "$STAGE_DIR/"
+  done
+
+  # Prove the staged product is internally complete before touching an existing
+  # installation. This catches missing references and invalid provider packs.
+  if ! node "$STAGE_DIR/bin/callsmith.mjs" doctor >/dev/null 2>&1; then
+    err "Staged release failed doctor; existing installation was not changed."
+    exit 1
+  fi
+
+  mkdir -p "$INSTALL_DIR" "$BACKUP_DIR"
+  INSTALL_STARTED=1
+  for required in "${REQUIRED_PATHS[@]}"; do
+    if [ -e "$INSTALL_DIR/$required" ]; then
+      mkdir -p "$(dirname "$BACKUP_DIR/$required")"
+      mv "$INSTALL_DIR/$required" "$BACKUP_DIR/$required"
+    fi
+  done
+  for required in "${REQUIRED_PATHS[@]}"; do
+    mkdir -p "$(dirname "$INSTALL_DIR/$required")"
+    mv "$STAGE_DIR/$required" "$INSTALL_DIR/$required"
+  done
+  INSTALL_STARTED=0
+  rm -rf "$BACKUP_DIR"
 
   # Create a wrapper script
-  mkdir -p "$HOME/.local/bin"
-  WRAPPER="$HOME/.local/bin/$BINARY_NAME"
+  mkdir -p "$BIN_DIR"
+  WRAPPER="$BIN_DIR/$BINARY_NAME"
   cat > "$WRAPPER" <<EOF
 #!/usr/bin/env bash
 exec node "$INSTALL_DIR/bin/callsmith.mjs" "\$@"
 EOF
   chmod +x "$WRAPPER"
 
-  BIN_DIR="$HOME/.local/bin"
 fi
 
 # --- Verify ------------------------------------------------------------------
 echo ""
+CALLSMITH_BIN_PATH=""
 if [ "${INSTALL_METHOD:-manual}" = "npm" ]; then
   if command -v callsmith >/dev/null 2>&1; then
+    CALLSMITH_BIN_PATH="$(command -v callsmith)"
     bold "Installed:"
     callsmith --version 2>/dev/null || echo "  callsmith is on your PATH"
   else
     # npm global bin might not be on PATH yet
     NPM_BIN="$(npm config get prefix 2>/dev/null)/bin"
+    CALLSMITH_BIN_PATH="$NPM_BIN/callsmith"
     bold "Installed to $NPM_BIN/callsmith"
     echo ""
     if ! echo "$PATH" | grep -q "$NPM_BIN"; then
@@ -107,6 +189,7 @@ if [ "${INSTALL_METHOD:-manual}" = "npm" ]; then
     fi
   fi
 else
+  CALLSMITH_BIN_PATH="$WRAPPER"
   bold "Installed:"
   "$WRAPPER" --version 2>/dev/null || true
   echo ""
@@ -117,8 +200,21 @@ else
   fi
 fi
 
+# Require verification spine (doctor). Generation CLI (intake/init/forge) was removed.
+if [ -n "$CALLSMITH_BIN_PATH" ] && [ -x "$CALLSMITH_BIN_PATH" ]; then
+  if ! "$CALLSMITH_BIN_PATH" doctor >/dev/null 2>&1; then
+    err "Installed callsmith failed doctor (need agent-compiler / 1.6+ verification CLI)."
+    echo "  Re-run this installer, or:"
+    echo "    npm install -g github:$REPO"
+    echo "    # or from a checkout: node bin/callsmith.mjs doctor"
+    exit 1
+  fi
+  info "Verified: callsmith doctor OK (pack validation spine)."
+fi
+
 echo ""
 bold "Next:"
-echo "  callsmith init          # create a starter voice-agent project"
-echo "  callsmith spec          # interactive intake quiz"
+echo "  npx skills add Nachi-Kulkarni/Callsmith_skills   # primary: agent skill"
+echo "  invoke /callsmith                                 # agent compiles the design"
+echo "  callsmith doctor | packs | pack validate | check  # verification only"
 echo ""

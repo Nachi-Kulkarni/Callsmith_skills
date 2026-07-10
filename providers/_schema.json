@@ -3,7 +3,7 @@
   "title": "Callsmith Provider Pack",
   "description": "Each provider declares its real audio/transport/lifecycle contract plus known potholes. The resolver reconciles these across the selected stack to produce the compatibility matrix and audio bridge contract. This file documents the shape every providers/*/<id>.json must follow.",
   "type": "object",
-  "required": ["id", "kind", "label", "transport", "ingest", "egress", "directions", "native_capabilities"],
+  "required": ["id", "kind", "label", "transport", "ingest", "egress", "directions", "native_capabilities", "verification"],
   "properties": {
     "id": { "type": "string", "description": "Stable identifier, matches menu option id. Lowercase-kebab." },
     "kind": { "type": "string", "enum": ["telephony", "orchestration", "realtime", "stt", "tts", "llm", "vad"] },
@@ -62,12 +62,32 @@
       }
     },
     "model": { "type": "string", "description": "Current verified model ID. Pinned by staleness guard tests." },
+    "verification": {
+      "type": "object",
+      "description": "Provenance for the factual claims in this pack. Refresh before expires_at; a URL merely being syntactically valid is not evidence that a claim is current.",
+      "required": ["grade", "verified_at", "expires_at", "sources"],
+      "properties": {
+        "grade": {
+          "type": "string",
+          "enum": ["official_docs", "official_repository", "callsmith_measurement", "community"],
+          "description": "Strength of the evidence used for this pack."
+        },
+        "verified_at": { "type": "string", "description": "UTC calendar date (YYYY-MM-DD) on which the sources were checked." },
+        "expires_at": { "type": "string", "description": "UTC calendar date (YYYY-MM-DD) after which verification fails until the pack is refreshed." },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Primary evidence URLs supporting the pack's current factual claims."
+        }
+      }
+    },
     "streaming": { "type": "boolean", "description": "Whether this provider supports streaming output." },
     "tool_calling": { "type": "boolean", "description": "Whether this provider supports function/tool calling." },
     "context_window": { "type": "integer", "description": "Maximum context window in tokens (LLM only)." },
     "latency_estimates": {
       "type": "object",
-      "description": "Typical latency contribution from this provider in milliseconds. Used for latency budget computation.",
+      "description": "Planning-only latency inputs in milliseconds, retained for compatibility with the resolver. These are not measurements and MUST have matching latency_evidence entries.",
       "properties": {
         "media_rtt_ms": { "type": "integer", "description": "Telephony media stream round-trip time." },
         "ttf_transcript_ms": { "type": "integer", "description": "STT: time to first transcript." },
@@ -76,6 +96,33 @@
         "response_start_ms": { "type": "integer", "description": "Realtime model: time to first audio response." },
         "processing_ms": { "type": "integer", "description": "VAD/pipeline: processing latency." },
         "pipeline_overhead_ms": { "type": "integer", "description": "Orchestration: frame pipeline overhead." }
+      }
+    },
+    "latency_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Evidence for each latency metric. Planning estimates explicitly carry a zero sample and unavailable percentiles; measured or vendor-reported distributions carry sample size, region, and p50/p95/p99.",
+      "items": {
+        "type": "object",
+        "required": ["metric", "source", "region", "sample_size", "percentiles_ms", "methodology"],
+        "properties": {
+          "metric": { "type": "string", "enum": ["media_rtt_ms", "ttf_transcript_ms", "ttft_ms", "ttfa_ms", "response_start_ms", "processing_ms", "pipeline_overhead_ms"] },
+          "source": { "type": "string", "enum": ["planning_estimate", "vendor_claim", "callsmith_measurement"] },
+          "region": { "type": "string", "description": "Measurement region, or 'not_measured' for a planning estimate." },
+          "sample_size": { "type": "integer", "description": "Number of observed turns; zero only for planning estimates." },
+          "planning_value_ms": { "type": "integer", "description": "Architecture-budget input; required for planning_estimate and never represented as an observed percentile." },
+          "percentiles_ms": {
+            "type": "object",
+            "required": ["p50", "p95", "p99"],
+            "properties": {
+              "p50": { "type": ["number", "null"] },
+              "p95": { "type": ["number", "null"] },
+              "p99": { "type": ["number", "null"] }
+            }
+          },
+          "methodology": { "type": "string" },
+          "source_url": { "type": "string", "description": "Primary source for vendor_claim evidence." }
+        }
       }
     },
     "interruption": {
@@ -113,7 +160,7 @@
     "doc_urls": { "type": "array", "items": { "type": "string" } },
     "cost_estimates": {
       "type": "object",
-      "description": "Pricing data for cost estimation. per_minute_usd is pre-normalized for the resolver to sum.",
+      "description": "Architecture-planning cost inputs, never a quote or billing source. per_minute_usd is normalized for comparison; verify current account/region pricing before an SLO or purchase decision.",
       "properties": {
         "billing": { "type": "string", "enum": ["per_minute", "per_1k_chars", "per_hour", "free"], "description": "How the provider bills." },
         "rate_usd": { "type": "number", "description": "Raw rate in the billing unit." },

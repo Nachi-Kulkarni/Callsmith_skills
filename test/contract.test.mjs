@@ -1,0 +1,122 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  parseContractReceipt,
+  validateContract,
+  validateContractReceipt,
+  REQUIRED_SECTIONS,
+} from '../src/lib/contract.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const BIN = path.join(ROOT, 'bin', 'callsmith.mjs');
+const EXAMPLE = path.join(ROOT, 'examples', 'clinic-triage', 'callsmith.recipe.md');
+
+function run(...args) {
+  return spawnSync(process.execPath, [BIN, ...args], {
+    encoding: 'utf8',
+    cwd: ROOT,
+  });
+}
+
+describe('contract validate (G5)', () => {
+  it('REQUIRED_SECTIONS has 7 G5 sections', () => {
+    assert.equal(REQUIRED_SECTIONS.length, 7);
+  });
+
+  it('empty contract fails', () => {
+    const r = validateContract('');
+    assert.equal(r.status, 'FAIL');
+    assert.ok(r.errors.length);
+  });
+
+  it('example clinic contract passes with medical floors', () => {
+    const text = fs.readFileSync(EXAMPLE, 'utf8');
+    const r = validateContract(text, { domain: 'medical' });
+    assert.equal(r.status, 'PASS', JSON.stringify(r.errors));
+    assert.equal(r.domain, 'medical');
+    assert.ok(r.sections.every((s) => s.present));
+    assert.ok(r.floors.length >= 1);
+    assert.ok(r.floors.every((f) => f.present));
+  });
+
+  it('CLI contract validate --file example --domain medical', () => {
+    const r = run('contract', 'validate', '--file', EXAMPLE, '--domain', 'medical');
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.match(r.stdout, /PASS/);
+  });
+
+  it('CLI fails on thin stub', () => {
+    const stub = path.join(ROOT, 'test', '_stub-contract.md');
+    fs.writeFileSync(stub, '# Hello\n\nNo real sections.\n');
+    try {
+      const r = run('contract', 'validate', '--file', stub);
+      assert.equal(r.status, 1);
+      assert.match(r.stdout + r.stderr, /FAIL|MISS|missing/i);
+    } finally {
+      fs.unlinkSync(stub);
+    }
+  });
+
+  it('standalone CLI rejects a regulated keyword-theater fixture', () => {
+    const fixture = path.join(ROOT, 'evals/csb/scenarios/bank-kyc/fixtures/keyword-theater.recipe.md');
+    const r = run('contract', 'validate', '--file', fixture, '--domain', 'banking');
+    assert.equal(r.status, 1);
+    assert.match(r.stdout + r.stderr, /callsmith-contract receipt/i);
+  });
+
+  it('rejects prose-only keyword theater', () => {
+    const prose = REQUIRED_SECTIONS.map((section) => `## ${section.label}\n\nConsent retention handoff latency 500 ms provider build.`).join('\n\n');
+    const r = validateContract(prose, { domain: 'medical' });
+    assert.equal(r.status, 'FAIL');
+    assert.match(r.errors.join('; '), /missing .*callsmith-contract receipt/i);
+  });
+
+  it('parses a receipt and rejects unknown providers when a catalog is supplied', () => {
+    const text = '```json callsmith-contract\n{"schema_version":1}\n```';
+    assert.equal(parseContractReceipt(text).receipt.schema_version, 1);
+    const r = validateContractReceipt({
+      schema_version: 1,
+      domain: 'general',
+      surface: 'web_voice',
+      providers: { orchestration: 'invented-provider' },
+      policy: {
+        basis: 'organization_policy',
+        retention_basis: 'Internal policy.',
+        recording_consent: 'none',
+        transcript_retention: 'ephemeral',
+        human_handoff: 'none',
+      },
+      latency_slo: { metric: 'turn_gap_ms', percentile: 95, target_ms: 800 },
+    }, { providers: new Set(['livekit']) });
+    assert.equal(r.status, 'FAIL');
+    assert.match(r.errors.join('; '), /unknown provider/i);
+  });
+
+  it('requires explicit acceptance to reduce a regulated default', () => {
+    const receipt = {
+      schema_version: 1,
+      domain: 'medical',
+      surface: 'inbound_pstn',
+      providers: { telephony: 'twilio' },
+      policy: {
+        jurisdiction: 'US',
+        basis: 'organization_policy',
+        retention_basis: 'Clinic policy.',
+        recording_consent: 'none',
+        transcript_retention: 'seven_days',
+        human_handoff: 'ticket',
+      },
+      latency_slo: { metric: 'turn_gap_ms', percentile: 95, target_ms: 900 },
+    };
+    assert.equal(validateContractReceipt(receipt).status, 'FAIL');
+    receipt.policy.basis = 'explicit_risk_acceptance';
+    receipt.policy.override = { accepted_by: 'Safety owner', reason: 'Approved pilot exception.' };
+    const accepted = validateContractReceipt(receipt);
+    assert.equal(accepted.status, 'PASS', accepted.errors.join('; '));
+    assert.ok(accepted.warnings.length);
+  });
+});

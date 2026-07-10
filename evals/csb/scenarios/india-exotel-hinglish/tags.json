@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "domain": "banking",
+  "surface_class": "pstn",
+  "direction": "inbound",
+  "language_force": "hinglish",
+  "stakes": "payment",
+  "regulated": true
+}

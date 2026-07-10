@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "bank-kyc",
+  "title": "Banking KYC inbound",
+  "domain": "banking",
+  "stakes": "payment",
+  "seed_mode": "poisoned",
+  "arms": [
+    "BASE",
+    "WITH"
+  ]
+}

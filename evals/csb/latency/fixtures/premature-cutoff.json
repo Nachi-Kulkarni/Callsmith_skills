@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "track": "controlled",
+  "run_id": "controlled-cutoff-v1",
+  "environment": {
+    "architecture": "cascaded", "surface": "webrtc_app", "transport": "webrtc",
+    "region": "test-local", "runtime": "synthetic-v1",
+    "network_profile": "deterministic-local", "audio_format": "pcm16-16000-mono",
+    "providers": { "stt": "fixture", "llm": "fixture", "tts": "fixture" }
+  },
+  "clock": { "type": "monotonic", "unit": "ms", "origin_id": "fixture-clock" },
+  "turns": [{
+    "turn_id": "cutoff-1", "speech_end_ms": 1000, "speech_end_source": "labeled",
+    "eou_detected_ms": 1050, "transcript_final_ms": 1090, "llm_request_ms": 1100,
+    "llm_first_token_ms": 1220, "text_committed_ms": 1260, "tts_request_ms": 1270,
+    "tts_first_chunk_ms": 1370, "audio_first_playout_ms": 1390, "audio_first_audible_ms": 1400,
+    "quality": { "premature_cutoff": true, "false_interruption": false, "response_correct": false, "audio_underruns": 0 }
+  }]
+}

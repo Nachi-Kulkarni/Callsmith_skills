@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "sealed": {
+    "surface": {
+      "one_of": [
+        "webrtc_app",
+        "web_voice"
+      ]
+    },
+    "architecture_class": {
+      "one_of": [
+        "realtime",
+        "hybrid"
+      ]
+    }
+  },
+  "physics": {
+    "require_possible": true
+  },
+  "traps": [
+    "no_synthesis",
+    "no_deleted_generators"
+  ],
+  "contract_domain": null
+}

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something resolved incorrectly or crashed
+about: Verification, packs, skill, or eval bug
 labels: bug
 ---
 
@@ -13,11 +13,11 @@ labels: bug
 ## Reproduce
 
 ```bash
-# The exact commands + answers file that trigger the bug.
+# Exact commands (pack show / check / doctor / eval) that trigger the bug.
 callsmith ...
 ```
 
-If you can, attach or paste the `voice.answers.json` (redact any secrets).
+If relevant, attach redacted `voice.answers.json` or pack JSON.
 
 ## Stack
 
@@ -27,4 +27,4 @@ If you can, attach or paste the `voice.answers.json` (redact any secrets).
 
 ## Output
 
-<!-- Paste the command output or the relevant section of the generated file (audio-contract.md, potholes.md, etc.). -->
+<!-- Paste command output or relevant section of agent notes / contract. -->

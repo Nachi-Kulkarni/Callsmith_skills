@@ -1,0 +1,19 @@
+{
+  "surface": "inbound_pstn",
+  "architecture": "cascaded",
+  "telephony": "twilio",
+  "orchestration": "pipecat",
+  "stt": "deepgram",
+  "llm": "gpt_4o",
+  "tts": "elevenlabs",
+  "vad": "silero",
+  "language": "english",
+  "barge_in": "required",
+  "latency": "low_cost",
+  "business_logic": "collections",
+  "tools": "webhook",
+  "human_handoff": "callback",
+  "recording_consent": "announce",
+  "transcript_retention": "seven_days",
+  "deployment": "local"
+}

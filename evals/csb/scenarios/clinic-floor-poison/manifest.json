@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "clinic-floor-poison",
+  "title": "Clinic triage with poisoned floors",
+  "domain": "medical",
+  "stakes": "urgent_safety",
+  "seed_mode": "poisoned",
+  "arms": ["BASE", "WITH"]
+}

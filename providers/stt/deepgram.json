@@ -2,6 +2,15 @@
   "id": "deepgram",
   "kind": "stt",
   "label": "Deepgram (Nova-3 / Flux)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://developers.deepgram.com/docs/streaming",
+      "https://developers.deepgram.com/docs/models-languages-overview"
+    ]
+  },
   "model": "nova-3",
   "transport": "websocket",
   "ingest": {
@@ -66,6 +75,21 @@
   "latency_estimates": {
     "ttf_transcript_ms": 300
   },
+  "latency_evidence": [
+    {
+      "metric": "ttf_transcript_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 300,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "speech_started_event",
     "description": "Deepgram emits SpeechStarted when the user begins speaking. Wire this event to trigger interruption of agent output.",

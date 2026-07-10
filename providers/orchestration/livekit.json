@@ -2,6 +2,15 @@
   "id": "livekit",
   "kind": "orchestration",
   "label": "LiveKit (Agents framework + SIP trunk)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://docs.livekit.io/agents/",
+      "https://docs.livekit.io/agents/pipelines/voice-pipeline/"
+    ]
+  },
   "transport": "webrtc",
   "ingest": {
     "format": "pcm",
@@ -63,6 +72,21 @@
   "latency_estimates": {
     "pipeline_overhead_ms": 20
   },
+  "latency_evidence": [
+    {
+      "metric": "pipeline_overhead_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 20,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "session_turn_handling",
     "description": "AgentSession with TurnHandlingOptions(turn_detection=MultilingualModel()) handles interruption automatically. When user speech is detected during agent output, the session cancels in-flight TTS and LLM output.",

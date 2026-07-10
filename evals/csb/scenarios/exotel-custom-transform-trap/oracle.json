@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "sealed": {
+    "surface": { "one_of": ["inbound_pstn"] },
+    "telephony": { "one_of": ["exotel"] }
+  },
+  "physics": {
+    "transform_band": "heavy",
+    "require_possible": true
+  },
+  "traps": [
+    "no_pstn_to_web",
+    "no_synthesis",
+    "no_deleted_generators"
+  ],
+  "contract_domain": null
+}

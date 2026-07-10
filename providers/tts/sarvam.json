@@ -2,6 +2,14 @@
   "id": "sarvam",
   "kind": "tts",
   "label": "Sarvam",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"
+    ]
+  },
   "model": "bulbul:v3",
   "transport": "websocket",
   "directions": ["inbound", "outbound"],
@@ -29,6 +37,21 @@
   "env_keys": ["SARVAM_API_KEY"],
   "doc_urls": ["https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"],
   "latency_estimates": { "ttfa_ms": 200 },
+  "latency_evidence": [
+    {
+      "metric": "ttfa_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 200,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "stop_playback",
     "description": "On interruption, stop the TTS streaming session. Discard buffered audio.",

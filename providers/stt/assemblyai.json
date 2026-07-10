@@ -2,6 +2,14 @@
   "id": "assemblyai",
   "kind": "stt",
   "label": "AssemblyAI",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://www.assemblyai.com/docs/Guides/real-time_streaming_transcription"
+    ]
+  },
   "model": "universal-3-5-pro",
   "transport": "websocket",
   "directions": ["inbound", "outbound"],
@@ -30,6 +38,21 @@
   "env_keys": ["ASSEMBLYAI_API_KEY"],
   "doc_urls": ["https://www.assemblyai.com/docs/Guides/real-time_streaming_transcription"],
   "latency_estimates": { "ttf_transcript_ms": 350 },
+  "latency_evidence": [
+    {
+      "metric": "ttf_transcript_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 350,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "turn_event",
     "description": "AssemblyAI Universal streaming emits Turn events. A turn with end_of_turn=true signals the user finished speaking, which can trigger interruption if the agent was outputting.",

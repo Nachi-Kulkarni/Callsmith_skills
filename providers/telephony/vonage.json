@@ -2,6 +2,14 @@
   "id": "vonage",
   "kind": "telephony",
   "label": "Vonage",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://developer.vonage.com/en/voice/voice-api/concepts/websockets"
+    ]
+  },
   "transport": "websocket",
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
@@ -30,6 +38,21 @@
   "env_keys": ["VONAGE_API_KEY", "VONAGE_API_SECRET", "VONAGE_APPLICATION_ID"],
   "doc_urls": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"],
   "latency_estimates": { "media_rtt_ms": 70 },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 70,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "clear_action",
     "description": "Send {\"action\":\"clear\"} JSON message to the WebSocket to flush all buffered outbound audio. Vonage supports this natively.",

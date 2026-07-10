@@ -2,6 +2,15 @@
   "id": "pipecat",
   "kind": "orchestration",
   "label": "Pipecat (frame-based pipeline)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://docs.pipecat.ai/",
+      "https://docs.pipecat.ai/server/transports/"
+    ]
+  },
   "transport": "websocket",
   "ingest": {
     "format": "pcm",
@@ -59,6 +68,21 @@
   "latency_estimates": {
     "pipeline_overhead_ms": 30
   },
+  "latency_evidence": [
+    {
+      "metric": "pipeline_overhead_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 30,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "interruption_frame",
     "description": "Pipecat 1.0+ uses user_turn_strategies in LLMUserAggregatorParams. When the VAD detects user speech, an InterruptionFrame propagates through the pipeline, discarding pending output frames. The transport serializer handles provider-specific clearing.",

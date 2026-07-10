@@ -2,6 +2,16 @@
   "id": "openai-realtime",
   "kind": "realtime",
   "label": "OpenAI Realtime (gpt-realtime-2)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://platform.openai.com/docs/guides/realtime",
+      "https://platform.openai.com/docs/guides/realtime-sip",
+      "https://platform.openai.com/docs/guides/voice-agents"
+    ]
+  },
   "model": "gpt-realtime-2",
   "transport": "websocket",
   "native_sip": true,
@@ -90,6 +100,21 @@
   "latency_estimates": {
     "response_start_ms": 450
   },
+  "latency_evidence": [
+    {
+      "metric": "response_start_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 450,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "server_vad_speech_started",
     "description": "OpenAI Realtime emits input_audio_buffer.speech_started on user speech. This signals barge-in. Stop outbound playback, clear the buffer, and send response.cancel to abort in-flight responses.",

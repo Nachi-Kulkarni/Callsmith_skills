@@ -2,6 +2,14 @@
   "id": "silero",
   "kind": "vad",
   "label": "Silero VAD",
+  "verification": {
+    "grade": "official_repository",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://github.com/snakers4/silero-vad"
+    ]
+  },
   "transport": "inline",
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
@@ -22,6 +30,21 @@
   "latency_estimates": {
     "processing_ms": 20
   },
+  "latency_evidence": [
+    {
+      "metric": "processing_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 20,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "speech_detection",
     "description": "Silero VAD detects user speech during agent output. When speech is detected and the agent is speaking, an interruption is triggered.",

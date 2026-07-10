@@ -1,8 +1,18 @@
 {
   "id": "elevenlabs",
   "kind": "tts",
-  "label": "ElevenLabs (eleven_v3)",
-  "model": "eleven_v3",
+  "label": "ElevenLabs (Flash v2.5)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://elevenlabs.io/docs/overview/models",
+      "https://elevenlabs.io/docs/api-reference/reducing-latency",
+      "https://elevenlabs.io/docs/api-reference/text-to-speech/v-1-text-to-speech-voice-id-stream-input"
+    ]
+  },
+  "model": "eleven_flash_v2_5",
   "transport": "websocket",
   "ingest": {
     "format": "text",
@@ -41,21 +51,27 @@
     {
       "id": "first_audio_latency",
       "severity": "warning",
-      "note": "First-byte latency dominates perceived responsiveness. Stream text as soon as the LLM emits tokens; do not wait for a full sentence before calling TTS. Use optimize_streaming_latency up to 4."
+      "note": "First-byte latency dominates perceived responsiveness. Use Flash v2.5 for realtime TTS, keep a persistent WebSocket, stream LLM text promptly, and consider auto_mode plus deployment-region proximity. Avoid legacy latency-tuning query parameters."
+    },
+    {
+      "id": "flash_text_normalization",
+      "severity": "warning",
+      "note": "Flash v2.5 disables text normalization by default to preserve latency, so normalize phone numbers, dates, and currencies before TTS (or use the Enterprise normalization option)."
     }
   ],
   "env_keys": [
     "ELEVENLABS_API_KEY"
   ],
   "doc_urls": [
-    "https://elevenlabs.io/docs/product/api-reference/text-to-speech",
-    "https://elevenlabs.io/docs/product/api-reference/websockets/streaming"
+    "https://elevenlabs.io/docs/overview/models",
+    "https://elevenlabs.io/docs/api-reference/reducing-latency",
+    "https://elevenlabs.io/docs/api-reference/text-to-speech/v-1-text-to-speech-voice-id-stream-input"
   ],
   "cost_estimates": {
     "billing": "per_1k_chars",
     "rate_usd": 0.30,
     "per_minute_usd": 0.24,
-    "notes": "$0.30/1k chars at ~800 chars/min conversational pace"
+    "notes": "Architecture-planning allowance only; verify current Flash v2.5 account pricing before a production cost SLO"
   },
   "context7": {
     "library_id": "/elevenlabs/elevenlabs-python",
@@ -68,6 +84,21 @@
   "latency_estimates": {
     "ttfa_ms": 250
   },
+  "latency_evidence": [
+    {
+      "metric": "ttfa_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 250,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "stop_playback",
     "description": "On interruption, stop consuming the streaming TTS WebSocket. Discard any buffered audio chunks. Cancel the text input stream.",

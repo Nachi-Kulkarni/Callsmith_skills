@@ -1,19 +1,22 @@
 ## Summary
 <!-- What does this PR change and why? -->
 
+## Constitution check
+- [ ] Aligns with [`product_decisions.md`](../product_decisions.md)
+- [ ] Does **not** resurrect deleted generation (`forge` / `scaffold` / `init` / `simulate` / synthesis / lock-as-identity)
+- [ ] New knowledge lands in packs, floors, skill/playbooks, or eval scenarios
+
 ## Verification
 
-- [ ] `npm test` passes (green)
-- [ ] `node bin/callsmith.mjs verify-packs` reports 0 failures (if packs changed)
-- [ ] `node bin/callsmith.mjs release-check --skip-tests --skip-generated-install` passes
-- [ ] If generated runtime dependencies changed, `node bin/callsmith.mjs release-check --skip-tests --full-installs` passes
-- [ ] If audio-contract resolution changed, a fixture exercises the change
+- [ ] `npm test` passes
+- [ ] `node bin/callsmith.mjs pack validate` / `verify-packs` clean (if packs changed)
+- [ ] `node bin/callsmith.mjs doctor` OK
+- [ ] Contract/answers and turn-gap fixtures validate if behavior changed
 - [ ] No new runtime dependencies (or justified below)
 
 ## Type
-<!-- Check one: -->
-- [ ] Provider pack (new or updated contract/model/pricing)
-- [ ] Resolver / audio-contract fix
-- [ ] Scaffold improvement
-- [ ] CLI / UX
+- [ ] Provider pack
+- [ ] Physics / check / resolver
+- [ ] Skill / playbooks / floors
+- [ ] Eval harness / rubric / scenarios
 - [ ] Docs / OSS

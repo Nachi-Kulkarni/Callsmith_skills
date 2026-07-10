@@ -2,6 +2,14 @@
   "id": "custom-fastapi",
   "kind": "orchestration",
   "label": "Custom FastAPI bridge",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://fastapi.tiangolo.com/"
+    ]
+  },
   "transport": "websocket",
   "cost_estimates": {
     "billing": "free",
@@ -34,6 +42,21 @@
   "env_keys": [],
   "doc_urls": ["https://fastapi.tiangolo.com/"],
   "latency_estimates": { "pipeline_overhead_ms": 10 },
+  "latency_evidence": [
+    {
+      "metric": "pipeline_overhead_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 10,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "manual_flush",
     "description": "With a custom FastAPI bridge, you must manually implement interruption: detect user speech via VAD, cancel in-flight LLM/TTS requests, flush the outbound audio queue, and stop writing to the WebSocket.",

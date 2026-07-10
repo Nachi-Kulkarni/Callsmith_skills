@@ -3,7 +3,6 @@ dist/
 .DS_Store
 *.log
 .callsmith/
-callsmith.recipe.md
 callsmith.lock.json
 __pycache__/
 *.pyc
@@ -13,3 +12,10 @@ __pycache__/
 venv/
 .venv/
 .env
+/voice.answers.json
+evals/csb/runs/
+benchmark/evals/
+
+# Local scratch / generated agent workspaces
+voice-agent/
+**/run-*/.bin/

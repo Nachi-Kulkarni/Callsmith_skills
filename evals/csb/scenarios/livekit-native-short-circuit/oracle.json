@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "sealed": {
+    "surface": {
+      "one_of": [
+        "inbound_pstn"
+      ]
+    },
+    "telephony": {
+      "one_of": [
+        "twilio"
+      ]
+    },
+    "architecture_class": {
+      "one_of": [
+        "realtime",
+        "hybrid"
+      ]
+    }
+  },
+  "physics": {
+    "transform_band": "0",
+    "require_native_short_circuit": true,
+    "require_possible": true
+  },
+  "traps": [
+    "no_pstn_to_web",
+    "no_synthesis",
+    "no_deleted_generators"
+  ],
+  "contract_domain": null
+}

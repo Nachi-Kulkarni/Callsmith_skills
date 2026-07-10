@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "exotel-custom-transform-trap",
+  "title": "Exotel + custom FastAPI must admit heavy transforms",
+  "domain": "general",
+  "stakes": "lead",
+  "seed_mode": "poisoned",
+  "arms": ["BASE", "WITH"]
+}

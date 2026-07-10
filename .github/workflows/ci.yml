@@ -12,18 +12,16 @@ jobs:
         with:
           node-version: 20
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Python deps for scaffold tests
-        run: pip install numpy scipy pytest
-
       - name: Run callsmith test suite
-        run: node --test test/
+        run: npm test
 
-      - name: Release readiness smoke
-        run: node bin/callsmith.mjs release-check --skip-tests --skip-generated-install
+      - name: Verification CLI smoke
+        run: |
+          node bin/callsmith.mjs doctor
+          node bin/callsmith.mjs contract validate --file examples/clinic-triage/callsmith.recipe.md --domain medical
+
+      - name: Package manifest smoke
+        run: npm pack --dry-run --json --cache /tmp/callsmith-npm-cache
 
   validate-packs:
     runs-on: ubuntu-latest
@@ -33,4 +31,6 @@ jobs:
         with:
           node-version: 20
       - name: Validate all provider packs against schema
-        run: node --input-type=module -e "import { validatePacks } from './src/lib/validate.mjs'; const e = validatePacks(); if (e.length) { console.error(e.join('\n')); process.exit(1); } console.log('All packs valid.');"
+        run: |
+          node bin/callsmith.mjs pack validate
+          node bin/callsmith.mjs verify-packs

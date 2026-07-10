@@ -2,6 +2,14 @@
   "id": "deepgram-endpointing",
   "kind": "vad",
   "label": "Deepgram Endpointing",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://developers.deepgram.com/docs/endpointing"
+    ]
+  },
   "transport": "inline",
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
@@ -22,6 +30,21 @@
   "latency_estimates": {
     "processing_ms": 30
   },
+  "latency_evidence": [
+    {
+      "metric": "processing_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 30,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "endpoint_detection",
     "description": "Deepgram's endpointing detects when a user finishes speaking (or starts speaking during agent output) using the interim_results + endpointing parameter. Configure endpointing_ms (default 300ms, lower for faster interruption).",

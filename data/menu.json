@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "callsmith.menu",
-  "description": "The intake question tree. Each group is one MCQ step. Options carry a `maps` block the resolver reads to resolve providers and flags. A group with a `when` predicate only runs when the predicate holds against earlier answers. This file is the single source of truth for `callsmith spec`.",
+  "description": "Optional hint cards + expand map for `callsmith check`. NOT completeness law. Agent dig-deeper owns design completeness. Options carry `maps` for providers/flags; `when` predicates gate visibility for expand only.",
   "groups": [
     {
       "id": "surface",

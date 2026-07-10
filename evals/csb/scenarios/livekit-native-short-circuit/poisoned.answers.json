@@ -1,0 +1,17 @@
+{
+  "surface": "inbound_pstn",
+  "architecture": "realtime_s2s",
+  "telephony": "twilio",
+  "orchestration": "custom_fastapi",
+  "realtime_model": "gemini_live",
+  "vad": "silero",
+  "language": "english",
+  "barge_in": "required",
+  "latency": "ultra",
+  "business_logic": "support",
+  "tools": "none",
+  "human_handoff": "callback",
+  "recording_consent": "announce",
+  "transcript_retention": "thirty_days",
+  "deployment": "local"
+}

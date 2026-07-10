@@ -2,6 +2,14 @@
   "id": "webrtc-vad",
   "kind": "vad",
   "label": "WebRTC VAD",
+  "verification": {
+    "grade": "official_repository",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://github.com/wiseman/py-webrtcvad"
+    ]
+  },
   "transport": "inline",
   "directions": ["inbound", "outbound"],
   "native_capabilities": [],
@@ -22,6 +30,21 @@
   "latency_estimates": {
     "processing_ms": 10
   },
+  "latency_evidence": [
+    {
+      "metric": "processing_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 10,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
   "interruption": {
     "mechanism": "frame_energy",
     "description": "WebRTC VAD classifies each audio frame as speech or non-speech using GMM (Gaussian Mixture Model). On consecutive speech frames during agent output, triggers interruption.",
