@@ -37,6 +37,11 @@ export function validateActorTrial({ actor, artifacts, before = {}, startedAtMs 
   if (actor?.status !== 0) reasons.push(`actor exit status was ${String(actor?.status)}`);
   if (actor?.timedOut) reasons.push('actor timed out');
   if (actor?.error) reasons.push(`actor error: ${actor.error}`);
+  if (actor?.stdoutTruncated) reasons.push('actor stdout was truncated');
+  if (actor?.stderrTruncated) reasons.push('actor stderr was truncated');
+  if (actor?.traceRequired && actor?.trace?.valid !== true) {
+    reasons.push(...(actor?.trace?.invalid_reasons || ['required actor trace is invalid']));
+  }
 
   for (const [kind, file] of Object.entries(artifacts)) {
     const now = fileSnapshot(file);

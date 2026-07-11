@@ -96,7 +96,10 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
 
   if (arm === 'WITH') {
     cpSync(join(REPO_ROOT, 'SKILL.md'), join(runDir, 'SKILL.md'));
-    // Packs + CLI via shim to repo root (actor can pack show / check)
+    // Self-contained verification runtime: no absolute path back to the sealed repository.
+    cpSync(join(REPO_ROOT, 'bin'), join(runDir, 'bin'), { recursive: true });
+    cpSync(join(REPO_ROOT, 'src'), join(runDir, 'src'), { recursive: true });
+    cpSync(join(REPO_ROOT, 'data'), join(runDir, 'data'), { recursive: true });
     const binDir = join(runDir, '.bin');
     mkdirSync(binDir, { recursive: true });
     const shim = join(binDir, 'callsmith');
@@ -105,7 +108,9 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
       [
         '#!/usr/bin/env node',
         "import { spawnSync } from 'node:child_process';",
-        `const result = spawnSync(process.execPath, [${JSON.stringify(join(REPO_ROOT, 'bin', 'callsmith.mjs'))}, ...process.argv.slice(2)], { stdio: 'inherit' });`,
+        "import { fileURLToPath } from 'node:url';",
+        "const target = fileURLToPath(new URL('../bin/callsmith.mjs', import.meta.url));",
+        "const result = spawnSync(process.execPath, [target, ...process.argv.slice(2)], { stdio: 'inherit' });",
         'if (result.error) { console.error(result.error.message); process.exit(1); }',
         'if (result.signal) process.kill(process.pid, result.signal);',
         'process.exit(result.status ?? 1);',
@@ -114,7 +119,7 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
     );
     chmodSync(shim, 0o755);
 
-    // Optional: symlink-free copy of providers for agents that prefer reading files
+    // Symlink-free packs are shared by the CLI and agents that prefer reading files.
     cpSync(join(REPO_ROOT, 'providers'), join(runDir, 'providers'), { recursive: true });
     // reference playbooks available but unscored
     if (existsSync(join(REPO_ROOT, 'reference'))) {

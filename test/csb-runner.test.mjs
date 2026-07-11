@@ -11,6 +11,12 @@ import { loadScenario } from '../evals/csb/harness/score.mjs';
 import { prepareArmWorkspace } from '../evals/csb/harness/prepare.mjs';
 import { buildActorPrompt } from '../evals/csb/harness/prompts.mjs';
 import {
+  actorSpec,
+  buildActorInvocation,
+  codexThreadId,
+  parseCodexTrace,
+} from '../evals/csb/harness/actors.mjs';
+import {
   seededSchedule,
   snapshotArtifacts,
   summarizeValidPairs,
@@ -49,6 +55,12 @@ describe('CSB prepareArmWorkspace', () => {
     assert.ok(fs.existsSync(path.join(withDir, 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(withDir, 'providers')));
     assert.ok(fs.existsSync(path.join(withDir, '.bin', 'callsmith')));
+    const shim = fs.readFileSync(path.join(withDir, '.bin', 'callsmith'), 'utf8');
+    assert.equal(shim.includes(ROOT), false);
+    const doctor = spawnSync(path.join(withDir, '.bin', 'callsmith'), ['doctor'], {
+      cwd: withDir, encoding: 'utf8',
+    });
+    assert.equal(doctor.status, 0, doctor.stderr + doctor.stdout);
     assert.equal(fs.existsSync(path.join(withDir, 'oracle.json')), false);
     assert.equal(fs.existsSync(path.join(withDir, 'tags.json')), false);
   });
@@ -77,6 +89,55 @@ describe('CSB prepareArmWorkspace', () => {
 });
 
 describe('CSB run-arms CLI', () => {
+  it('builds an isolated subscription-backed Codex invocation with pinned reasoning', () => {
+    const spec = actorSpec({
+      tool: 'codex', binary: 'codex', model: 'gpt-5.6-luna', reasoning: 'xhigh',
+    });
+    const invocation = buildActorInvocation(spec, { prompt: 'do the work', cwd: '/tmp/arm' });
+    assert.equal(invocation.binary, 'codex');
+    assert.deepEqual(invocation.args.slice(0, 4), ['exec', '--strict-config', '--model', 'gpt-5.6-luna']);
+    assert.ok(invocation.args.includes('--ephemeral'));
+    assert.ok(invocation.args.includes('--ignore-user-config'));
+    assert.ok(invocation.args.includes('--ignore-rules'));
+    assert.ok(invocation.args.includes('--json'));
+    assert.ok(invocation.args.includes('approval_policy="never"'));
+    assert.ok(invocation.args.includes('model_reasoning_effort="xhigh"'));
+    assert.equal(invocation.args.at(-2), '/tmp/arm');
+    assert.equal(invocation.args.at(-1), 'do the work');
+  });
+
+  it('extracts the Codex thread id from retained JSONL events', () => {
+    assert.equal(codexThreadId([
+      JSON.stringify({ type: 'thread.started', thread_id: 'thread-123' }),
+      JSON.stringify({ type: 'turn.completed' }),
+    ].join('\n')), 'thread-123');
+    assert.equal(codexThreadId('not-json\n'), null);
+  });
+
+  it('fails Codex traces closed on malformed, failed, or incomplete JSONL', () => {
+    const complete = [
+      { type: 'thread.started', thread_id: 'thread-123' },
+      { type: 'item.completed', item: { type: 'command_execution', command: 'callsmith check' } },
+      { type: 'turn.completed' },
+    ].map(JSON.stringify).join('\n');
+    assert.equal(parseCodexTrace(complete).valid, true);
+    assert.equal(parseCodexTrace(complete).commandLog, 'callsmith check');
+    assert.equal(parseCodexTrace('{bad').valid, false);
+    assert.equal(parseCodexTrace(JSON.stringify({ type: 'thread.started', thread_id: 'x' })).valid, false);
+    const failed = [
+      { type: 'thread.started', thread_id: 'x' },
+      { type: 'turn.failed' },
+    ].map(JSON.stringify).join('\n');
+    assert.equal(parseCodexTrace(failed).valid, false);
+  });
+
+  it('rejects reasoning controls on non-Codex actors', () => {
+    assert.throws(
+      () => actorSpec({ tool: 'opencode', model: 'model', reasoning: 'xhigh' }),
+      /only supported by the codex actor/,
+    );
+  });
+
   it('dry-run prepares both arms and does not publish CSB-Δ', () => {
     const out = path.join(ROOT, 'evals/csb/runs/_test-dry-run');
     fs.rmSync(out, { recursive: true, force: true });
@@ -128,6 +189,21 @@ describe('CSB run-arms CLI', () => {
     assert.equal(fs.existsSync(out), false);
   });
 
+  it('requires a Codex reasoning pin before a live run', () => {
+    const out = path.join(ROOT, 'evals/csb/runs/_test-no-reasoning');
+    fs.rmSync(out, { recursive: true, force: true });
+    const r = spawnSync(process.execPath, [
+      RUNNER,
+      '--actor-tool', 'codex',
+      '--actor-model', 'gpt-5.6-luna',
+      '--scenario', 'clinic-floor-poison',
+      '--out', out,
+    ], { encoding: 'utf8', cwd: ROOT });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /require --actor-reasoning/i);
+    assert.equal(fs.existsSync(out), false);
+  });
+
   it('refuses to overwrite an existing run root', () => {
     const out = path.join(ROOT, 'evals/csb/runs/_test-reused-root');
     fs.rmSync(out, { recursive: true, force: true });
@@ -172,6 +248,31 @@ describe('CSB validity and repeated-run statistics', () => {
     });
     assert.equal(validity.valid, false);
     assert.match(validity.reasons.join(' '), /exit status/);
+  });
+
+  it('invalidates truncated output or a required invalid trace', () => {
+    const dir = path.join(ROOT, 'evals/csb/runs/_test-invalid-trace');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const answers = path.join(dir, 'voice.answers.json');
+    const recipe = path.join(dir, 'callsmith.recipe.md');
+    fs.writeFileSync(answers, '{}\n');
+    fs.writeFileSync(recipe, '# recipe\n');
+    const validity = validateActorTrial({
+      actor: {
+        status: 0,
+        timedOut: false,
+        stdoutTruncated: true,
+        traceRequired: true,
+        trace: { valid: false, invalid_reasons: ['Codex trace is missing turn.completed'] },
+      },
+      artifacts: { answers, recipe },
+      before: {},
+      startedAtMs: Date.now() - 1000,
+    });
+    assert.equal(validity.valid, false);
+    assert.match(validity.reasons.join(' '), /truncated/);
+    assert.match(validity.reasons.join(' '), /turn\.completed/);
   });
 
   it('invalidates stale or unchanged artifacts', () => {

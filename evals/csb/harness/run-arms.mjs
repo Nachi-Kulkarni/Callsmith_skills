@@ -1,18 +1,28 @@
 #!/usr/bin/env node
 /** Reproducible BASE/WITH CallsmithBench runner. */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  cpSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds, scoreArm, pairDelta } from './score.mjs';
 import { prepareArmWorkspace, readArmArtifacts, REPO_ROOT } from './prepare.mjs';
 import { buildActorPrompt } from './prompts.mjs';
+import {
+  actorSpec,
+  prepareActorWorkspace,
+  retainActorTrace,
+  runActor,
+} from './actors.mjs';
 import {
   hashFile,
   seededSchedule,
@@ -27,8 +37,22 @@ const HERE = fileURLToPath(new URL('.', import.meta.url));
 const args = parseArgs(process.argv.slice(2));
 const dryRun = args['dry-run'] === true;
 const scoreFixtures = args['score-fixtures'] === true;
-const opencodeBin = args['opencode-bin'] || process.env.OPENCODE_BIN || 'opencode';
-const actorModel = args['actor-model'] || process.env.OPENCODE_ACTOR_MODEL || '';
+const actorTool = String(args['actor-tool'] || process.env.CSB_ACTOR_TOOL || 'opencode').toLowerCase();
+let actor;
+try {
+  actor = actorSpec({
+    tool: actorTool,
+    binary: args['actor-bin'] || args['opencode-bin']
+      || (actorTool === 'codex' ? process.env.CODEX_BIN : process.env.OPENCODE_BIN),
+    model: args['actor-model']
+      || (actorTool === 'codex' ? process.env.CODEX_ACTOR_MODEL : process.env.OPENCODE_ACTOR_MODEL)
+      || '',
+    reasoning: args['actor-reasoning'] || process.env.CODEX_ACTOR_REASONING || null,
+  });
+} catch (error) {
+  fail(error.message);
+}
+const actorModel = actor.model;
 const runId = args['run-id'] || new Date().toISOString().replace(/[:.]/g, '-');
 const outRoot = resolve(args.out || join(HERE, '..', 'runs', runId));
 const runs = parsePositiveInt(args.runs || '1', '--runs');
@@ -49,7 +73,10 @@ const armsWanted = parseArms(args.arms || 'both');
 if (!scenarioIds.length) fail('No scenarios selected.');
 if (!armsWanted.length) fail('No valid arms selected.');
 if (!dryRun && !scoreFixtures && !actorModel) {
-  fail('Live publishable runs require --actor-model (or OPENCODE_ACTOR_MODEL).');
+  fail('Live publishable runs require --actor-model (or the selected actor model environment variable).');
+}
+if (!dryRun && !scoreFixtures && actor.tool === 'codex' && !actor.reasoning) {
+  fail('Live Codex runs require --actor-reasoning so reasoning effort is reproducible.');
 }
 if (existsSync(outRoot)) fail(`Refusing reused run directory: ${outRoot}`);
 
@@ -60,12 +87,18 @@ if (!dryRun && !scoreFixtures && git.dirty) {
 
 const schedule = seededSchedule(scenarioIds, scoreFixtures ? 1 : runs, armsWanted, seed);
 const source = sourceManifest(scenarioIds);
-const toolVersion = scoreFixtures || dryRun ? toolVersionFor(opencodeBin) : requireToolVersion(opencodeBin);
+const toolVersion = scoreFixtures || dryRun ? toolVersionFor(actor.binary) : requireToolVersion(actor.binary);
 const config = {
   schema_version: 2,
   run_id: runId,
   mode: scoreFixtures ? 'fixtures' : dryRun ? 'dry-run' : 'live',
-  actor: { tool: opencodeBin, version: toolVersion, model: actorModel || null },
+  actor: {
+    tool: actor.tool,
+    binary: actor.binary,
+    version: toolVersion,
+    model: actorModel || null,
+    reasoning: actor.reasoning,
+  },
   git,
   seed,
   runs,
@@ -96,7 +129,10 @@ for (const scheduled of schedule) {
   }
 
   for (const arm of scheduled.arms) {
-    const runDir = join(trialRoot, arm);
+    const persistedRunDir = join(trialRoot, arm);
+    const runDir = dryRun
+      ? persistedRunDir
+      : mkdtempSync(join(tmpdir(), `callsmith-csb-${scheduled.trial}-${scenario.id}-${arm}-`));
     prepareArmWorkspace(arm, scenario, runDir);
     const prompt = buildActorPrompt(arm, scenario, runDir);
     const promptPath = join(runDir, 'actor-prompt.md');
@@ -111,33 +147,47 @@ for (const scheduled of schedule) {
       scenario_sha256: source.scenarios[scenario.id],
       provider_packs_sha256: source.provider_packs_sha256,
       model: actorModel || null,
+      actor_tool: actor.tool,
+      actor_reasoning: actor.reasoning,
       tool_version: toolVersion,
       budget: config.budget,
     };
     writeJson(join(runDir, 'reproducibility.json'), armRepro);
 
     if (dryRun) {
-      const actor = { status: 'DRY_RUN', valid: false, reasons: ['dry runs are never scored'] };
-      writeJson(join(runDir, 'actor.status.json'), actor);
-      result.arms[arm] = { runDir, actor, score: null, reproducibility: armRepro };
+      const actorStatus = { status: 'DRY_RUN', valid: false, reasons: ['dry runs are never scored'] };
+      writeJson(join(runDir, 'actor.status.json'), actorStatus);
+      result.arms[arm] = { runDir, actor: actorStatus, score: null, reproducibility: armRepro };
       console.log(`  trial ${scheduled.trial} ${scenario.id} ${arm}: prepared`);
       continue;
     }
 
     process.stdout.write(`  trial ${scheduled.trial} ${scenario.id} ${arm}: actor ... `);
-    const sessionsBefore = listSessions(opencodeBin, runDir);
+    prepareActorWorkspace(actor, runDir);
+    const sessionsBefore = actor.tool === 'opencode' ? listSessions(actor.binary, runDir) : [];
     const startedAtMs = Date.now();
-    const processResult = await runOpenCode(prompt, runDir, actorModel, arm, timeoutMs, opencodeBin);
+    const processResult = await runActor(actor, {
+      prompt, cwd: runDir, arm, timeout: timeoutMs,
+    });
     writeFileSync(join(runDir, 'actor.stdout.txt'), processResult.stdout || '');
     writeFileSync(join(runDir, 'actor.stderr.txt'), processResult.stderr || '');
-    const trace = exportNewestSession(opencodeBin, sessionsBefore, runDir);
+    const trace = retainActorTrace(
+      actor,
+      processResult,
+      runDir,
+      () => exportNewestSession(actor.binary, sessionsBefore, runDir),
+    );
     const validity = validateActorTrial({
-      actor: processResult,
+      actor: {
+        ...processResult,
+        traceRequired: actor.tool === 'codex',
+        trace,
+      },
       artifacts: artifactPaths,
       before,
       startedAtMs,
     });
-    const actor = {
+    const actorStatus = {
       status: processResult.status,
       signal: processResult.signal || null,
       duration_ms: processResult.durationMs,
@@ -153,7 +203,7 @@ for (const scheduled of schedule) {
       invalid_reasons: validity.reasons,
       session_trace: trace,
     };
-    writeJson(join(runDir, 'actor.status.json'), actor);
+    writeJson(join(runDir, 'actor.status.json'), actorStatus);
 
     let score = null;
     if (validity.valid) {
@@ -162,13 +212,19 @@ for (const scheduled of schedule) {
         scenario,
         answers,
         recipe,
-        commandLog: `${processResult.stdout || ''}\n${processResult.stderr || ''}`,
+        commandLog: actor.tool === 'codex'
+          ? trace.command_log || ''
+          : `${processResult.stdout || ''}\n${processResult.stderr || ''}`,
         arm,
       });
       score.task_success = taskSuccess(score);
       writeJson(join(runDir, 'score.json'), score);
     }
-    result.arms[arm] = { runDir, actor, score, reproducibility: armRepro };
+    rmSync(join(runDir, '.git'), { recursive: true, force: true });
+    mkdirSync(trialRoot, { recursive: true });
+    cpSync(runDir, persistedRunDir, { recursive: true });
+    rmSync(runDir, { recursive: true, force: true });
+    result.arms[arm] = { runDir: persistedRunDir, actor: actorStatus, score, reproducibility: armRepro };
     console.log(validity.valid ? 'valid' : `INVALID (${validity.reasons.join('; ')})`);
   }
 
@@ -376,54 +432,6 @@ function exportNewestSession(binary, before, runDir) {
 
 function sessionId(session) {
   return session?.id || session?.sessionID || session?.sessionId || session?.uuid || null;
-}
-
-function runOpenCode(prompt, cwd, model, arm, timeout, binary) {
-  return new Promise((done) => {
-    const started = process.hrtime.bigint();
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    let error = null;
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
-    let stdoutTruncated = false;
-    let stderrTruncated = false;
-    const maxBytes = 20 * 1024 * 1024;
-    const command = ['run', '--auto', '--dir', cwd, '--model', model, prompt];
-    const env = { ...process.env, PATH: arm === 'WITH'
-      ? `${join(cwd, '.bin')}:${join(REPO_ROOT, 'bin')}:${process.env.PATH || ''}`
-      : process.env.PATH || '' };
-    const child = spawn(binary, command, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env });
-    child.stdout.on('data', (chunk) => {
-      stdoutBytes += chunk.length;
-      const remaining = maxBytes - Buffer.byteLength(stdout);
-      if (remaining > 0) stdout += chunk.subarray(0, remaining).toString('utf8');
-      if (chunk.length > remaining) stdoutTruncated = true;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderrBytes += chunk.length;
-      const remaining = maxBytes - Buffer.byteLength(stderr);
-      if (remaining > 0) stderr += chunk.subarray(0, remaining).toString('utf8');
-      if (chunk.length > remaining) stderrTruncated = true;
-    });
-    child.on('error', (caught) => { error = caught.message; });
-    let killTimer = null;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
-    }, timeout);
-    child.on('close', (status, signal) => {
-      clearTimeout(timer);
-      if (killTimer) clearTimeout(killTimer);
-      done({
-        status, signal, stdout, stderr, error, timedOut,
-        durationMs: Math.round((Number(process.hrtime.bigint() - started) / 1e6) * 100) / 100,
-        stdoutBytes, stderrBytes, stdoutTruncated, stderrTruncated,
-      });
-    });
-  });
 }
 
 function firstExisting(dir, names) {

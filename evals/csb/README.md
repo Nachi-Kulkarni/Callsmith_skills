@@ -39,6 +39,10 @@ A publishable run also requires:
 - paired BASE/WITH trials for every scheduled scenario;
 - retained stdout, stderr, and a sanitized full session export when the actor tool exposes one.
 
+The runner supports `opencode` and subscription-authenticated `codex` actors. Codex runs are
+ephemeral, ignore personal configuration/rules, execute inside a nested isolated Git root, and
+retain the CLI JSONL event stream as the arm trace. `codex login status` must report a valid login.
+
 ## Commands
 
 ```bash
@@ -57,6 +61,14 @@ npm run bench:csb -- \
   --actor-model provider/model-version \
   --runs 3 \
   --seed experiment-1
+
+# Codex CLI via ChatGPT subscription, with model and reasoning both pinned.
+npm run bench:csb -- \
+  --actor-tool codex \
+  --actor-model gpt-5.6-luna \
+  --actor-reasoning xhigh \
+  --runs 3 \
+  --seed luna-xhigh-20260711
 ```
 
 `--runs N` repeats each scenario N times. `--seed` deterministically shuffles scenario order and counterbalances which arm runs first. Every trial is stored under `trial-NNN/<scenario>/<arm>` so attempts cannot overwrite one another.
@@ -86,6 +98,6 @@ evals/csb/
   DESIGN.md
   schema/scenario.v1.md
   oracles/{floors,physics,real,contract-gate,levels}.mjs
-  harness/{prepare,prompts,run-arms,score,validity}.mjs
+  harness/{actors,prepare,prompts,run-arms,score,validity}.mjs
   scenarios/<id>/{manifest,tags,oracle,brief,poisoned.answers.json,fixtures/}
 ```
