@@ -14,6 +14,7 @@ import {
   actorSpec,
   buildActorInvocation,
   codexThreadId,
+  createIsolatedActorWorkspace,
   parseCodexTrace,
 } from '../evals/csb/harness/actors.mjs';
 import {
@@ -89,6 +90,17 @@ describe('CSB prepareArmWorkspace', () => {
 });
 
 describe('CSB run-arms CLI', () => {
+  it('allocates a fresh external root with a non-existent workspace child', () => {
+    const isolated = createIsolatedActorWorkspace('test');
+    try {
+      assert.ok(fs.existsSync(isolated.root));
+      assert.equal(fs.existsSync(isolated.cwd), false);
+      assert.equal(isolated.cwd.startsWith(ROOT), false);
+    } finally {
+      fs.rmSync(isolated.root, { recursive: true, force: true });
+    }
+  });
+
   it('builds an isolated subscription-backed Codex invocation with pinned reasoning', () => {
     const spec = actorSpec({
       tool: 'codex', binary: 'codex', model: 'gpt-5.6-luna', reasoning: 'xhigh',

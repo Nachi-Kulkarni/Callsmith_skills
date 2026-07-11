@@ -5,20 +5,19 @@ import {
   existsSync,
   cpSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds, scoreArm, pairDelta } from './score.mjs';
 import { prepareArmWorkspace, readArmArtifacts, REPO_ROOT } from './prepare.mjs';
 import { buildActorPrompt } from './prompts.mjs';
 import {
   actorSpec,
+  createIsolatedActorWorkspace,
   prepareActorWorkspace,
   retainActorTrace,
   runActor,
@@ -130,9 +129,12 @@ for (const scheduled of schedule) {
 
   for (const arm of scheduled.arms) {
     const persistedRunDir = join(trialRoot, arm);
+    const isolated = dryRun
+      ? null
+      : createIsolatedActorWorkspace(`${scheduled.trial}-${scenario.id}-${arm}`);
     const runDir = dryRun
       ? persistedRunDir
-      : mkdtempSync(join(tmpdir(), `callsmith-csb-${scheduled.trial}-${scenario.id}-${arm}-`));
+      : isolated.cwd;
     prepareArmWorkspace(arm, scenario, runDir);
     const prompt = buildActorPrompt(arm, scenario, runDir);
     const promptPath = join(runDir, 'actor-prompt.md');
@@ -223,7 +225,7 @@ for (const scheduled of schedule) {
     rmSync(join(runDir, '.git'), { recursive: true, force: true });
     mkdirSync(trialRoot, { recursive: true });
     cpSync(runDir, persistedRunDir, { recursive: true });
-    rmSync(runDir, { recursive: true, force: true });
+    rmSync(isolated.root, { recursive: true, force: true });
     result.arms[arm] = { runDir: persistedRunDir, actor: actorStatus, score, reproducibility: armRepro };
     console.log(validity.valid ? 'valid' : `INVALID (${validity.reasons.join('; ')})`);
   }

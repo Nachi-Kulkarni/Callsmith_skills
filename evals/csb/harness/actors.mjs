@@ -1,8 +1,14 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const MAX_CAPTURE_BYTES = 20 * 1024 * 1024;
+
+export function createIsolatedActorWorkspace(label = 'arm') {
+  const root = mkdtempSync(join(tmpdir(), `callsmith-csb-${label}-`));
+  return { root, cwd: join(root, 'workspace') };
+}
 
 export function actorSpec({ tool = 'opencode', binary, model, reasoning } = {}) {
   if (!['codex', 'opencode'].includes(tool)) {
