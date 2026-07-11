@@ -106,14 +106,8 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
     writeFileSync(
       shim,
       [
-        '#!/usr/bin/env node',
-        "import { spawnSync } from 'node:child_process';",
-        "import { fileURLToPath } from 'node:url';",
-        "const target = fileURLToPath(new URL('../bin/callsmith.mjs', import.meta.url));",
-        "const result = spawnSync(process.execPath, [target, ...process.argv.slice(2)], { stdio: 'inherit' });",
-        'if (result.error) { console.error(result.error.message); process.exit(1); }',
-        'if (result.signal) process.kill(process.pid, result.signal);',
-        'process.exit(result.status ?? 1);',
+        '#!/bin/sh',
+        'exec node "$(dirname "$0")/../bin/callsmith.mjs" "$@"',
         '',
       ].join('\n'),
     );

@@ -58,12 +58,27 @@ describe('CSB prepareArmWorkspace', () => {
     assert.ok(fs.existsSync(path.join(withDir, '.bin', 'callsmith')));
     const shim = fs.readFileSync(path.join(withDir, '.bin', 'callsmith'), 'utf8');
     assert.equal(shim.includes(ROOT), false);
+    assert.match(shim, /^#!\/bin\/sh/);
+    assert.doesNotMatch(shim, /NODE_OPTIONS|experimental-default-type/);
     const doctor = spawnSync(path.join(withDir, '.bin', 'callsmith'), ['doctor'], {
       cwd: withDir, encoding: 'utf8',
     });
     assert.equal(doctor.status, 0, doctor.stderr + doctor.stdout);
     assert.equal(fs.existsSync(path.join(withDir, 'oracle.json')), false);
     assert.equal(fs.existsSync(path.join(withDir, 'tags.json')), false);
+  });
+
+  it('WITH CLI runs in an external workspace with no parent package metadata', () => {
+    const isolated = createIsolatedActorWorkspace('self-contained-cli');
+    try {
+      prepareArmWorkspace('WITH', scenario, isolated.cwd);
+      const doctor = spawnSync(path.join(isolated.cwd, '.bin', 'callsmith'), ['doctor'], {
+        cwd: isolated.cwd, encoding: 'utf8',
+      });
+      assert.equal(doctor.status, 0, doctor.stderr + doctor.stdout);
+    } finally {
+      fs.rmSync(isolated.root, { recursive: true, force: true });
+    }
   });
 
   it('refuses a reused or dirty actor workspace', () => {
@@ -188,6 +203,19 @@ describe('CSB run-arms CLI', () => {
     assert.equal(summary.metrics, null);
     assert.ok(summary.fixture_demo_deltas?.length >= 1);
     assert.ok(summary.fixture_demo_deltas[0].delta >= 2);
+  });
+
+  it('excludes solved scenarios from low-cost screening schedules', () => {
+    const out = path.join(ROOT, 'evals/csb/runs/_test-exclude');
+    fs.rmSync(out, { recursive: true, force: true });
+    const r = spawnSync(process.execPath, [
+      RUNNER, '--dry-run', '--arms', 'WITH', '--exclude', 'clinic-floor-poison', '--out', out,
+    ], { encoding: 'utf8', cwd: ROOT });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    const config = JSON.parse(fs.readFileSync(path.join(out, 'config.json'), 'utf8'));
+    assert.equal(config.scenarios.includes('clinic-floor-poison'), false);
+    assert.equal(config.scenarios.length, 9);
+    assert.deepEqual(config.arms, ['WITH']);
   });
 
   it('requires an explicit model pin before a live run', () => {

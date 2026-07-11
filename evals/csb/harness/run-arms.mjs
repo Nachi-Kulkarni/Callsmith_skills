@@ -66,6 +66,10 @@ if (args.scenario || args.only) {
   const id = args.scenario || args.only;
   scenarioIds = scenarioIds.filter((candidate) => candidate === id);
 }
+if (args.exclude) {
+  const excluded = new Set(String(args.exclude).split(',').map((id) => id.trim()).filter(Boolean));
+  scenarioIds = scenarioIds.filter((id) => !excluded.has(id));
+}
 if (args.limit) scenarioIds = scenarioIds.slice(0, parsePositiveInt(args.limit, '--limit'));
 const armsWanted = parseArms(args.arms || 'both');
 

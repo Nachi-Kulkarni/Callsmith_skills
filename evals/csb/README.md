@@ -73,6 +73,9 @@ npm run bench:csb -- \
 
 `--runs N` repeats each scenario N times. `--seed` deterministically shuffles scenario order and counterbalances which arm runs first. Every trial is stored under `trial-NNN/<scenario>/<arm>` so attempts cannot overwrite one another.
 
+Use `--arms WITH --exclude scenario-a,scenario-b` for a low-cost screening pass that skips
+already-solved scenarios. Screening runs are diagnostic and never publishable without paired BASE arms.
+
 ## Arm honesty
 
 | Arm | Gets | Does not get |
