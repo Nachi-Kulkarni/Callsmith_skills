@@ -2,6 +2,7 @@
  * Handoff contract validation (G5 + optional floor receipts).
  * Constitution: product_decisions.md — agent writes the contract; CLI only validates shape.
  */
+import { expandAnswers } from './resolver.mjs';
 
 /** Required sections (G5). Each entry: id + matchers (heading/body keywords). */
 export const REQUIRED_SECTIONS = [
@@ -356,4 +357,44 @@ export function validateContract(text, opts = {}) {
     errors,
     warnings,
   };
+}
+
+/** Compare the structured receipt with the canonical answers artifact. */
+export function validateContractAnswers(receipt, answers, menu) {
+  const checks = [];
+  const errors = [];
+  const compare = (id, actual, expected) => {
+    const ok = actual === expected;
+    const detail = ok
+      ? `${id} matches (${String(actual)})`
+      : `${id} mismatch: receipt=${String(actual ?? '(missing)')} answers=${String(expected ?? '(missing)')}`;
+    checks.push({ id, ok, actual: actual ?? null, expected: expected ?? null, detail });
+    if (!ok) errors.push(detail);
+  };
+
+  if (!receipt || typeof receipt !== 'object') {
+    return { status: 'FAIL', checks, errors: ['cannot compare answers without a valid contract receipt'] };
+  }
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return { status: 'FAIL', checks, errors: ['answers must be a JSON object'] };
+  }
+
+  compare('surface', receipt.surface, answers.surface);
+  compare('recording_consent', receipt.policy?.recording_consent, answers.recording_consent);
+  compare('transcript_retention', receipt.policy?.transcript_retention, answers.transcript_retention);
+  compare('human_handoff', receipt.policy?.human_handoff, answers.human_handoff);
+
+  try {
+    const expanded = expandAnswers(answers, menu, { strict: true });
+    const expectedProviders = Object.fromEntries(Object.entries(expanded.providers || {})
+      .filter(([, selection]) => selection?.id)
+      .map(([role, selection]) => [role, selection.id]));
+    const actualProviders = receipt.providers || {};
+    const roles = [...new Set([...Object.keys(expectedProviders), ...Object.keys(actualProviders)])].sort();
+    for (const role of roles) compare(`provider.${role}`, actualProviders[role], expectedProviders[role]);
+  } catch (error) {
+    errors.push(`answers cannot be normalized: ${error.message}`);
+  }
+
+  return { status: errors.length ? 'FAIL' : 'PASS', checks, errors };
 }

@@ -96,10 +96,13 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
 
   if (arm === 'WITH') {
     cpSync(join(REPO_ROOT, 'SKILL.md'), join(runDir, 'SKILL.md'));
-    // Self-contained verification runtime: no absolute path back to the sealed repository.
-    cpSync(join(REPO_ROOT, 'bin'), join(runDir, 'bin'), { recursive: true });
-    cpSync(join(REPO_ROOT, 'src'), join(runDir, 'src'), { recursive: true });
-    cpSync(join(REPO_ROOT, 'data'), join(runDir, 'data'), { recursive: true });
+    // Hidden self-contained runtime: executable, but absent from normal agent discovery.
+    const runtimeDir = join(runDir, '.callsmith-runtime');
+    mkdirSync(runtimeDir, { recursive: true });
+    for (const name of ['bin', 'src', 'data', 'providers', 'reference']) {
+      cpSync(join(REPO_ROOT, name), join(runtimeDir, name), { recursive: true });
+    }
+    cpSync(join(REPO_ROOT, 'SKILL.md'), join(runtimeDir, 'SKILL.md'));
     const binDir = join(runDir, '.bin');
     mkdirSync(binDir, { recursive: true });
     const shim = join(binDir, 'callsmith');
@@ -107,7 +110,7 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
       shim,
       [
         '#!/bin/sh',
-        'exec node "$(dirname "$0")/../bin/callsmith.mjs" "$@"',
+        'exec node "$(dirname "$0")/../.callsmith-runtime/bin/callsmith.mjs" "$@"',
         '',
       ].join('\n'),
     );

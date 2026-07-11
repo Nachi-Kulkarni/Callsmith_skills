@@ -52,7 +52,7 @@ These are agent modes, not generators.
 4. **Normalize vocabulary** — every policy/stack field uses the canonical option IDs in `reference/policy.md`. Free-form synonyms fail tools and gates.
 5. **Physics check** — if the user has answers JSON, run `callsmith check --answers <file>`. Unknown providers: **do not synthesize** — research, write a pack, or refuse to ship.
 6. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
-7. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md` when CLI available.
+7. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
 8. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
 9. **Quality modes** — audit / critique / harden / latency as needed. Use ttft only to isolate the LLM leg.
 
@@ -102,7 +102,7 @@ callsmith packs
 callsmith pack show twilio
 callsmith pack validate
 callsmith check --answers voice.answers.json   # optional answers file
-callsmith contract validate --file callsmith.recipe.md --domain medical
+callsmith contract validate --file callsmith.recipe.md --answers voice.answers.json --domain medical
 callsmith doctor
 ```
 
@@ -113,7 +113,7 @@ callsmith doctor
 | `packs` / `pack show` / `pack validate` | Stdlib inspection |
 | `verify-packs` | Evidence dates, expiry, provenance shape, and CI safety |
 | `check --answers f` | Transforms, impossibilities, latency/cost from packs |
-| `contract validate --file f [--domain …]` | Semantic policy/provider/turn-gap receipt + explanatory sections |
+| `contract validate --file f [--answers a] [--domain …]` | Semantic policy/provider/turn-gap receipt, answers consistency + explanatory sections |
 | `doctor` | Install health |
 
 **Removed (do not call):** `init`, `forge`, `scaffold`, `simulate`, `intake`, `docs`, `spec`, `release-check`. Generation is your job.

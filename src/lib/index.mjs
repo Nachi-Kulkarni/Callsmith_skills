@@ -14,4 +14,9 @@ export {
 
 export { validatePack, validatePacks } from './validate.mjs';
 export { verifyPacks } from './verify-packs.mjs';
-export { validateContract, REQUIRED_SECTIONS, DOMAIN_FLOOR_HINTS } from './contract.mjs';
+export {
+  validateContract,
+  validateContractAnswers,
+  REQUIRED_SECTIONS,
+  DOMAIN_FLOOR_HINTS,
+} from './contract.mjs';

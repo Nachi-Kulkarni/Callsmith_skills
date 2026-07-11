@@ -7,13 +7,16 @@ import { fileURLToPath } from 'node:url';
 import {
   parseContractReceipt,
   validateContract,
+  validateContractAnswers,
   validateContractReceipt,
   REQUIRED_SECTIONS,
 } from '../src/lib/contract.mjs';
+import { loadMenu } from '../src/lib/resolver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = path.join(ROOT, 'bin', 'callsmith.mjs');
 const EXAMPLE = path.join(ROOT, 'examples', 'clinic-triage', 'callsmith.recipe.md');
+const EXAMPLE_ANSWERS = path.join(ROOT, 'examples', 'clinic-triage', 'voice.answers.json');
 
 function run(...args) {
   return spawnSync(process.execPath, [BIN, ...args], {
@@ -44,9 +47,34 @@ describe('contract validate (G5)', () => {
   });
 
   it('CLI contract validate --file example --domain medical', () => {
-    const r = run('contract', 'validate', '--file', EXAMPLE, '--domain', 'medical');
+    const r = run('contract', 'validate', '--file', EXAMPLE, '--answers', EXAMPLE_ANSWERS, '--domain', 'medical');
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.match(r.stdout, /PASS/);
+    assert.match(r.stdout, /answers OK\s+provider\.telephony/);
+  });
+
+  it('fails when the receipt and answers disagree', () => {
+    const text = fs.readFileSync(EXAMPLE, 'utf8');
+    const report = validateContract(text, { domain: 'medical' });
+    const answers = JSON.parse(fs.readFileSync(EXAMPLE_ANSWERS, 'utf8'));
+    answers.telephony = 'exotel';
+    const consistency = validateContractAnswers(report.receipt, answers, loadMenu());
+    assert.equal(consistency.status, 'FAIL');
+    assert.match(consistency.errors.join('; '), /provider\.telephony mismatch/);
+  });
+
+  it('CLI exits nonzero when --answers disagrees with the receipt', () => {
+    const mismatch = path.join(ROOT, 'test', '_mismatched-answers.json');
+    const answers = JSON.parse(fs.readFileSync(EXAMPLE_ANSWERS, 'utf8'));
+    answers.telephony = 'exotel';
+    fs.writeFileSync(mismatch, `${JSON.stringify(answers, null, 2)}\n`);
+    try {
+      const r = run('contract', 'validate', '--file', EXAMPLE, '--answers', mismatch, '--domain', 'medical');
+      assert.equal(r.status, 1);
+      assert.match(r.stdout + r.stderr, /provider\.telephony|answers MISS/i);
+    } finally {
+      fs.unlinkSync(mismatch);
+    }
   });
 
   it('CLI fails on thin stub', () => {

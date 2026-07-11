@@ -101,7 +101,7 @@ That abbreviated view comes from the full `json callsmith-contract` block. Verif
 
 ```bash
 node bin/callsmith.mjs check --answers examples/clinic-triage/voice.answers.json
-node bin/callsmith.mjs contract validate --file examples/clinic-triage/callsmith.recipe.md --domain medical
+node bin/callsmith.mjs contract validate --file examples/clinic-triage/callsmith.recipe.md --answers examples/clinic-triage/voice.answers.json --domain medical
 ```
 
 The irreversible value is the trail: commit the answers and contract with the implementation, review receipt diffs, and run the same checks in CI. The next agent inherits decisions and evidence instead of reconstructing them from chat. See [`reference/workflow.md`](./reference/workflow.md).
@@ -149,7 +149,7 @@ Add a provider by dropping a validated JSON pack into `providers/`. **Unknown pr
 | `callsmith pack validate` | Schema-validate packs |
 | `callsmith verify-packs` | Evidence provenance/date/expiry guard (not live source-content verification) |
 | `callsmith check --answers f` | Physics report (transforms, blockers, latency, cost) |
-| `callsmith contract validate --file f` | Handoff contract G5 + structured policy/provider/latency receipt |
+| `callsmith contract validate --file f --answers a` | Handoff contract G5 + structured policy/provider/latency receipt + answers consistency |
 | `callsmith doctor` | Install + pack health |
 
 Generation commands (`init`, `forge`, `scaffold`, `simulate`, `intake`, …) are **removed** (exit 2).

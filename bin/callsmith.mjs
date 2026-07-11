@@ -16,7 +16,7 @@ import {
 } from '../src/lib/resolver.mjs';
 import { validatePacks } from '../src/lib/validate.mjs';
 import { verifyPacks } from '../src/lib/verify-packs.mjs';
-import { validateContract } from '../src/lib/contract.mjs';
+import { validateContract, validateContractAnswers } from '../src/lib/contract.mjs';
 
 const VERSION = '1.6.0-agent-compiler';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,6 +54,7 @@ Usage:
   callsmith verify-packs [--json]          Evidence provenance/date/expiry checks
   callsmith check --answers <file>         Physics report from pack data
   callsmith contract validate --file <f>   Semantic receipt + handoff contract
+       [--answers voice.answers.json]
        [--domain medical|banking|collections|legal|insurance]
   callsmith doctor                         Install + pack health
   callsmith --version | --help
@@ -211,7 +212,7 @@ function cmdCheck() {
 
 function cmdContractValidate() {
   const file = args.file || args.f || positional[1];
-  if (!file || file === true) die('usage: callsmith contract validate --file <handoff.md> [--domain medical|...]');
+  if (!file || file === true) die('usage: callsmith contract validate --file <handoff.md> [--answers voice.answers.json] [--domain medical|...]');
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');
@@ -220,6 +221,19 @@ function cmdContractValidate() {
   }
   const domain = args.domain === true ? undefined : args.domain;
   const report = validateContract(text, { domain, providers: loadProviders() });
+  if (args.answers && args.answers !== true) {
+    let answers;
+    try {
+      answers = JSON.parse(fs.readFileSync(args.answers, 'utf8'));
+    } catch (e) {
+      die(`could not read answers file "${args.answers}": ${e.message}`);
+    }
+    report.answers_consistency = validateContractAnswers(report.receipt, answers, loadMenu());
+    report.errors.push(...report.answers_consistency.errors);
+    report.status = report.errors.length ? 'FAIL' : 'PASS';
+  } else if (args.answers === true) {
+    die('--answers requires a JSON file path');
+  }
   if (args.json === true) {
     console.log(JSON.stringify(report, null, 2));
   } else {
@@ -229,6 +243,9 @@ function cmdContractValidate() {
     }
     for (const f of report.floors) {
       console.log(`  floor   ${f.present ? 'OK' : 'MISS'}  ${f.domain}/${f.id}`);
+    }
+    for (const check of report.answers_consistency?.checks || []) {
+      console.log(`  answers ${check.ok ? 'OK' : 'MISS'}  ${check.id}`);
     }
     for (const w of report.warnings) console.warn(`  WARN  ${w}`);
     for (const e of report.errors) console.error(`  FAIL  ${e}`);
@@ -322,7 +339,7 @@ if (cmd === 'packs') {
 } else if (cmd === 'contract') {
   const sub = positional[0];
   if (sub === 'validate') cmdContractValidate();
-  else die('usage: callsmith contract validate --file <handoff.md> [--domain medical|...]');
+  else die('usage: callsmith contract validate --file <handoff.md> [--answers voice.answers.json] [--domain medical|...]');
 } else if (cmd === 'doctor') {
   cmdDoctor();
 } else if (

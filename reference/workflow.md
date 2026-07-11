@@ -16,7 +16,7 @@ Do not put secrets, transcripts, raw audio, or patient/customer content in these
 
 ```bash
 callsmith check --answers path/to/voice.answers.json
-callsmith contract validate --file path/to/callsmith.recipe.md
+callsmith contract validate --file path/to/callsmith.recipe.md --answers path/to/voice.answers.json
 callsmith verify-packs
 ```
 
@@ -30,7 +30,7 @@ Use the same verifier; do not create a second policy engine in a workflow wrappe
 - run: npm ci
 - run: node bin/callsmith.mjs verify-packs
 - run: node bin/callsmith.mjs check --answers services/voice/voice.answers.json
-- run: node bin/callsmith.mjs contract validate --file services/voice/callsmith.recipe.md
+- run: node bin/callsmith.mjs contract validate --file services/voice/callsmith.recipe.md --answers services/voice/voice.answers.json
 ```
 
 ## Thin runtime adapters

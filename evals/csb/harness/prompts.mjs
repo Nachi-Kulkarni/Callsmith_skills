@@ -33,7 +33,7 @@ ${scenario.brief}
 3. For every provider you keep: \`callsmith pack show <id>\` or read \`providers/**\` — cite real pack ids.
 4. Run \`callsmith check --answers voice.answers.json\` and fix impossibilities / wrong legs.
 5. Write a **non-empty** \`callsmith.recipe.md\`: begin with the structured receipt from \`reference/contract.md\`, then all G5 sections (intent, stack, audio path, interruption, floors, latency/cost, build notes).
-6. Run \`callsmith contract validate --file callsmith.recipe.md\` (add \`--domain\` when regulated: medical/banking/collections/legal/insurance).
+6. Run \`callsmith contract validate --file callsmith.recipe.md --answers voice.answers.json\` (add \`--domain\` when regulated: medical/banking/collections/legal/insurance). This owns receipt ↔ answers consistency; do not write an ad-hoc comparison script.
 7. Ensure the receipt and contract floors exactly match answers (no “consent matters” while \`recording_consent: none\` on regulated flows).
 
 ## Hard constraints (bench-proven failure modes)
