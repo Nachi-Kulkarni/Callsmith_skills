@@ -162,6 +162,22 @@ describe('CSB run-arms CLI', () => {
     assert.equal(parseCodexTrace(failed).valid, false);
   });
 
+  it('accepts a transient error when a later turn.completed proves recovery', () => {
+    const recovered = [
+      { type: 'thread.started', thread_id: 'thread-123' },
+      { type: 'error', message: 'Reconnecting... request timed out' },
+      { type: 'item.completed', item: { type: 'agent_message', text: 'done' } },
+      { type: 'turn.completed' },
+    ].map(JSON.stringify).join('\n');
+    const trace = parseCodexTrace(recovered);
+    assert.equal(trace.valid, true, trace.reasons.join('; '));
+    assert.equal(trace.terminalEvent, 'turn.completed');
+    assert.equal(trace.recoveredErrorCount, 1);
+
+    const terminalError = `${recovered}\n${JSON.stringify({ type: 'error', message: 'terminal' })}`;
+    assert.equal(parseCodexTrace(terminalError).valid, false);
+  });
+
   it('rejects reasoning controls on non-Codex actors', () => {
     assert.throws(
       () => actorSpec({ tool: 'opencode', model: 'model', reasoning: 'xhigh' }),

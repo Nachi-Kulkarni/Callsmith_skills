@@ -76,6 +76,7 @@ export function retainActorTrace(spec, processResult, runDir, opencodeTrace) {
     sanitized: false,
     event_count: parsed.eventCount,
     terminal_event: parsed.terminalEvent,
+    recovered_error_count: parsed.recoveredErrorCount,
     command_log: parsed.commandLog,
   };
 }
@@ -96,10 +97,17 @@ export function parseCodexTrace(jsonl, { requireTerminal = true } = {}) {
     }
   }
   const started = events.find((event) => event.type === 'thread.started' && event.thread_id);
-  const failed = events.find((event) => event.type === 'turn.failed' || event.type === 'error');
-  const completed = events.findLast((event) => event.type === 'turn.completed');
+  const completedIndex = events.findLastIndex((event) => event.type === 'turn.completed');
+  const completed = completedIndex >= 0 ? events[completedIndex] : null;
+  const turnFailed = events.find((event) => event.type === 'turn.failed');
+  const errorIndexes = events
+    .map((event, index) => (event.type === 'error' ? index : -1))
+    .filter((index) => index >= 0);
+  const terminalError = errorIndexes.find((index) => completedIndex < 0 || index > completedIndex);
+  const recoveredErrorCount = errorIndexes.filter((index) => completedIndex >= 0 && index < completedIndex).length;
   if (!started) reasons.push('Codex trace is missing thread.started');
-  if (failed) reasons.push(`Codex trace contains ${failed.type}`);
+  if (turnFailed) reasons.push('Codex trace contains turn.failed');
+  if (terminalError !== undefined) reasons.push('Codex trace contains terminal error');
   if (requireTerminal && !completed) reasons.push('Codex trace is missing turn.completed');
   const commands = events
     .filter((event) => event.type === 'item.completed' && event.item?.type === 'command_execution')
@@ -110,7 +118,8 @@ export function parseCodexTrace(jsonl, { requireTerminal = true } = {}) {
     reasons: [...new Set(reasons)],
     threadId: started?.thread_id || null,
     eventCount: events.length,
-    terminalEvent: completed ? 'turn.completed' : failed?.type || null,
+    terminalEvent: terminalError !== undefined ? 'error' : turnFailed ? 'turn.failed' : completed ? 'turn.completed' : null,
+    recoveredErrorCount,
     commandLog: commands.join('\n'),
   };
 }
