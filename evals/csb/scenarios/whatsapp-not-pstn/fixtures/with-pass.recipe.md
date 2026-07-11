@@ -3,10 +3,10 @@
 ```json callsmith-contract
 {
   "schema_version": 1,
-  "domain": "general",
+  "domain": "medical",
   "surface": "whatsapp_voice",
   "providers": { "orchestration": "custom-fastapi", "stt": "deepgram", "llm": "openai", "tts": "elevenlabs", "vad": "silero" },
-  "policy": { "basis": "organization_policy", "retention_basis": "Async support operations policy.", "recording_consent": "announce", "transcript_retention": "thirty_days", "human_handoff": "ticket" },
+  "policy": { "jurisdiction": "clinic-defined", "basis": "callsmith_default", "retention_basis": "Callsmith medical default; clinic review required before launch.", "recording_consent": "announce", "transcript_retention": "thirty_days", "human_handoff": "transfer" },
   "latency_slo": { "metric": "turn_gap_ms", "percentile": 95, "target_ms": 2500 }
 }
 ```

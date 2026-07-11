@@ -11,7 +11,7 @@
   "latency": "balanced",
   "business_logic": "support",
   "tools": "openapi",
-  "human_handoff": "ticket",
+  "human_handoff": "transfer",
   "recording_consent": "announce",
   "transcript_retention": "thirty_days",
   "deployment": "local"

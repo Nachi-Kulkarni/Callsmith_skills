@@ -38,6 +38,15 @@ describe('CSB schema v1 scenarios', () => {
       assert.equal(s.tags.schema_version, 1);
       assert.equal(s.oracle.schema_version, 1);
       assert.ok(s.brief.length > 20);
+      assert.equal(s.tags.domain, s.manifest.domain, `${id}: manifest/tags domain drift`);
+      const regulated = new Set(['medical', 'banking', 'collections', 'legal', 'insurance']);
+      assert.equal(s.tags.regulated, regulated.has(s.manifest.domain), `${id}: regulated tag drift`);
+      if (regulated.has(s.manifest.domain)) {
+        assert.equal(s.oracle.contract_domain, s.manifest.domain, `${id}: contract domain drift`);
+      }
+      if (/\bclinic\b|\bpatient\b|medical\s+triage/i.test(s.brief)) {
+        assert.equal(s.manifest.domain, 'medical', `${id}: clinical brief mislabeled as ${s.manifest.domain}`);
+      }
     }
   });
 
