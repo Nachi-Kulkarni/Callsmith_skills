@@ -21,6 +21,11 @@ callsmith encodes provider reality as **packs**, product taste as **floors**, an
 
 > My agent no longer hallucinates voice-stack physics, skips consent/handoff floors, or ships a pretty demo that fails on PSTN reality.
 
+**Evidence status:** the scorer and isolated runner are complete, but no product-lift number is
+published until repeated core10 runs pass across two model families. Earlier traces remain visible as
+[superseded diagnostics](./evidence/diagnostics/README.md), including the benchmark contamination they
+exposed. See [Callsmith evidence](./evidence/README.md) and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
+
 ### Product wedge
 
 > **pack physics inspect + floor receipts + contract validate + eval gate**

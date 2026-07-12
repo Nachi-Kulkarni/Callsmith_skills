@@ -56,3 +56,11 @@ Use option 3. First eliminate actor contamination and validate the harness with 
 **Actions:** Reproduced that `--ignore-user-config` still exposed globally discovered skills. Added a disposable auth-only `HOME`/`CODEX_HOME` per live Codex arm, kept it outside the persisted workspace, disabled local/remote plugins, hooks, and memories, recorded the isolation policy in the run manifest, and added regression coverage. Extended summaries with gate rates, floor/physics lift, BASE failure rate, regulated `pass^k`, trace-sanitization status, and stricter repeated-core10 publication semantics. Focused CSB runner tests pass (24/24); full repository tests pass (91/91).
 
 **Learnings:** Codex configuration isolation and skill discovery isolation are different boundaries. A publishable BASE arm needs both workspace isolation and home-directory isolation.
+
+### 2026-07-12 - Added evidence publication boundary
+
+**By:** Codex
+
+**Actions:** Added a fail-closed evidence builder that allowlists receipts, sanitizes JSON/JSONL/text, removes command output, redacts host paths/trace IDs/common credentials, generates reproduction and redaction receipts, and content-addresses every published file. Added Honest Numbers, publication criteria, and checksummed excerpts from superseded traces that exposed global-skill contamination and product-loop friction. Marked pre-isolation runs diagnostic and OpenCode runs ineligible for public evidence until equivalent host isolation exists.
+
+**Learnings:** Raw traces are useful engineering evidence but unsafe marketing artifacts. Publication needs its own tested transformation and manifest, not a manual copy step.

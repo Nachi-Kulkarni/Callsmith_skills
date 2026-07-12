@@ -31,7 +31,15 @@ describe('release integrity', () => {
   });
 
   it('keeps public product documentation internally linked and aligned', () => {
-    const docs = ['README.md', 'product_decisions.md', 'product.md', 'subtraction.md'];
+    const docs = [
+      'README.md',
+      'product_decisions.md',
+      'product.md',
+      'subtraction.md',
+      'evidence/README.md',
+      'evidence/HONEST-NUMBERS.md',
+      'evidence/diagnostics/README.md',
+    ];
     for (const doc of docs) {
       const body = read(doc);
       for (const match of body.matchAll(/\]\((\.\/[^)#]+)(?:#[^)]+)?\)/g)) {
@@ -57,6 +65,8 @@ describe('release integrity', () => {
     assert.equal(pkg.scripts['release:check'], undefined);
     assert.ok(pkg.files.includes('reference'));
     assert.ok(pkg.files.includes('examples'));
+    assert.ok(pkg.files.includes('evidence'));
+    assert.ok(pkg.files.includes('evals/csb/scripts'));
   });
 
   it('CI does not invoke deleted generation release checks', () => {
@@ -89,6 +99,8 @@ describe('release integrity', () => {
         'reference/contract.md',
         'reference/latency.md',
         'evals/csb/latency/score.mjs',
+        'evals/csb/scripts/build-evidence.mjs',
+        'evidence/HONEST-NUMBERS.md',
         'examples/clinic-triage/callsmith.recipe.md',
       ]) {
         assert.ok(fs.existsSync(path.join(source, file)), `Git index export missing ${file}`);

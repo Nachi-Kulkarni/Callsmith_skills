@@ -39,7 +39,9 @@ A publishable run also requires:
 - paired BASE/WITH trials for every scheduled scenario;
 - retained stdout, stderr, and a sanitized full session export when the actor tool exposes one.
 
-The runner supports `opencode` and subscription-authenticated `codex` actors. Codex runs are
+The runner supports `opencode` and subscription-authenticated `codex` actors. Only Codex runs are
+currently eligible for the public evidence path; OpenCode remains diagnostic until its user-home,
+plugin, and PATH isolation receives the same fail-closed boundary. Codex runs are
 ephemeral, ignore personal configuration/rules, execute inside a nested isolated Git root, and
 retain the CLI JSONL event stream as the arm trace. Each arm also receives a disposable auth-only
 `HOME`/`CODEX_HOME`: the runner copies only `auth.json`, so personal skills, plugins, memories,
@@ -96,6 +98,15 @@ Both arms get the same unlabeled seed, brief, actor model, and budget.
 - `trial-NNN/.../score.json` — emitted only for valid actor output.
 - `summary.json` — primary success lift, interval, `pass^k`, diagnostics, and invalid arms.
 - `report.md` — compact human-readable result.
+
+Raw runs are ignored. After review, create an allowlisted, sanitized, checksummed public bundle:
+
+```bash
+npm run bench:csb:evidence -- --source evals/csb/runs/<run-id> --out evidence/csb/<run-id>
+```
+
+See [`../../evidence/README.md`](../../evidence/README.md) for the publication standard and
+[`../../evidence/HONEST-NUMBERS.md`](../../evidence/HONEST-NUMBERS.md) for claim limits.
 
 ## Layout
 

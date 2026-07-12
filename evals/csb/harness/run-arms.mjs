@@ -305,6 +305,7 @@ function buildSummary(results, configValue) {
   const repeatedCore10 = configValue.runs >= 3
     && configValue.scenarios.length === 10
     && ['BASE', 'WITH'].every((arm) => configValue.arms.includes(arm));
+  const actorIsolationEligible = configValue.actor.tool === 'codex';
   const regulatedScenarioIds = configValue.scenarios.filter((id) => {
     const domain = loadScenario(id).manifest.domain;
     return ['medical', 'banking', 'collections'].includes(domain);
@@ -316,9 +317,10 @@ function buildSummary(results, configValue) {
     schema_version: 2,
     run_id: configValue.run_id,
     run_valid: runValid,
-    publishable: runValid && repeatedCore10,
+    publishable: runValid && repeatedCore10 && actorIsolationEligible,
     publication_requirements: {
       repeated_core10: repeatedCore10,
+      actor_isolation_eligible: actorIsolationEligible,
       second_model_family_required_for_product_claim: true,
       product_claim_eligible_from_this_run_alone: false,
     },
