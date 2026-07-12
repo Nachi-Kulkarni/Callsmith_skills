@@ -1,0 +1,6 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "callsmith",
+  "version": "1.6.0",
+  "description": "Design production voice agents with verified provider physics, safety floors, contracts, and eval gates."
+}

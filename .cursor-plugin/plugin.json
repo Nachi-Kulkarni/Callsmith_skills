@@ -1,0 +1,19 @@
+{
+  "name": "callsmith",
+  "displayName": "Callsmith",
+  "version": "1.6.0",
+  "description": "Design production voice agents with verified provider physics, safety floors, contracts, and eval gates.",
+  "author": {
+    "name": "Nachi Kulkarni"
+  },
+  "homepage": "https://github.com/Nachi-Kulkarni/Callsmith_skills",
+  "repository": "https://github.com/Nachi-Kulkarni/Callsmith_skills",
+  "license": "MIT",
+  "keywords": [
+    "cursor",
+    "voice-agent",
+    "telephony",
+    "realtime-audio",
+    "agent-skill"
+  ]
+}

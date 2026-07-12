@@ -41,6 +41,28 @@ describe('release integrity', () => {
     assert.ok(fs.existsSync(path.join(ROOT, 'skills/callsmith/SKILL.md')));
   });
 
+  it('ships native manifests for the supported coding agents', () => {
+    const manifests = [
+      '.cursor-plugin/plugin.json',
+      '.kimi-plugin/plugin.json',
+      '.kimi-plugin/marketplace.json',
+      '.devin-plugin/plugin.json',
+      '.grok-plugin/plugin.json',
+      'plugin.json',
+      '.agy/plugin.json',
+    ];
+    for (const file of manifests) {
+      const manifest = JSON.parse(read(file));
+      assert.ok(manifest.name === 'callsmith' || manifest.plugins?.[0]?.id === 'callsmith', `${file} has wrong plugin id`);
+    }
+
+    const pkg = JSON.parse(read('package.json'));
+    assert.equal(pkg.main, '.opencode/plugins/callsmith.js');
+    assert.deepEqual(pkg.pi.skills, ['./skills']);
+    assert.ok(fs.existsSync(path.join(ROOT, '.opencode/plugins/callsmith.js')));
+    assert.ok(fs.existsSync(path.join(ROOT, '.pi/extensions/callsmith.ts')));
+  });
+
   it('keeps committed contracts visible to normal git staging', () => {
     const ignore = read('.gitignore');
     assert.doesNotMatch(ignore, /^callsmith\.recipe\.md$/m);

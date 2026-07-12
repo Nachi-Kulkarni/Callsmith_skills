@@ -6,7 +6,19 @@
   "bin": {
     "callsmith": "bin/callsmith.mjs"
   },
-  "main": "src/lib/index.mjs",
+  "main": ".opencode/plugins/callsmith.js",
+  "exports": {
+    ".": "./src/lib/index.mjs",
+    "./opencode": "./.opencode/plugins/callsmith.js"
+  },
+  "pi": {
+    "extensions": [
+      "./.pi/extensions/callsmith.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
   "engines": {
     "node": ">=18"
   },
@@ -49,6 +61,14 @@
     ".mcp.json",
     ".claude-plugin",
     ".codex-plugin",
+    ".cursor-plugin",
+    ".kimi-plugin",
+    ".devin-plugin",
+    ".grok-plugin",
+    ".agy",
+    ".opencode",
+    ".pi",
+    "plugin.json",
     "skills",
     "bin",
     "src",

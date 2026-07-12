@@ -1,0 +1,32 @@
+{
+  "name": "callsmith",
+  "version": "1.6.0",
+  "description": "Design production voice agents with verified provider physics, safety floors, contracts, and eval gates.",
+  "keywords": [
+    "voice-agent",
+    "telephony",
+    "realtime-audio",
+    "provider-packs",
+    "agent-skill"
+  ],
+  "author": "Nachi Kulkarni",
+  "homepage": "https://github.com/Nachi-Kulkarni/Callsmith_skills",
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    }
+  },
+  "interface": {
+    "displayName": "Callsmith",
+    "shortDescription": "Compile voice-agent designs against real provider physics",
+    "longDescription": "Callsmith applies provider physics, conservative policy floors, structured contracts, and deterministic verification to voice-agent engineering.",
+    "developerName": "Nachi Kulkarni",
+    "websiteURL": "https://github.com/Nachi-Kulkarni/Callsmith_skills"
+  }
+}

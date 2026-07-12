@@ -1,0 +1,10 @@
+{
+  "version": "2",
+  "plugins": [
+    {
+      "id": "callsmith",
+      "displayName": "Callsmith",
+      "source": "https://github.com/Nachi-Kulkarni/Callsmith_skills"
+    }
+  ]
+}

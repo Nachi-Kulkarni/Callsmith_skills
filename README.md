@@ -129,6 +129,53 @@ codex plugin add callsmith@callsmith-marketplace
 grok plugin install Nachi-Kulkarni/Callsmith_skills
 ```
 
+**Cursor:** install from the Cursor Plugin Marketplace when listed, or add this repository as a
+custom plugin source. The native manifest lives at `.cursor-plugin/plugin.json`.
+
+**Kimi Code:**
+
+```text
+/plugins install https://github.com/Nachi-Kulkarni/Callsmith_skills
+/reload
+```
+
+Or browse the repository catalog with `/plugins marketplace` and the raw
+`.kimi-plugin/marketplace.json` URL.
+
+**Devin CLI:**
+
+```bash
+devin plugins install Nachi-Kulkarni/Callsmith_skills
+```
+
+**OpenCode:** add the Git repository package to `opencode.json`, then restart OpenCode:
+
+```json
+{
+  "plugin": [
+    "callsmith@git+https://github.com/Nachi-Kulkarni/Callsmith_skills.git"
+  ]
+}
+```
+
+The OpenCode plugin registers the Callsmith skill directory and Context7 MCP without overwriting an
+existing user-configured `context7` server.
+
+**Pi:**
+
+```bash
+pi install git:github.com/Nachi-Kulkarni/Callsmith_skills
+```
+
+**Antigravity:**
+
+```bash
+agy plugin install https://github.com/Nachi-Kulkarni/Callsmith_skills
+```
+
+All native installers use this repository as the product root. Start a new session—or run the
+client's reload command—after installation.
+
 ### Skill-only install
 
 ```bash
