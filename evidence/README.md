@@ -34,6 +34,7 @@ evidence/
     report.md
     REDACTION.md
     MANIFEST.sha256
+    case-studies/
     trial-*/<scenario>/<arm>/...
 ```
 
@@ -46,4 +47,19 @@ npm run bench:csb:evidence -- \
 ```
 
 The builder refuses malformed traces, removes command output, redacts local paths/identifiers and
-common credentials, excludes unknown files, and hashes every published artifact.
+common credentials, excludes unknown files, generates paired BASE/WITH case studies, and hashes
+every published artifact.
+
+After building two model bundles, run the release reviewer:
+
+```bash
+npm run bench:csb:review -- \
+  --bundles evidence/csb/<model-a>,evidence/csb/<model-b> \
+  --out evidence/csb/review
+```
+
+It writes `product-claim.json` and `RESULTS.md`, and exits nonzero unless both bundles are sanitized,
+complete repeated core10 runs with distinct pinned model IDs, distinct named model families, identical
+frozen controls, checksum-valid receipts, and every documented lift threshold.
+Only an eligible review emits `README-SNIPPET.md`; that reviewed snippet becomes the measured-evidence
+section near the top of the project README.

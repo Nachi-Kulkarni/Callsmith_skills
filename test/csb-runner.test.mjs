@@ -16,8 +16,11 @@ import {
   buildActorInvocation,
   codexThreadId,
   createIsolatedActorWorkspace,
+  grokThreadId,
   parseCodexTrace,
+  parseGrokTrace,
   prepareCodexActorHome,
+  prepareGrokActorHome,
 } from '../evals/csb/harness/actors.mjs';
 import {
   seededSchedule,
@@ -74,6 +77,16 @@ describe('CSB prepareArmWorkspace', () => {
     assert.equal(fs.existsSync(path.join(withDir, 'tags.json')), false);
   });
 
+  it('materializes an explicit empty seed for scenarios without poison input', () => {
+    const isolated = createIsolatedActorWorkspace('empty-seed');
+    try {
+      prepareArmWorkspace('BASE', { id: 'empty-seed', brief: 'Design it.', poison: null }, isolated.cwd);
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(isolated.cwd, 'voice.answers.json'), 'utf8')), {});
+    } finally {
+      fs.rmSync(isolated.root, { recursive: true, force: true });
+    }
+  });
+
   it('WITH CLI runs in an external workspace with no parent package metadata', () => {
     const isolated = createIsolatedActorWorkspace('self-contained-cli');
     try {
@@ -111,6 +124,23 @@ describe('CSB prepareArmWorkspace', () => {
 });
 
 describe('CSB run-arms CLI', () => {
+  it('creates a first run when the output parent does not exist', () => {
+    const isolated = createIsolatedActorWorkspace('missing-run-parent');
+    const out = path.join(isolated.root, 'missing', 'dry-run');
+    try {
+      const result = spawnSync(process.execPath, [
+        RUNNER,
+        '--dry-run',
+        '--scenario', 'clinic-floor-poison',
+        '--out', out,
+      ], { encoding: 'utf8', cwd: ROOT });
+      assert.equal(result.status, 0, result.stderr + result.stdout);
+      assert.ok(fs.existsSync(path.join(out, 'summary.json')));
+    } finally {
+      fs.rmSync(isolated.root, { recursive: true, force: true });
+    }
+  });
+
   it('allocates a fresh external root with a non-existent workspace child', () => {
     const isolated = createIsolatedActorWorkspace('test');
     try {
@@ -185,6 +215,87 @@ describe('CSB run-arms CLI', () => {
     assert.equal(invocation.args.at(-1), 'do the work');
   });
 
+  it('builds an isolated subscription-backed Grok invocation with fail-closed isolation', () => {
+    const spec = actorSpec({
+      tool: 'grok', binary: process.execPath, model: 'grok-4.5', reasoning: 'high',
+    });
+    const invocation = buildActorInvocation(spec, { prompt: 'do the work', cwd: '/tmp/arm' });
+    assert.equal(invocation.binary, process.execPath);
+    assert.deepEqual(invocation.args.slice(0, 2), ['-m', 'grok-4.5']);
+    assert.ok(invocation.args.includes('--permission-mode'));
+    assert.equal(invocation.args[invocation.args.indexOf('--permission-mode') + 1], 'bypassPermissions');
+    assert.ok(invocation.args.includes('--always-approve'));
+    // fail-closed isolation flags
+    for (const flag of ['--no-memory', '--no-subagents', '--no-plan', '--disable-web-search']) {
+      assert.ok(invocation.args.includes(flag), `missing ${flag}`);
+    }
+    assert.ok(invocation.args.includes('--sandbox'));
+    assert.equal(invocation.args[invocation.args.indexOf('--sandbox') + 1], 'workspace');
+    assert.ok(invocation.args.includes('--output-format'));
+    assert.equal(invocation.args[invocation.args.indexOf('--output-format') + 1], 'streaming-json');
+    assert.ok(invocation.args.includes('--reasoning-effort'));
+    assert.equal(invocation.args[invocation.args.indexOf('--reasoning-effort') + 1], 'high');
+    assert.equal(invocation.args.at(-2), '-p');
+    assert.equal(invocation.args.at(-1), 'do the work');
+  });
+
+  it('gives Grok an auth-only home with .grok/auth.json and hides personal config', () => {
+    const isolated = createIsolatedActorWorkspace('grok-auth-only-home');
+    // sourceGrokHome models the real ~/.grok directory: auth.json lives at its root,
+    // alongside config.toml/plugins that must NOT be copied into the isolated home.
+    const sourceGrokHome = path.join(isolated.root, 'source-grok-home');
+    const spec = actorSpec({ tool: 'grok', model: 'grok-4.5', reasoning: 'high' });
+    try {
+      fs.mkdirSync(sourceGrokHome, { recursive: true });
+      fs.writeFileSync(path.join(sourceGrokHome, 'auth.json'), '{"token":"test-only"}\n');
+      fs.writeFileSync(path.join(sourceGrokHome, 'config.toml'), 'permission_mode="ask"\n');
+
+      prepareGrokActorHome(spec, isolated.home, isolated.bin, sourceGrokHome);
+      assert.deepEqual(fs.readdirSync(isolated.home), ['.grok']);
+      assert.deepEqual(fs.readdirSync(path.join(isolated.home, '.grok')), ['auth.json']);
+      assert.equal(fs.existsSync(path.join(isolated.home, '.grok', 'config.toml')), false);
+      assert.equal(fs.realpathSync(path.join(isolated.bin, 'node')), process.execPath);
+
+      const env = actorEnvironment(spec, {
+        cwd: '/tmp/arm', arm: 'BASE', actorHome: isolated.home, actorBin: isolated.bin,
+      });
+      assert.equal(env.HOME, isolated.home);
+      assert.equal(env.CODEX_HOME, undefined);
+      assert.equal(env.PATH.includes(process.env.PATH), false);
+      const withEnv = actorEnvironment(spec, {
+        cwd: '/tmp/arm', arm: 'WITH', actorHome: isolated.home, actorBin: isolated.bin,
+      });
+      assert.equal(withEnv.PATH.split(path.delimiter)[0], '/tmp/arm/.bin');
+    } finally {
+      fs.rmSync(isolated.root, { recursive: true, force: true });
+    }
+  });
+
+  it('extracts the Grok session id from the retained streaming-json end event', () => {
+    assert.equal(grokThreadId([
+      JSON.stringify({ type: 'thought', data: 'hi' }),
+      JSON.stringify({ type: 'end', stopReason: 'EndTurn', sessionId: 'sess-456' }),
+    ].join('\n')), 'sess-456');
+    assert.equal(grokThreadId('not-json\n'), null);
+  });
+
+  it('fails Grok traces closed on malformed, missing end, or non-EndTurn stop', () => {
+    const complete = [
+      { type: 'thought', data: 'thinking' },
+      { type: 'text', data: 'done' },
+      { type: 'end', stopReason: 'EndTurn', sessionId: 'sess-1' },
+    ].map(JSON.stringify).join('\n');
+    assert.equal(parseGrokTrace(complete).valid, true);
+    assert.equal(parseGrokTrace(complete).threadId, 'sess-1');
+    assert.equal(parseGrokTrace('{bad').valid, false);
+    assert.equal(parseGrokTrace(JSON.stringify({ type: 'thought', data: 'no end' })).valid, false);
+    const aborted = [
+      { type: 'thought', data: 'started' },
+      { type: 'end', stopReason: 'ToolFailure', sessionId: 'sess-2' },
+    ].map(JSON.stringify).join('\n');
+    assert.equal(parseGrokTrace(aborted).valid, false);
+  });
+
   it('extracts the Codex thread id from retained JSONL events', () => {
     assert.equal(codexThreadId([
       JSON.stringify({ type: 'thread.started', thread_id: 'thread-123' }),
@@ -226,10 +337,10 @@ describe('CSB run-arms CLI', () => {
     assert.equal(parseCodexTrace(terminalError).valid, false);
   });
 
-  it('rejects reasoning controls on non-Codex actors', () => {
+  it('rejects reasoning controls on actors that do not support it', () => {
     assert.throws(
       () => actorSpec({ tool: 'opencode', model: 'model', reasoning: 'xhigh' }),
-      /only supported by the codex actor/,
+      /only supported by the codex or grok actor/,
     );
   });
 
@@ -304,6 +415,21 @@ describe('CSB run-arms CLI', () => {
       RUNNER,
       '--actor-tool', 'codex',
       '--actor-model', 'gpt-5.6-luna',
+      '--scenario', 'clinic-floor-poison',
+      '--out', out,
+    ], { encoding: 'utf8', cwd: ROOT });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /require --actor-reasoning/i);
+    assert.equal(fs.existsSync(out), false);
+  });
+
+  it('requires a Grok reasoning pin before a live run', () => {
+    const out = path.join(ROOT, 'evals/csb/runs/_test-no-grok-reasoning');
+    fs.rmSync(out, { recursive: true, force: true });
+    const r = spawnSync(process.execPath, [
+      RUNNER,
+      '--actor-tool', 'grok',
+      '--actor-model', 'grok-4.5',
       '--scenario', 'clinic-floor-poison',
       '--out', out,
     ], { encoding: 'utf8', cwd: ROOT });
@@ -401,6 +527,90 @@ describe('CSB validity and repeated-run statistics', () => {
     assert.equal(validity.valid, false);
     assert.match(validity.reasons.join(' '), /stale/);
     assert.match(validity.reasons.join(' '), /untouched/);
+  });
+
+  it('rejects symlinked actor artifacts', () => {
+    const dir = path.join(ROOT, 'evals/csb/runs/_test-symlink-artifact');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const target = path.join(dir, 'target.json');
+    const answers = path.join(dir, 'voice.answers.json');
+    const recipe = path.join(dir, 'callsmith.recipe.md');
+    fs.writeFileSync(target, '{}\n');
+    fs.symlinkSync(target, answers);
+    fs.writeFileSync(recipe, '# recipe\n');
+    const validity = validateActorTrial({
+      actor: { status: 0, timedOut: false },
+      artifacts: { answers, recipe },
+      before: {},
+      startedAtMs: Date.now() - 1000,
+    });
+    assert.equal(validity.valid, false);
+    assert.match(validity.reasons.join(' '), /must not be a symlink/);
+  });
+
+  it('rejects directory artifacts without attempting to read them', () => {
+    const dir = path.join(ROOT, 'evals/csb/runs/_test-directory-artifact');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const answers = path.join(dir, 'voice.answers.json');
+    const recipe = path.join(dir, 'callsmith.recipe.md');
+    fs.mkdirSync(answers);
+    fs.writeFileSync(recipe, '# recipe\n');
+    const validity = validateActorTrial({
+      actor: { status: 0, timedOut: false },
+      artifacts: { answers, recipe },
+      before: {},
+      startedAtMs: Date.now() - 1000,
+    });
+    assert.equal(validity.valid, false);
+    assert.match(validity.reasons.join(' '), /answers artifact must be a regular file/);
+  });
+
+  it('does not treat an mtime-only touch as rewriting seeded output', () => {
+    const dir = path.join(ROOT, 'evals/csb/runs/_test-touched-seed');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const answers = path.join(dir, 'voice.answers.json');
+    const recipe = path.join(dir, 'callsmith.recipe.md');
+    fs.writeFileSync(answers, '{"seed":true}\n');
+    const before = snapshotArtifacts([answers, recipe]);
+    const now = new Date();
+    fs.utimesSync(answers, now, now);
+    fs.writeFileSync(recipe, '# new recipe\n');
+    const validity = validateActorTrial({
+      actor: { status: 0, timedOut: false },
+      artifacts: { answers, recipe },
+      before,
+      startedAtMs: Date.now() - 1000,
+    });
+    assert.equal(validity.valid, false);
+    assert.match(validity.reasons.join(' '), /answers artifact was untouched/);
+  });
+
+  it('invalidates an actor that changes a controlled benchmark input', () => {
+    const dir = path.join(ROOT, 'evals/csb/runs/_test-mutated-input');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    const answers = path.join(dir, 'voice.answers.json');
+    const recipe = path.join(dir, 'callsmith.recipe.md');
+    const brief = path.join(dir, 'brief.md');
+    fs.writeFileSync(answers, '{"before":true}\n');
+    fs.writeFileSync(recipe, '# before\n');
+    fs.writeFileSync(brief, '# controlled brief\n');
+    const before = snapshotArtifacts([answers, recipe, brief]);
+    fs.writeFileSync(answers, '{"after":true}\n');
+    fs.writeFileSync(recipe, '# after\n');
+    fs.writeFileSync(brief, '# actor changed the brief\n');
+    const validity = validateActorTrial({
+      actor: { status: 0, timedOut: false, error: null },
+      artifacts: { answers, recipe },
+      immutable: { brief },
+      before,
+      startedAtMs: Date.now() - 1000,
+    });
+    assert.equal(validity.valid, false);
+    assert.match(validity.reasons.join(' '), /brief control was modified/);
   });
 
   it('uses all-gates task success with G_REAL as a veto', () => {

@@ -9,6 +9,7 @@ import {
   sanitizeJsonValue,
   sanitizeTrace,
 } from '../evals/csb/scripts/build-evidence.mjs';
+import { createRawPublishableRun } from '../test-support/csb-fixture.mjs';
 
 describe('CSB evidence publication', () => {
   it('keeps committed diagnostic excerpts content-addressed', () => {
@@ -38,8 +39,7 @@ describe('CSB evidence publication', () => {
     ].map(JSON.stringify).join('\n');
     const clean = sanitizeTrace(trace);
     assert.doesNotMatch(clean, /private-thread|Users\/alice|secret-value|alice@example/);
-    assert.doesNotMatch(clean, /aggregated_output/);
-    assert.match(clean, /\$HOME/);
+    assert.doesNotMatch(clean, /aggregated_output|"command":|\/bin\/sh/);
     assert.match(clean, /REDACTED_TRACE_ID/);
   });
 
@@ -55,38 +55,25 @@ describe('CSB evidence publication', () => {
 
   it('builds an allowlisted bundle with a complete checksum manifest', () => {
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-evidence-test-'));
-    const source = path.join(temp, 'raw-run');
+    const source = createRawPublishableRun(temp, 'raw-run');
     const out = path.join(temp, 'published');
     try {
-      const arm = path.join(source, 'trial-001', 'clinic', 'BASE');
-      fs.mkdirSync(arm, { recursive: true });
-      fs.writeFileSync(path.join(source, 'config.json'), JSON.stringify({
-        run_id: 'test-run',
-        actor: { tool: 'codex', model: 'gpt-test', reasoning: 'xhigh' },
-        git: { commit: 'abc123' },
-        runs: 3,
-        seed: 'fixed',
-        scenarios: ['clinic'],
-        budget: { timeout_ms_per_arm: 1000 },
-        access_token: 'private',
-      }));
-      fs.writeFileSync(path.join(source, 'summary.json'), '{"publishable":true}\n');
-      fs.writeFileSync(path.join(source, 'report.md'), '# Report\n');
       fs.writeFileSync(path.join(source, 'do-not-copy.txt'), 'private\n');
-      fs.writeFileSync(path.join(arm, 'actor.status.json'), '{"session_id":"private"}\n');
-      fs.writeFileSync(path.join(arm, 'actor.events.jsonl'), `${JSON.stringify({ type: 'thread.started', thread_id: 'private' })}\n`);
-      fs.writeFileSync(path.join(arm, 'actor.stdout.txt'), 'not allowlisted\n');
 
-      const result = buildEvidenceBundle({ source, out });
+      const result = buildEvidenceBundle({ source, out, provenanceVerifier: testProvenance });
       assert.ok(result.files.includes('MANIFEST.sha256'));
       assert.ok(result.files.includes('REDACTION.md'));
       assert.ok(result.files.includes('REPRODUCE.md'));
-      assert.ok(result.files.includes('trial-001/clinic/BASE/actor.events.sanitized.jsonl'));
+      assert.ok(result.files.includes('case-studies/README.md'));
+      assert.equal(result.files.filter((file) => file.startsWith('case-studies/trial-')).length, 30);
+      assert.ok(result.files.includes('trial-001/bank-kyc/BASE/actor.events.sanitized.jsonl'));
       assert.equal(fs.existsSync(path.join(out, 'do-not-copy.txt')), false);
-      assert.equal(fs.existsSync(path.join(out, 'trial-001/clinic/BASE/actor.stdout.txt')), false);
-      assert.doesNotMatch(fs.readFileSync(path.join(out, 'config.json'), 'utf8'), /private/);
+      assert.equal(result.files.some((file) => file.endsWith('actor.events.jsonl')), false);
+      assert.equal(result.files.some((file) => file.includes('stdout') || file.includes('stderr')), false);
+      assert.doesNotMatch(fs.readFileSync(path.join(out, 'config.json'), 'utf8'), /Users\//);
       assert.match(fs.readFileSync(path.join(out, 'summary.json'), 'utf8'), /"sanitized": true/);
-      assert.match(fs.readFileSync(path.join(out, 'REPRODUCE.md'), 'utf8'), /git checkout abc123/);
+      assert.match(fs.readFileSync(path.join(out, 'REPRODUCE.md'), 'utf8'), /git checkout b{40}/);
+      assert.match(fs.readFileSync(path.join(out, 'case-studies/trial-001-bank-kyc.md'), 'utf8'), /BASE \*\*fail\*\* · WITH \*\*pass\*\*/);
       const manifest = fs.readFileSync(path.join(out, 'MANIFEST.sha256'), 'utf8');
       for (const file of result.files.filter((file) => file !== 'MANIFEST.sha256')) {
         assert.match(manifest, new RegExp(`  ${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
@@ -98,18 +85,58 @@ describe('CSB evidence publication', () => {
 
   it('refuses to turn a diagnostic run into public evidence', () => {
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-evidence-refuse-'));
-    const source = path.join(temp, 'raw-run');
+    const source = createRawPublishableRun(temp, 'raw-run');
     try {
-      fs.mkdirSync(source);
-      fs.writeFileSync(path.join(source, 'config.json'), '{}\n');
-      fs.writeFileSync(path.join(source, 'summary.json'), '{"publishable":false}\n');
-      fs.writeFileSync(path.join(source, 'report.md'), '# Diagnostic\n');
+      const summary = JSON.parse(fs.readFileSync(path.join(source, 'summary.json'), 'utf8'));
+      summary.publishable = false;
+      fs.writeFileSync(path.join(source, 'summary.json'), `${JSON.stringify(summary)}\n`);
       assert.throws(
-        () => buildEvidenceBundle({ source, out: path.join(temp, 'published') }),
+        () => buildEvidenceBundle({ source, out: path.join(temp, 'published'), provenanceVerifier: testProvenance }),
         /not publication-eligible/,
       );
     } finally {
       fs.rmSync(temp, { recursive: true, force: true });
     }
   });
+
+  it('rejects allowlisted receipts that are symlinks', () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-evidence-symlink-'));
+    try {
+      const source = createRawPublishableRun(temp, 'raw-run');
+      const recipe = path.join(source, 'trial-001', 'bank-kyc', 'BASE', 'callsmith.recipe.md');
+      fs.rmSync(recipe);
+      fs.symlinkSync('/etc/hosts', recipe);
+      assert.throws(
+        () => buildEvidenceBundle({ source, out: path.join(temp, 'published'), provenanceVerifier: testProvenance }),
+        /regular file/,
+      );
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
+  });
+
+  it('builds an allowlisted bundle from a Grok run with its own isolation boundary', () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-evidence-grok-'));
+    const source = createRawPublishableRun(temp, 'raw-run', { tool: 'grok' });
+    const out = path.join(temp, 'published');
+    try {
+      const config = JSON.parse(fs.readFileSync(path.join(source, 'config.json'), 'utf8'));
+      assert.equal(config.actor.tool, 'grok');
+      assert.equal(config.actor.family, 'grok');
+
+      const result = buildEvidenceBundle({ source, out, provenanceVerifier: testProvenance });
+      assert.ok(result.files.includes('MANIFEST.sha256'));
+      assert.ok(result.files.includes('trial-001/bank-kyc/BASE/actor.events.sanitized.jsonl'));
+      // Grok streaming-json traces round-trip through the grok trace parser on rescore.
+      const study = fs.readFileSync(path.join(out, 'case-studies/trial-001-bank-kyc.md'), 'utf8');
+      assert.match(study, /grok 0\.2\.93/);
+      assert.match(study, /BASE \*\*fail\*\* · WITH \*\*pass\*\*/);
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
+  });
 });
+
+function testProvenance() {
+  return true;
+}

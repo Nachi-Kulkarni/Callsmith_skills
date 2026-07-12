@@ -18,6 +18,7 @@
     "bench:csb:dry": "node evals/csb/harness/run-arms.mjs --dry-run",
     "bench:csb:fixtures": "node evals/csb/harness/run-arms.mjs --score-fixtures",
     "bench:csb:evidence": "node evals/csb/scripts/build-evidence.mjs",
+    "bench:csb:review": "node evals/csb/scripts/review-publication.mjs",
     "bench:turn": "node evals/csb/latency/score.mjs",
     "bench:turn:score": "node evals/csb/latency/score.mjs",
     "doctor": "node bin/callsmith.mjs doctor",

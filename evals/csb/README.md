@@ -37,16 +37,22 @@ A publishable run also requires:
 - prompt, scenario, harness, and provider-pack SHA-256 hashes;
 - recorded time/output budgets and arm timing;
 - paired BASE/WITH trials for every scheduled scenario;
-- retained stdout, stderr, and a sanitized full session export when the actor tool exposes one.
+- retained local stdout/stderr and a complete actor trace when the tool exposes one; public bundles
+  exclude stdout/stderr and contain only the sanitized, command-output-free trace.
 
-The runner supports `opencode` and subscription-authenticated `codex` actors. Only Codex runs are
-currently eligible for the public evidence path; OpenCode remains diagnostic until its user-home,
-plugin, and PATH isolation receives the same fail-closed boundary. Codex runs are
-ephemeral, ignore personal configuration/rules, execute inside a nested isolated Git root, and
-retain the CLI JSONL event stream as the arm trace. Each arm also receives a disposable auth-only
-`HOME`/`CODEX_HOME`: the runner copies only `auth.json`, so personal skills, plugins, memories,
-history, and configuration cannot enter either arm. That home is deleted after the run and is never
-copied into the evidence bundle. `codex login status` must report a valid login.
+The runner supports `opencode`, subscription-authenticated `codex`, and subscription-authenticated
+`grok` actors. Codex and Grok runs are eligible for the public evidence path; OpenCode remains
+diagnostic until its user-home, plugin, and PATH isolation receives the same fail-closed boundary.
+
+Codex runs are ephemeral, ignore personal configuration/rules, execute inside a nested isolated Git
+root, and retain the CLI JSONL event stream as the arm trace. Grok runs mirror that boundary: they
+disable memory, subagents, plan mode, and web search, confine writes via the `workspace` sandbox,
+execute inside a nested isolated Git root, and retain the streaming-json event stream as the arm
+trace. Each arm also receives a disposable auth-only `HOME`: the runner copies only
+`auth.json` — for Codex into `HOME`/`CODEX_HOME`, for Grok into `HOME/.grok/auth.json` — so personal
+skills, plugins, memories, history, and configuration cannot enter either arm. That home is deleted
+after the run and is never copied into the evidence bundle. `codex login status` or `grok` (any
+command) must report a valid login.
 
 ## Commands
 
@@ -74,6 +80,14 @@ npm run bench:csb -- \
   --actor-reasoning xhigh \
   --runs 3 \
   --seed luna-xhigh-20260711
+
+# Grok CLI via xAI subscription, with model and reasoning both pinned.
+npm run bench:csb -- \
+  --actor-tool grok \
+  --actor-model grok-4.5 \
+  --actor-reasoning high \
+  --runs 3 \
+  --seed grok4-5-high-20260712
 ```
 
 `--runs N` repeats each scenario N times. `--seed` deterministically shuffles scenario order and counterbalances which arm runs first. Every trial is stored under `trial-NNN/<scenario>/<arm>` so attempts cannot overwrite one another.
@@ -88,7 +102,8 @@ already-solved scenarios. Screening runs are diagnostic and never publishable wi
 | **BASE** | brief, seed answers, output schema | skill, packs, CLI, oracle/tags |
 | **WITH** | brief, seed, skill, packs, CLI shim, references | oracle/tags/manifest |
 
-Both arms get the same unlabeled seed, brief, actor model, and budget.
+Both arms get the same unlabeled seed, brief, actor model, and budget. The runner invalidates an arm
+if the actor modifies the common seed, brief, scenario, output schema, or recorded prompt.
 
 ## Outputs
 

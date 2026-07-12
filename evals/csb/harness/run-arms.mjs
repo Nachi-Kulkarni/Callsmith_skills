@@ -4,13 +4,15 @@ import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   cpSync,
+  lstatSync,
   mkdirSync,
+  realpathSync,
   readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds, scoreArm, pairDelta } from './score.mjs';
 import { prepareArmWorkspace, readArmArtifacts, REPO_ROOT } from './prepare.mjs';
@@ -18,9 +20,12 @@ import { buildActorPrompt } from './prompts.mjs';
 import {
   actorSpec,
   createIsolatedActorWorkspace,
+  modelFamilyFor,
   prepareActorWorkspace,
   prepareCodexActorHome,
+  prepareGrokActorHome,
   retainActorTrace,
+  resolveActorExecutable,
   runActor,
 } from './actors.mjs';
 import {
@@ -38,21 +43,37 @@ const args = parseArgs(process.argv.slice(2));
 const dryRun = args['dry-run'] === true;
 const scoreFixtures = args['score-fixtures'] === true;
 const actorTool = String(args['actor-tool'] || process.env.CSB_ACTOR_TOOL || 'opencode').toLowerCase();
+const actorToolEnvBin = {
+  codex: 'CODEX_BIN',
+  opencode: 'OPENCODE_BIN',
+  grok: 'GROK_BIN',
+}[actorTool];
+const actorToolEnvModel = {
+  codex: 'CODEX_ACTOR_MODEL',
+  opencode: 'OPENCODE_ACTOR_MODEL',
+  grok: 'GROK_ACTOR_MODEL',
+}[actorTool];
+const actorToolEnvReasoning = {
+  codex: 'CODEX_ACTOR_REASONING',
+  grok: 'GROK_ACTOR_REASONING',
+}[actorTool];
 let actor;
 try {
   actor = actorSpec({
     tool: actorTool,
     binary: args['actor-bin'] || args['opencode-bin']
-      || (actorTool === 'codex' ? process.env.CODEX_BIN : process.env.OPENCODE_BIN),
+      || (actorToolEnvBin ? process.env[actorToolEnvBin] : undefined),
     model: args['actor-model']
-      || (actorTool === 'codex' ? process.env.CODEX_ACTOR_MODEL : process.env.OPENCODE_ACTOR_MODEL)
+      || (actorToolEnvModel ? process.env[actorToolEnvModel] : undefined)
       || '',
-    reasoning: args['actor-reasoning'] || process.env.CODEX_ACTOR_REASONING || null,
+    reasoning: args['actor-reasoning'] || (actorToolEnvReasoning ? process.env[actorToolEnvReasoning] : undefined) || null,
   });
 } catch (error) {
   fail(error.message);
 }
 const actorModel = actor.model;
+const derivedActorFamily = modelFamilyFor(actorModel);
+const actorFamily = derivedActorFamily;
 const runId = args['run-id'] || new Date().toISOString().replace(/[:.]/g, '-');
 const outRoot = resolve(args.out || join(HERE, '..', 'runs', runId));
 const runs = parsePositiveInt(args.runs || '1', '--runs');
@@ -79,8 +100,11 @@ if (!armsWanted.length) fail('No valid arms selected.');
 if (!dryRun && !scoreFixtures && !actorModel) {
   fail('Live publishable runs require --actor-model (or the selected actor model environment variable).');
 }
-if (!dryRun && !scoreFixtures && actor.tool === 'codex' && !actor.reasoning) {
-  fail('Live Codex runs require --actor-reasoning so reasoning effort is reproducible.');
+if (!dryRun && !scoreFixtures && ['codex', 'grok'].includes(actor.tool) && !actor.reasoning) {
+  fail(`Live ${actor.tool} runs require --actor-reasoning so reasoning effort is reproducible.`);
+}
+if (!dryRun && !scoreFixtures && ['codex', 'grok'].includes(actor.tool) && !derivedActorFamily) {
+  fail(`Live ${actor.tool} publication requires a model ID with a reviewed family mapping.`);
 }
 if (existsSync(outRoot)) fail(`Refusing reused run directory: ${outRoot}`);
 
@@ -91,7 +115,9 @@ if (!dryRun && !scoreFixtures && git.dirty) {
 
 const schedule = seededSchedule(scenarioIds, scoreFixtures ? 1 : runs, armsWanted, seed);
 const source = sourceManifest(scenarioIds);
+if (!dryRun && !scoreFixtures) actor.binary = resolveActorExecutable(actor.binary, REPO_ROOT);
 const toolVersion = scoreFixtures || dryRun ? toolVersionFor(actor.binary) : requireToolVersion(actor.binary);
+const actorBinarySha256 = !dryRun && !scoreFixtures ? hashFile(actor.binary) : null;
 const config = {
   schema_version: 2,
   run_id: runId,
@@ -99,10 +125,12 @@ const config = {
   actor: {
     tool: actor.tool,
     binary: actor.binary,
+    binary_sha256: actorBinarySha256,
     version: toolVersion,
     model: actorModel || null,
+    family: actorFamily || null,
     reasoning: actor.reasoning,
-    isolation: actor.tool === 'codex' ? {
+    isolation: ['codex', 'grok'].includes(actor.tool) ? {
       ephemeral_session: true,
       ignore_user_config: true,
       ignore_user_rules: true,
@@ -122,7 +150,7 @@ const config = {
   schedule,
 };
 
-mkdirSync(outRoot, { recursive: false });
+mkdirSync(outRoot, { recursive: true });
 writeJson(join(outRoot, 'config.json'), config);
 console.log(`\nCallsmithBench ${config.mode}: ${schedule.length} scheduled pair(s)/arm set`);
 console.log(`  model: ${actorModel || 'not applicable'}`);
@@ -157,15 +185,36 @@ for (const scheduled of schedule) {
       answers: join(runDir, 'voice.answers.json'),
       recipe: join(runDir, 'callsmith.recipe.md'),
     };
-    const before = snapshotArtifacts(Object.values(artifactPaths));
+    if (existsSync(artifactPaths.answers)) {
+      writeFileSync(join(runDir, 'input-seed.answers.json'), readFileSync(artifactPaths.answers));
+    }
+    const controlledInputs = {
+      brief: join(runDir, 'brief.md'),
+      scenario: join(runDir, 'scenario.json'),
+      output_schema: join(runDir, 'OUTPUT_SCHEMA.md'),
+      actor_prompt: promptPath,
+      input_seed: join(runDir, 'input-seed.answers.json'),
+    };
+    const before = snapshotArtifacts([
+      ...Object.values(artifactPaths),
+      ...Object.values(controlledInputs),
+    ]);
     const armRepro = {
       prompt_sha256: hashFile(promptPath),
       scenario_sha256: source.scenarios[scenario.id],
       provider_packs_sha256: source.provider_packs_sha256,
+      harness_sha256: source.harness_sha256,
+      scorer_sha256: source.scorer_sha256,
+      product_sha256: source.product_sha256,
       model: actorModel || null,
+      model_family: actorFamily || null,
       actor_tool: actor.tool,
       actor_reasoning: actor.reasoning,
       tool_version: toolVersion,
+      actor_binary_sha256: actorBinarySha256,
+      git_commit: git.commit,
+      seed,
+      arm,
       budget: config.budget,
     };
     writeJson(join(runDir, 'reproducibility.json'), armRepro);
@@ -181,12 +230,19 @@ for (const scheduled of schedule) {
     process.stdout.write(`  trial ${scheduled.trial} ${scenario.id} ${arm}: actor ... `);
     prepareActorWorkspace(actor, runDir);
     prepareCodexActorHome(actor, isolated.home, isolated.bin);
+    prepareGrokActorHome(actor, isolated.home, isolated.bin);
     const sessionsBefore = actor.tool === 'opencode' ? listSessions(actor.binary, runDir) : [];
     const startedAtMs = Date.now();
     const processResult = await runActor(actor, {
       prompt, cwd: runDir, arm, timeout: timeoutMs,
       actorHome: isolated.home, actorBin: isolated.bin,
     });
+    try {
+      assertIsolatedWorkspace(isolated.root, runDir);
+    } catch (error) {
+      rmSync(isolated.root, { recursive: true, force: true });
+      fail(`Actor workspace boundary violated: ${error.message}`);
+    }
     writeFileSync(join(runDir, 'actor.stdout.txt'), processResult.stdout || '');
     writeFileSync(join(runDir, 'actor.stderr.txt'), processResult.stderr || '');
     const trace = retainActorTrace(
@@ -198,10 +254,11 @@ for (const scheduled of schedule) {
     const validity = validateActorTrial({
       actor: {
         ...processResult,
-        traceRequired: actor.tool === 'codex',
+        traceRequired: ['codex', 'grok'].includes(actor.tool),
         trace,
       },
       artifacts: artifactPaths,
+      immutable: controlledInputs,
       before,
       startedAtMs,
     });
@@ -230,7 +287,7 @@ for (const scheduled of schedule) {
         scenario,
         answers,
         recipe,
-        commandLog: actor.tool === 'codex'
+        commandLog: ['codex', 'grok'].includes(actor.tool)
           ? trace.command_log || ''
           : `${processResult.stdout || ''}\n${processResult.stderr || ''}`,
         arm,
@@ -260,7 +317,14 @@ for (const scheduled of schedule) {
   results.push(result);
 }
 
-const summary = buildSummary(results, config);
+const finalGit = config.mode === 'live' ? gitState() : git;
+const finalSource = config.mode === 'live' ? sourceManifest(scenarioIds) : source;
+const finalActorBinarySha256 = config.mode === 'live' ? hashFile(actor.binary) : actorBinarySha256;
+const sourceStable = config.mode !== 'live'
+  || (finalGit.commit === git.commit && finalGit.dirty === false
+    && JSON.stringify(finalSource) === JSON.stringify(source)
+    && finalActorBinarySha256 === actorBinarySha256);
+const summary = buildSummary(results, config, { sourceStable });
 writeJson(join(outRoot, 'summary.json'), summary);
 writeFileSync(join(outRoot, 'report.md'), renderReport(summary, results));
 console.log(`\nWrote ${join(outRoot, 'summary.json')}`);
@@ -269,8 +333,12 @@ if (summary.invalid_arms.length) {
   console.error(`Invalid live arms: ${summary.invalid_arms.length}; run is not publishable.`);
   process.exitCode = 1;
 }
+if (!sourceStable) {
+  console.error('Benchmark source drifted during the live run; results are not publishable.');
+  process.exitCode = 1;
+}
 
-function buildSummary(results, configValue) {
+function buildSummary(results, configValue, { sourceStable = true } = {}) {
   const fixturePairs = results.map((r) => r.pair).filter(Boolean);
   if (configValue.mode === 'fixtures') {
     return {
@@ -301,11 +369,17 @@ function buildSummary(results, configValue) {
   const expectedPairs = configValue.runs * configValue.scenarios.length;
   const runValid = configValue.mode === 'live'
     && invalidArms.length === 0
-    && metricPairs.length === expectedPairs;
+    && metricPairs.length === expectedPairs
+    && sourceStable;
   const repeatedCore10 = configValue.runs >= 3
     && configValue.scenarios.length === 10
     && ['BASE', 'WITH'].every((arm) => configValue.arms.includes(arm));
-  const actorIsolationEligible = configValue.actor.tool === 'codex';
+  const namedModelFamily = typeof configValue.actor.family === 'string' && configValue.actor.family.length > 0;
+  const actorIsolationEligible = ['codex', 'grok'].includes(configValue.actor.tool)
+    && [
+      'ephemeral_session', 'ignore_user_config', 'ignore_user_rules', 'auth_only_home',
+      'plugins_disabled', 'hooks_disabled', 'memories_disabled',
+    ].every((key) => configValue.actor.isolation?.[key] === true);
   const regulatedScenarioIds = configValue.scenarios.filter((id) => {
     const domain = loadScenario(id).manifest.domain;
     return ['medical', 'banking', 'collections'].includes(domain);
@@ -317,10 +391,12 @@ function buildSummary(results, configValue) {
     schema_version: 2,
     run_id: configValue.run_id,
     run_valid: runValid,
-    publishable: runValid && repeatedCore10 && actorIsolationEligible,
+    publishable: runValid && repeatedCore10 && actorIsolationEligible && namedModelFamily,
     publication_requirements: {
       repeated_core10: repeatedCore10,
       actor_isolation_eligible: actorIsolationEligible,
+      named_model_family: namedModelFamily,
+      source_stable_through_run: sourceStable,
       second_model_family_required_for_product_claim: true,
       product_claim_eligible_from_this_run_alone: false,
     },
@@ -419,6 +495,18 @@ function sourceManifest(ids) {
   return {
     provider_packs_sha256: hashTree(join(REPO_ROOT, 'providers')),
     harness_sha256: hashTree(HERE),
+    scorer_sha256: hashPaths([
+      join(REPO_ROOT, 'evals/csb/oracles'),
+      join(REPO_ROOT, 'src/lib'),
+      join(REPO_ROOT, 'data'),
+    ]),
+    product_sha256: hashPaths([
+      join(REPO_ROOT, 'SKILL.md'),
+      join(REPO_ROOT, 'bin'),
+      join(REPO_ROOT, 'src'),
+      join(REPO_ROOT, 'data'),
+      join(REPO_ROOT, 'reference'),
+    ]),
     scenarios: Object.fromEntries(ids.map((id) => [id, hashTree(join(HERE, '..', 'scenarios', id))])),
   };
 }
@@ -426,6 +514,18 @@ function sourceManifest(ids) {
 function hashTree(dir) {
   const files = walk(dir).sort();
   return sha256(files.map((file) => `${relative(dir, file)}\0${hashFile(file)}`).join('\n'));
+}
+
+function hashPaths(paths) {
+  const files = paths.flatMap((path) => (lstatSync(path).isDirectory() ? walk(path) : [path])).sort();
+  return sha256(files.map((file) => `${relative(REPO_ROOT, file)}\0${hashFile(file)}`).join('\n'));
+}
+
+function assertIsolatedWorkspace(root, runDir) {
+  if (lstatSync(runDir).isSymbolicLink()) throw new Error('workspace root became a symlink');
+  const realRoot = realpathSync(root);
+  const realRunDir = realpathSync(runDir);
+  if (!realRunDir.startsWith(`${realRoot}${sep}`)) throw new Error('workspace escaped its isolated root');
 }
 
 function walk(dir) {

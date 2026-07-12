@@ -1,6 +1,6 @@
 /** Reproducibility, trial validation, and statistics for CallsmithBench. */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 
 export function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -32,7 +32,7 @@ export function snapshotArtifacts(paths) {
   return Object.fromEntries(paths.map((file) => [file, fileSnapshot(file)]));
 }
 
-export function validateActorTrial({ actor, artifacts, before = {}, startedAtMs }) {
+export function validateActorTrial({ actor, artifacts, immutable = {}, before = {}, startedAtMs }) {
   const reasons = [];
   if (actor?.status !== 0) reasons.push(`actor exit status was ${String(actor?.status)}`);
   if (actor?.timedOut) reasons.push('actor timed out');
@@ -50,11 +50,40 @@ export function validateActorTrial({ actor, artifacts, before = {}, startedAtMs 
       continue;
     }
     if (now.size === 0) reasons.push(`${kind} artifact is empty`);
+    if (now.isSymlink) {
+      reasons.push(`${kind} artifact must not be a symlink`);
+      continue;
+    }
+    if (!now.isRegular) {
+      reasons.push(`${kind} artifact must be a regular file`);
+      continue;
+    }
     if (now.mtimeMs + 1 < startedAtMs) reasons.push(`${kind} artifact is stale`);
     const previous = before[file];
-    if (previous?.exists && previous.hash === now.hash && previous.mtimeMs === now.mtimeMs) {
+    if (previous?.exists && previous.hash === now.hash) {
       reasons.push(`${kind} artifact was untouched by the actor`);
     }
+  }
+  for (const [kind, file] of Object.entries(immutable)) {
+    const previous = before[file];
+    const now = fileSnapshot(file);
+    if (!previous?.exists) {
+      reasons.push(`${kind} control lacks an initial snapshot`);
+      continue;
+    }
+    if (!now.exists) {
+      reasons.push(`${kind} control is missing after the actor run`);
+      continue;
+    }
+    if (now.isSymlink) {
+      reasons.push(`${kind} control must not be a symlink`);
+      continue;
+    }
+    if (!now.isRegular) {
+      reasons.push(`${kind} control must be a regular file`);
+      continue;
+    }
+    if (previous.hash !== now.hash) reasons.push(`${kind} control was modified by the actor`);
   }
   return { valid: reasons.length === 0, reasons };
 }
@@ -143,8 +172,14 @@ export function meanConfidenceInterval(values) {
 
 function fileSnapshot(file) {
   if (!existsSync(file)) return { exists: false, size: 0, mtimeMs: null, hash: null };
-  const stat = statSync(file);
-  return { exists: true, size: stat.size, mtimeMs: stat.mtimeMs, hash: hashFile(file) };
+  const stat = lstatSync(file);
+  if (stat.isSymbolicLink()) {
+    return { exists: true, size: stat.size, mtimeMs: stat.mtimeMs, hash: null, isSymlink: true, isRegular: false };
+  }
+  if (!stat.isFile()) {
+    return { exists: true, size: stat.size, mtimeMs: stat.mtimeMs, hash: null, isSymlink: false, isRegular: false };
+  }
+  return { exists: true, size: stat.size, mtimeMs: stat.mtimeMs, hash: hashFile(file), isSymlink: false, isRegular: true };
 }
 
 function positiveInteger(value, name) {

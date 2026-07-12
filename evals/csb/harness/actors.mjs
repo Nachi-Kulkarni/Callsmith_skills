@@ -14,6 +14,17 @@ import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 
 const MAX_CAPTURE_BYTES = 20 * 1024 * 1024;
+const MODEL_FAMILY_PATTERNS = [
+  ['luna', /(?:^|[-_/])luna(?:$|[-_/])/i],
+  ['terra', /(?:^|[-_/])terra(?:$|[-_/])/i],
+  ['sol', /(?:^|[-_/])sol(?:$|[-_/])/i],
+  ['grok', /(?:^|[-_/])grok(?:$|[-_/])/i],
+];
+
+export function modelFamilyFor(model) {
+  if (typeof model !== 'string' || !model.trim()) return null;
+  return MODEL_FAMILY_PATTERNS.find(([, pattern]) => pattern.test(model))?.[0] || null;
+}
 
 export function createIsolatedActorWorkspace(label = 'arm') {
   const root = mkdtempSync(join(tmpdir(), `callsmith-csb-${label}-`));
@@ -54,8 +65,44 @@ export function prepareCodexActorHome(
   return actorHome;
 }
 
+/**
+ * Give Grok CLI subscription auth without exposing personal config, skills, plugins,
+ * marketplace sources, or session history. Grok resolves its config under `~/.grok/`,
+ * so the auth-only home carries a single `.grok/auth.json` and nothing else. The home
+ * is a sibling of the scored workspace, is never persisted in the run bundle, and is
+ * deleted with the isolated root.
+ */
+export function prepareGrokActorHome(
+  spec,
+  actorHome,
+  actorBin,
+  sourceGrokHome = process.env.GROK_HOME || join(homedir(), '.grok'),
+) {
+  if (spec.tool !== 'grok') return null;
+  if (!actorHome) throw new Error('Grok actor requires an isolated home.');
+  if (!actorBin) throw new Error('Grok actor requires an isolated tool bin.');
+  const authSource = join(sourceGrokHome, 'auth.json');
+  if (!existsSync(authSource)) {
+    throw new Error(`Grok subscription auth not found at ${authSource}; run grok login first.`);
+  }
+  mkdirSync(actorHome, { recursive: false });
+  mkdirSync(join(actorHome, '.grok'), { recursive: false });
+  cpSync(authSource, join(actorHome, '.grok', 'auth.json'));
+  mkdirSync(actorBin, { recursive: false });
+  symlinkSync(process.execPath, join(actorBin, 'node'));
+  const grokFiles = readdirSync(join(actorHome, '.grok'));
+  if (grokFiles.length !== 1 || grokFiles[0] !== 'auth.json') {
+    throw new Error('Grok actor home must contain .grok/auth.json only before launch.');
+  }
+  const files = readdirSync(actorHome);
+  if (files.length !== 1 || files[0] !== '.grok') {
+    throw new Error('Grok actor home must contain the .grok directory only before launch.');
+  }
+  return actorHome;
+}
+
 export function actorEnvironment(spec, { cwd, arm, actorHome, actorBin } = {}) {
-  if (spec.tool !== 'codex') {
+  if (spec.tool === 'opencode') {
     return {
       ...process.env,
       PATH: arm === 'WITH'
@@ -63,7 +110,9 @@ export function actorEnvironment(spec, { cwd, arm, actorHome, actorBin } = {}) {
         : process.env.PATH || '',
     };
   }
-  if (!actorHome || !actorBin) throw new Error('Codex actor requires an isolated home and tool bin.');
+  // codex and grok share the same fail-closed scrubbed environment; only the
+  // tool-specific home variables differ.
+  if (!actorHome || !actorBin) throw new Error(`${spec.tool} actor requires an isolated home and tool bin.`);
   const inheritedKeys = [
     'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
     'SSL_CERT_FILE', 'SSL_CERT_DIR', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
@@ -72,8 +121,10 @@ export function actorEnvironment(spec, { cwd, arm, actorHome, actorBin } = {}) {
     .filter((key) => process.env[key] !== undefined)
     .map((key) => [key, process.env[key]]));
   env.HOME = actorHome;
-  env.CODEX_HOME = actorHome;
-  env.ZDOTDIR = actorHome;
+  if (spec.tool === 'codex') {
+    env.CODEX_HOME = actorHome;
+    env.ZDOTDIR = actorHome;
+  }
   env.SHELL = '/bin/zsh';
   env.PATH = [
     ...(arm === 'WITH' ? [join(cwd, '.bin')] : []),
@@ -86,15 +137,18 @@ export function actorEnvironment(spec, { cwd, arm, actorHome, actorBin } = {}) {
   return env;
 }
 
+const REASONING_TOOLS = ['codex', 'grok'];
+const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+
 export function actorSpec({ tool = 'opencode', binary, model, reasoning } = {}) {
-  if (!['codex', 'opencode'].includes(tool)) {
+  if (!['codex', 'opencode', 'grok'].includes(tool)) {
     throw new Error(`Unsupported actor tool: ${tool}`);
   }
-  if (tool !== 'codex' && reasoning) {
-    throw new Error('--actor-reasoning is only supported by the codex actor.');
+  if (!REASONING_TOOLS.includes(tool) && reasoning) {
+    throw new Error(`--actor-reasoning is only supported by the ${REASONING_TOOLS.join(' or ')} actor.`);
   }
-  if (reasoning && !['minimal', 'low', 'medium', 'high', 'xhigh'].includes(reasoning)) {
-    throw new Error(`Unsupported Codex reasoning effort: ${reasoning}`);
+  if (reasoning && !REASONING_EFFORTS.includes(reasoning)) {
+    throw new Error(`Unsupported ${tool} reasoning effort: ${reasoning}`);
   }
   return {
     tool,
@@ -125,7 +179,31 @@ export function buildActorInvocation(spec, { prompt, cwd }) {
     ];
     if (spec.reasoning) args.push('-c', `model_reasoning_effort="${spec.reasoning}"`);
     args.push('-C', cwd, prompt);
-    return { binary: resolveExecutable(spec.binary, cwd), args };
+    return { binary: resolveActorExecutable(spec.binary, cwd), args };
+  }
+  if (spec.tool === 'grok') {
+    // Fail-closed isolation mirroring the reviewed Codex boundary:
+    //   - bypassPermissions + always-approve: no interactive prompts can block the turn
+    //   - no-memory: no cross-session memory persistence
+    //   - no-subagents: no lateral agent escalation
+    //   - no-plan: no plan-mode side channel
+    //   - disable-web-search: no external retrieval that could leak the brief
+    //   - sandbox workspace: filesystem writes confined to the workspace
+    // Personal config/skills/plugins are excluded via the auth-only HOME (actorEnvironment).
+    const args = [
+      '-m', spec.model,
+      '--permission-mode', 'bypassPermissions',
+      '--always-approve',
+      '--no-memory',
+      '--no-subagents',
+      '--no-plan',
+      '--disable-web-search',
+      '--sandbox', 'workspace',
+      '--output-format', 'streaming-json',
+    ];
+    if (spec.reasoning) args.push('--reasoning-effort', spec.reasoning);
+    args.push('-p', prompt);
+    return { binary: resolveActorExecutable(spec.binary, cwd), args };
   }
   return {
     binary: spec.binary,
@@ -134,25 +212,27 @@ export function buildActorInvocation(spec, { prompt, cwd }) {
 }
 
 export function prepareActorWorkspace(spec, cwd) {
-  if (spec.tool !== 'codex') return;
+  if (!['codex', 'grok'].includes(spec.tool)) return;
   const initialized = spawnSync('git', ['init', '--quiet'], { cwd, encoding: 'utf8', timeout: 30000 });
   if (initialized.status !== 0) {
-    throw new Error(`Cannot isolate Codex actor workspace: ${initialized.stderr || 'git init failed'}`);
+    throw new Error(`Cannot isolate ${spec.tool} actor workspace: ${initialized.stderr || 'git init failed'}`);
   }
 }
 
 export function retainActorTrace(spec, processResult, runDir, opencodeTrace) {
-  if (spec.tool !== 'codex') return opencodeTrace();
+  if (spec.tool === 'opencode') return opencodeTrace();
+  // codex and grok both emit their event stream on stdout; persist it verbatim.
   const file = 'actor.events.jsonl';
   writeFileSync(join(runDir, file), processResult.stdout || '');
-  const parsed = parseCodexTrace(processResult.stdout || '');
+  const parsed = parseActorTrace(spec.tool, processResult.stdout || '');
+  const format = spec.tool === 'codex' ? 'codex-jsonl' : 'grok-streaming-json';
   return {
     retained: Boolean(processResult.stdout),
     valid: parsed.valid,
     invalid_reasons: parsed.reasons,
     session_id: parsed.threadId,
     file,
-    format: 'codex-jsonl',
+    format,
     ephemeral: true,
     sanitized: false,
     event_count: parsed.eventCount,
@@ -160,6 +240,16 @@ export function retainActorTrace(spec, processResult, runDir, opencodeTrace) {
     recovered_error_count: parsed.recoveredErrorCount,
     command_log: parsed.commandLog,
   };
+}
+
+/**
+ * Dispatch trace parsing by actor tool. Each tool emits a distinct event format;
+ * all return the same receipt shape so the runner and evidence pipeline stay agnostic.
+ */
+export function parseActorTrace(tool, jsonl, options = {}) {
+  if (tool === 'codex') return parseCodexTrace(jsonl, options);
+  if (tool === 'grok') return parseGrokTrace(jsonl, options);
+  return { valid: false, reasons: [`Unsupported actor tool for trace parsing: ${tool}`] };
 }
 
 export function codexThreadId(jsonl) {
@@ -205,6 +295,45 @@ export function parseCodexTrace(jsonl, { requireTerminal = true } = {}) {
   };
 }
 
+export function grokThreadId(jsonl) {
+  return parseGrokTrace(jsonl, { requireTerminal: false }).threadId;
+}
+
+/**
+ * Parse a Grok CLI streaming-json trace. Grok emits incremental
+ * `{type:"thought"|"text",data:"..."}` events terminated by a single
+ * `{type:"end",stopReason,sessionId,requestId}` event. A turn completed cleanly
+ * only when an `end` event carries `stopReason === "EndTurn"`; any other terminal
+ * stopReason (e.g. an error/cancellation) fails the trace closed.
+ */
+export function parseGrokTrace(jsonl, { requireTerminal = true } = {}) {
+  const events = [];
+  const reasons = [];
+  for (const line of String(jsonl).split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      events.push(JSON.parse(line));
+    } catch {
+      reasons.push('Grok trace contains malformed JSONL');
+    }
+  }
+  if (!events.length) reasons.push('Grok trace is empty');
+  const endEvents = events.filter((event) => event?.type === 'end');
+  const end = endEvents.length ? endEvents[endEvents.length - 1] : null;
+  const cleanEnd = end && end.stopReason === 'EndTurn';
+  if (requireTerminal && !end) reasons.push('Grok trace is missing end event');
+  if (end && !cleanEnd) reasons.push(`Grok trace ended with stopReason ${end.stopReason || 'unknown'}`);
+  return {
+    valid: reasons.length === 0,
+    reasons: [...new Set(reasons)],
+    threadId: end?.sessionId || null,
+    eventCount: events.length,
+    terminalEvent: end ? (cleanEnd ? 'end' : `end:${end.stopReason || 'unknown'}`) : null,
+    recoveredErrorCount: 0,
+    commandLog: '',
+  };
+}
+
 export function runActor(spec, { prompt, cwd, arm, timeout, actorHome, actorBin }) {
   const invocation = buildActorInvocation(spec, { prompt, cwd });
   return runProcess(invocation.binary, invocation.args, {
@@ -214,7 +343,7 @@ export function runActor(spec, { prompt, cwd, arm, timeout, actorHome, actorBin 
   });
 }
 
-function resolveExecutable(binary, cwd) {
+export function resolveActorExecutable(binary, cwd) {
   if (isAbsolute(binary)) return binary;
   if (binary.includes('/')) return resolve(cwd, binary);
   for (const dir of String(process.env.PATH || '').split(delimiter)) {
@@ -241,7 +370,8 @@ function runProcess(binary, args, { cwd, timeout, env }) {
     let stderrBytes = 0;
     let stdoutTruncated = false;
     let stderrTruncated = false;
-    const child = spawn(binary, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env });
+    const detached = process.platform !== 'win32';
+    const child = spawn(binary, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env, detached });
     child.stdout.on('data', (chunk) => {
       stdoutBytes += chunk.length;
       const remaining = MAX_CAPTURE_BYTES - Buffer.byteLength(stdout);
@@ -258,17 +388,30 @@ function runProcess(binary, args, { cwd, timeout, env }) {
     let killTimer = null;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
+      signalProcessTree(child, 'SIGTERM', detached);
+      killTimer = setTimeout(() => signalProcessTree(child, 'SIGKILL', detached), 5000);
     }, timeout);
     child.on('close', (status, signal) => {
       clearTimeout(timer);
       if (killTimer) clearTimeout(killTimer);
-      done({
-        status, signal, stdout, stderr, error, timedOut,
-        durationMs: Math.round((Number(process.hrtime.bigint() - started) / 1e6) * 100) / 100,
-        stdoutBytes, stderrBytes, stdoutTruncated, stderrTruncated,
-      });
+      signalProcessTree(child, 'SIGTERM', detached);
+      setTimeout(() => {
+        signalProcessTree(child, 'SIGKILL', detached);
+        done({
+          status, signal, stdout, stderr, error, timedOut,
+          durationMs: Math.round((Number(process.hrtime.bigint() - started) / 1e6) * 100) / 100,
+          stdoutBytes, stderrBytes, stdoutTruncated, stderrTruncated,
+        });
+      }, detached ? 50 : 0);
     });
   });
+}
+
+function signalProcessTree(child, signal, detached) {
+  try {
+    if (detached && child.pid) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
 }

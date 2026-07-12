@@ -15,6 +15,7 @@ venv/
 /voice.answers.json
 evals/csb/runs/
 benchmark/evals/
+/todos/
 
 # Local scratch / generated agent workspaces
 voice-agent/

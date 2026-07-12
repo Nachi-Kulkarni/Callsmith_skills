@@ -16,6 +16,43 @@ import { fileURLToPath } from 'node:url';
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 export const REPO_ROOT = resolve(HERE, '../../..');
 
+export function outputSchemaText() {
+  return [
+    '# Required outputs',
+    '',
+    'Write these files in the workspace root (both **required**, non-empty):',
+    '',
+    '## 1. `voice.answers.json`',
+    '',
+    'JSON object of stack/policy choices. Prefer short **string enum tokens**, not free-form sentences.',
+    '',
+    'Common keys (include those that apply; **omit** unused provider keys — do not use the string `"none"` as a provider id):',
+    '',
+    '- `surface`, `architecture`, `language`, `barge_in`',
+    '- `telephony`, `orchestration`, `realtime_model`, `stt`, `llm`, `tts`, `vad` (only if that leg exists)',
+    '- `recording_consent`, `transcript_retention`, `human_handoff`, `tools`, `business_logic`, `latency`, `deployment`',
+    '',
+    'If Callsmith `SKILL.md` is present, use its **Canonical answers vocabulary** exactly.',
+    '',
+    '## 2. `callsmith.recipe.md`',
+    '',
+    'Short markdown handoff contract. Start with a fenced `json callsmith-contract` receipt following `reference/contract.md` when that file is available. The receipt policy must match `voice.answers.json`. Then include headings/content for:',
+    '',
+    '1. Intent / use case',
+    '2. Stack (providers + why)',
+    '3. Audio path',
+    '4. Interruption / barge-in',
+    '5. Floors (consent, retention, handoff, tools) — consistent with answers',
+    '6. Latency/cost note, with a percentile `turn_gap_ms` target in the receipt',
+    '7. Build / implement notes',
+    '',
+    'Empty recipe files are invalid.',
+    '',
+    'Do not invent other required deliverables.',
+    '',
+  ].join('\n');
+}
+
 /**
  * @param {'BASE'|'WITH'} arm
  * @param {{ id: string, brief: string, poison?: object|null }} scenario
@@ -35,49 +72,14 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
   );
 
   // Deterministic seed (same for BASE and WITH). Content only — not marked as "poison".
-  if (scenario.poison) {
-    writeFileSync(
-      join(runDir, 'voice.answers.json'),
-      JSON.stringify(scenario.poison, null, 2) + '\n',
-    );
-  }
+  writeFileSync(
+    join(runDir, 'voice.answers.json'),
+    JSON.stringify(scenario.poison || {}, null, 2) + '\n',
+  );
 
   writeFileSync(
     join(runDir, 'OUTPUT_SCHEMA.md'),
-    [
-      '# Required outputs',
-      '',
-      'Write these files in the workspace root (both **required**, non-empty):',
-      '',
-      '## 1. `voice.answers.json`',
-      '',
-      'JSON object of stack/policy choices. Prefer short **string enum tokens**, not free-form sentences.',
-      '',
-      'Common keys (include those that apply; **omit** unused provider keys — do not use the string `"none"` as a provider id):',
-      '',
-      '- `surface`, `architecture`, `language`, `barge_in`',
-      '- `telephony`, `orchestration`, `realtime_model`, `stt`, `llm`, `tts`, `vad` (only if that leg exists)',
-      '- `recording_consent`, `transcript_retention`, `human_handoff`, `tools`, `business_logic`, `latency`, `deployment`',
-      '',
-      'If Callsmith `SKILL.md` is present, use its **Canonical answers vocabulary** exactly.',
-      '',
-      '## 2. `callsmith.recipe.md`',
-      '',
-      'Short markdown handoff contract. Start with a fenced `json callsmith-contract` receipt following `reference/contract.md` when that file is available. The receipt policy must match `voice.answers.json`. Then include headings/content for:',
-      '',
-      '1. Intent / use case',
-      '2. Stack (providers + why)',
-      '3. Audio path',
-      '4. Interruption / barge-in',
-      '5. Floors (consent, retention, handoff, tools) — consistent with answers',
-      '6. Latency/cost note, with a percentile `turn_gap_ms` target in the receipt',
-      '7. Build / implement notes',
-      '',
-      'Empty recipe files are invalid.',
-      '',
-      'Do not invent other required deliverables.',
-      '',
-    ].join('\n'),
+    outputSchemaText(),
   );
 
   writeFileSync(

@@ -46,3 +46,9 @@ later `turn.completed` proves recovery, and rejects `turn.failed` or any termina
 
 [`trace-excerpts.jsonl`](./trace-excerpts.jsonl) retains only the evidence needed to understand these
 findings. Command output, personal paths, trace identifiers, and credentials are absent.
+
+## Offline engineering verification
+
+[`offline-core10-20260712.md`](./offline-core10-20260712.md) records the complete local test and
+fixture-causality evaluation after the publication hardening pass. It proves the benchmark and
+release machinery, not live-model product lift.
