@@ -12,10 +12,12 @@ import { prepareArmWorkspace } from '../evals/csb/harness/prepare.mjs';
 import { buildActorPrompt } from '../evals/csb/harness/prompts.mjs';
 import {
   actorSpec,
+  actorEnvironment,
   buildActorInvocation,
   codexThreadId,
   createIsolatedActorWorkspace,
   parseCodexTrace,
+  prepareCodexActorHome,
 } from '../evals/csb/harness/actors.mjs';
 import {
   seededSchedule,
@@ -114,7 +116,50 @@ describe('CSB run-arms CLI', () => {
     try {
       assert.ok(fs.existsSync(isolated.root));
       assert.equal(fs.existsSync(isolated.cwd), false);
+      assert.equal(fs.existsSync(isolated.home), false);
+      assert.equal(fs.existsSync(isolated.bin), false);
       assert.equal(isolated.cwd.startsWith(ROOT), false);
+    } finally {
+      fs.rmSync(isolated.root, { recursive: true, force: true });
+    }
+  });
+
+  it('gives Codex an auth-only home and hides personal agent skills', () => {
+    const isolated = createIsolatedActorWorkspace('auth-only-home');
+    const sourceHome = path.join(isolated.root, 'source-codex-home');
+    const spec = actorSpec({ tool: 'codex', model: 'gpt-5.6-luna', reasoning: 'xhigh' });
+    try {
+      fs.mkdirSync(sourceHome);
+      fs.writeFileSync(path.join(sourceHome, 'auth.json'), '{"token":"test-only"}\n');
+      fs.writeFileSync(path.join(sourceHome, 'config.toml'), 'model="personal"\n');
+      fs.mkdirSync(path.join(sourceHome, 'skills'));
+      fs.writeFileSync(path.join(sourceHome, 'skills', 'personal.md'), 'must not leak\n');
+
+      prepareCodexActorHome(spec, isolated.home, isolated.bin, sourceHome);
+      assert.deepEqual(fs.readdirSync(isolated.home), ['auth.json']);
+      assert.equal(fs.existsSync(path.join(isolated.home, 'config.toml')), false);
+      assert.equal(fs.existsSync(path.join(isolated.home, 'skills')), false);
+      assert.equal(fs.realpathSync(path.join(isolated.bin, 'node')), process.execPath);
+
+      const env = actorEnvironment(spec, {
+        cwd: '/tmp/arm', arm: 'BASE', actorHome: isolated.home, actorBin: isolated.bin,
+      });
+      assert.equal(env.HOME, isolated.home);
+      assert.equal(env.CODEX_HOME, isolated.home);
+      assert.equal(env.ZDOTDIR, isolated.home);
+      assert.equal(env.PATH.includes(process.env.PATH), false);
+      assert.equal(env.PATH.includes('.npm-global'), false);
+      assert.equal(env.PATH.includes('/tmp/arm/.bin'), false);
+      assert.equal(env.CODEX_THREAD_ID, undefined);
+      const globalCliProbe = spawnSync('/bin/sh', ['-c', 'command -v callsmith'], {
+        env, encoding: 'utf8',
+      });
+      assert.notEqual(globalCliProbe.status, 0, globalCliProbe.stdout);
+
+      const withEnv = actorEnvironment(spec, {
+        cwd: '/tmp/arm', arm: 'WITH', actorHome: isolated.home, actorBin: isolated.bin,
+      });
+      assert.equal(withEnv.PATH.split(path.delimiter)[0], '/tmp/arm/.bin');
     } finally {
       fs.rmSync(isolated.root, { recursive: true, force: true });
     }
@@ -122,14 +167,17 @@ describe('CSB run-arms CLI', () => {
 
   it('builds an isolated subscription-backed Codex invocation with pinned reasoning', () => {
     const spec = actorSpec({
-      tool: 'codex', binary: 'codex', model: 'gpt-5.6-luna', reasoning: 'xhigh',
+      tool: 'codex', binary: process.execPath, model: 'gpt-5.6-luna', reasoning: 'xhigh',
     });
     const invocation = buildActorInvocation(spec, { prompt: 'do the work', cwd: '/tmp/arm' });
-    assert.equal(invocation.binary, 'codex');
+    assert.equal(invocation.binary, process.execPath);
     assert.deepEqual(invocation.args.slice(0, 4), ['exec', '--strict-config', '--model', 'gpt-5.6-luna']);
     assert.ok(invocation.args.includes('--ephemeral'));
     assert.ok(invocation.args.includes('--ignore-user-config'));
     assert.ok(invocation.args.includes('--ignore-rules'));
+    for (const feature of ['plugins', 'remote_plugin', 'plugin_sharing', 'hooks', 'memories']) {
+      assert.ok(invocation.args.includes(feature));
+    }
     assert.ok(invocation.args.includes('--json'));
     assert.ok(invocation.args.includes('approval_policy="never"'));
     assert.ok(invocation.args.includes('model_reasoning_effort="xhigh"'));
@@ -367,7 +415,7 @@ describe('CSB validity and repeated-run statistics', () => {
       pair('b', score(false, true, true, true), score(false, true, true, true)),
       pair('b', score(true, true, true, true), score(false, true, true, true)),
     ];
-    const summary = summarizeValidPairs(pairs, { runs: 2 });
+    const summary = summarizeValidPairs(pairs, { runs: 2, regulatedScenarioIds: ['a'] });
     assert.equal(summary.n_valid_pairs, 4);
     assert.equal(summary.task_success.WITH, 0.75);
     assert.equal(summary.task_success.BASE, 0.25);
@@ -375,6 +423,11 @@ describe('CSB validity and repeated-run statistics', () => {
     assert.ok(summary.task_success.lift_95ci.low < summary.task_success.lift_95ci.high);
     assert.equal(summary.pass_power_k.k, 2);
     assert.equal(summary.pass_power_k.rate, 0.5);
+    assert.equal(summary.regulated_pass_power_k.rate, 1);
+    assert.deepEqual(summary.gate_rates.G_FLOOR, { WITH: 0.75, BASE: 0.25, lift: 0.5 });
+    assert.equal(summary.floor_lift, 0.5);
+    assert.equal(summary.physics_lift, 0);
+    assert.equal(summary.base_fail, 0.75);
     assert.equal(summary.diagnostic_gate_lift.G_FLOOR, 0.5);
   });
 });

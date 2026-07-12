@@ -1,13 +1,89 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import {
+  accessSync,
+  constants,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { delimiter, isAbsolute, join, resolve } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
 
 const MAX_CAPTURE_BYTES = 20 * 1024 * 1024;
 
 export function createIsolatedActorWorkspace(label = 'arm') {
   const root = mkdtempSync(join(tmpdir(), `callsmith-csb-${label}-`));
-  return { root, cwd: join(root, 'workspace') };
+  return {
+    root,
+    cwd: join(root, 'workspace'),
+    home: join(root, 'actor-home'),
+    bin: join(root, 'tool-bin'),
+  };
+}
+
+/**
+ * Give Codex subscription auth without exposing personal config, skills, plugins,
+ * memories, or history. The auth-only home is a sibling of the scored workspace,
+ * is never persisted in the run bundle, and is deleted with the isolated root.
+ */
+export function prepareCodexActorHome(
+  spec,
+  actorHome,
+  actorBin,
+  sourceCodexHome = process.env.CODEX_HOME || join(homedir(), '.codex'),
+) {
+  if (spec.tool !== 'codex') return null;
+  if (!actorHome) throw new Error('Codex actor requires an isolated home.');
+  if (!actorBin) throw new Error('Codex actor requires an isolated tool bin.');
+  const authSource = join(sourceCodexHome, 'auth.json');
+  if (!existsSync(authSource)) {
+    throw new Error(`Codex subscription auth not found at ${authSource}; run codex login first.`);
+  }
+  mkdirSync(actorHome, { recursive: false });
+  cpSync(authSource, join(actorHome, 'auth.json'));
+  mkdirSync(actorBin, { recursive: false });
+  symlinkSync(process.execPath, join(actorBin, 'node'));
+  const files = readdirSync(actorHome);
+  if (files.length !== 1 || files[0] !== 'auth.json') {
+    throw new Error('Codex actor home must contain auth.json only before launch.');
+  }
+  return actorHome;
+}
+
+export function actorEnvironment(spec, { cwd, arm, actorHome, actorBin } = {}) {
+  if (spec.tool !== 'codex') {
+    return {
+      ...process.env,
+      PATH: arm === 'WITH'
+        ? `${join(cwd, '.bin')}:${process.env.PATH || ''}`
+        : process.env.PATH || '',
+    };
+  }
+  if (!actorHome || !actorBin) throw new Error('Codex actor requires an isolated home and tool bin.');
+  const inheritedKeys = [
+    'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
+    'SSL_CERT_FILE', 'SSL_CERT_DIR', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+  ];
+  const env = Object.fromEntries(inheritedKeys
+    .filter((key) => process.env[key] !== undefined)
+    .map((key) => [key, process.env[key]]));
+  env.HOME = actorHome;
+  env.CODEX_HOME = actorHome;
+  env.ZDOTDIR = actorHome;
+  env.SHELL = '/bin/zsh';
+  env.PATH = [
+    ...(arm === 'WITH' ? [join(cwd, '.bin')] : []),
+    actorBin,
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ].join(delimiter);
+  return env;
 }
 
 export function actorSpec({ tool = 'opencode', binary, model, reasoning } = {}) {
@@ -38,13 +114,18 @@ export function buildActorInvocation(spec, { prompt, cwd }) {
       '--ephemeral',
       '--ignore-user-config',
       '--ignore-rules',
+      '--disable', 'plugins',
+      '--disable', 'remote_plugin',
+      '--disable', 'plugin_sharing',
+      '--disable', 'hooks',
+      '--disable', 'memories',
       '--skip-git-repo-check',
       '--json',
       '-c', 'approval_policy="never"',
     ];
     if (spec.reasoning) args.push('-c', `model_reasoning_effort="${spec.reasoning}"`);
     args.push('-C', cwd, prompt);
-    return { binary: spec.binary, args };
+    return { binary: resolveExecutable(spec.binary, cwd), args };
   }
   return {
     binary: spec.binary,
@@ -124,18 +205,29 @@ export function parseCodexTrace(jsonl, { requireTerminal = true } = {}) {
   };
 }
 
-export function runActor(spec, { prompt, cwd, arm, timeout }) {
+export function runActor(spec, { prompt, cwd, arm, timeout, actorHome, actorBin }) {
   const invocation = buildActorInvocation(spec, { prompt, cwd });
   return runProcess(invocation.binary, invocation.args, {
     cwd,
     timeout,
-    env: {
-      ...process.env,
-      PATH: arm === 'WITH'
-        ? `${join(cwd, '.bin')}:${process.env.PATH || ''}`
-        : process.env.PATH || '',
-    },
+    env: actorEnvironment(spec, { cwd, arm, actorHome, actorBin }),
   });
+}
+
+function resolveExecutable(binary, cwd) {
+  if (isAbsolute(binary)) return binary;
+  if (binary.includes('/')) return resolve(cwd, binary);
+  for (const dir of String(process.env.PATH || '').split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, binary);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Try the next PATH entry.
+    }
+  }
+  throw new Error(`Cannot resolve actor executable: ${binary}`);
 }
 
 function runProcess(binary, args, { cwd, timeout, env }) {

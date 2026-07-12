@@ -225,6 +225,11 @@ Reuse `callsmith contract validate`. Later: cross-check `answers.recording_conse
 | **BASE** | Same model, brief, time budget, output schema | No SKILL, no packs, no callsmith CLI, no reference/* |
 | **WITH** | Full product surface | Deleted generators still forbidden |
 
+For Codex actors, filesystem isolation alone is insufficient: the CLI can discover personal skills
+outside the arm workspace. Every arm therefore runs with a disposable auth-only `HOME` and
+`CODEX_HOME`. Only the subscription `auth.json` is copied; user configuration, rules, skills,
+plugins, memories, and history are excluded and the temporary home is never retained.
+
 Same poison seed for both arms.
 
 ### Attribution matrix (monthly / major skill edits)

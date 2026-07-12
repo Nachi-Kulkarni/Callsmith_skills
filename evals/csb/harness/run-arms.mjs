@@ -19,6 +19,7 @@ import {
   actorSpec,
   createIsolatedActorWorkspace,
   prepareActorWorkspace,
+  prepareCodexActorHome,
   retainActorTrace,
   runActor,
 } from './actors.mjs';
@@ -101,6 +102,15 @@ const config = {
     version: toolVersion,
     model: actorModel || null,
     reasoning: actor.reasoning,
+    isolation: actor.tool === 'codex' ? {
+      ephemeral_session: true,
+      ignore_user_config: true,
+      ignore_user_rules: true,
+      auth_only_home: true,
+      plugins_disabled: true,
+      hooks_disabled: true,
+      memories_disabled: true,
+    } : null,
   },
   git,
   seed,
@@ -170,10 +180,12 @@ for (const scheduled of schedule) {
 
     process.stdout.write(`  trial ${scheduled.trial} ${scenario.id} ${arm}: actor ... `);
     prepareActorWorkspace(actor, runDir);
+    prepareCodexActorHome(actor, isolated.home, isolated.bin);
     const sessionsBefore = actor.tool === 'opencode' ? listSessions(actor.binary, runDir) : [];
     const startedAtMs = Date.now();
     const processResult = await runActor(actor, {
       prompt, cwd: runDir, arm, timeout: timeoutMs,
+      actorHome: isolated.home, actorBin: isolated.bin,
     });
     writeFileSync(join(runDir, 'actor.stdout.txt'), processResult.stdout || '');
     writeFileSync(join(runDir, 'actor.stderr.txt'), processResult.stderr || '');
@@ -286,16 +298,42 @@ function buildSummary(results, configValue) {
     WITH: r.arms.WITH.score,
     BASE: r.arms.BASE.score,
   }));
+  const expectedPairs = configValue.runs * configValue.scenarios.length;
+  const runValid = configValue.mode === 'live'
+    && invalidArms.length === 0
+    && metricPairs.length === expectedPairs;
+  const repeatedCore10 = configValue.runs >= 3
+    && configValue.scenarios.length === 10
+    && ['BASE', 'WITH'].every((arm) => configValue.arms.includes(arm));
+  const regulatedScenarioIds = configValue.scenarios.filter((id) => {
+    const domain = loadScenario(id).manifest.domain;
+    return ['medical', 'banking', 'collections'].includes(domain);
+  });
+  const traces = results.flatMap((result) => Object.values(result.arms)
+    .map((arm) => arm.actor?.session_trace)
+    .filter(Boolean));
   return {
     schema_version: 2,
     run_id: configValue.run_id,
-    publishable: configValue.mode === 'live'
-      && invalidArms.length === 0
-      && metricPairs.length === configValue.runs * configValue.scenarios.length,
+    run_valid: runValid,
+    publishable: runValid && repeatedCore10,
+    publication_requirements: {
+      repeated_core10: repeatedCore10,
+      second_model_family_required_for_product_claim: true,
+      product_claim_eligible_from_this_run_alone: false,
+    },
     primary_metric: 'paired task-success-rate lift',
-    metrics: configValue.mode === 'live' ? summarizeValidPairs(metricPairs, { runs: configValue.runs }) : null,
+    metrics: configValue.mode === 'live'
+      ? summarizeValidPairs(metricPairs, { runs: configValue.runs, regulatedScenarioIds })
+      : null,
+    trace_sanitization: {
+      retained_traces: traces.length,
+      sanitized_traces: traces.filter((trace) => trace.sanitized === true).length,
+      all_retained_traces_sanitized: traces.length > 0 && traces.every((trace) => trace.sanitized === true),
+      note: 'Raw run traces are local diagnostics. Sanitize copies before adding a public evidence bundle.',
+    },
     invalid_arms: invalidArms,
-    n_scheduled_pairs: configValue.runs * configValue.scenarios.length,
+    n_scheduled_pairs: expectedPairs,
     n_valid_pairs: metricPairs.length,
     trials: results.map((r) => ({
       trial: r.trial,
@@ -322,9 +360,16 @@ function renderReport(summary, results) {
       '',
       `**pass^${summary.metrics.pass_power_k.k}:** ${format(summary.metrics.pass_power_k.rate)}`,
       '',
+      `**regulated pass^${summary.metrics.regulated_pass_power_k.k}:** ${format(summary.metrics.regulated_pass_power_k.rate)}`,
+      '',
+      `Floor lift ${format(summary.metrics.floor_lift)} · physics lift ${format(summary.metrics.physics_lift)} · BASE floor/physics fail rate ${format(summary.metrics.base_fail)}`,
+      '',
       'Task success requires every machine gate; G_REAL is a hard veto. Gate-score delta is diagnostic only.',
       '',
     );
+  }
+  if (summary.run_valid && !summary.publishable) {
+    lines.push('**Valid diagnostic run, not a publication run:** publication requires repeated core10; the product claim additionally requires a second model family.', '');
   }
   lines.push('| Trial | Scenario | BASE success | WITH success | Gate Δ (diagnostic) |', '|---:|---|---:|---:|---:|');
   for (const result of results) {

@@ -41,7 +41,10 @@ A publishable run also requires:
 
 The runner supports `opencode` and subscription-authenticated `codex` actors. Codex runs are
 ephemeral, ignore personal configuration/rules, execute inside a nested isolated Git root, and
-retain the CLI JSONL event stream as the arm trace. `codex login status` must report a valid login.
+retain the CLI JSONL event stream as the arm trace. Each arm also receives a disposable auth-only
+`HOME`/`CODEX_HOME`: the runner copies only `auth.json`, so personal skills, plugins, memories,
+history, and configuration cannot enter either arm. That home is deleted after the run and is never
+copied into the evidence bundle. `codex login status` must report a valid login.
 
 ## Commands
 

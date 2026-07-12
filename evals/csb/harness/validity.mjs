@@ -64,13 +64,14 @@ export function taskSuccess(score) {
   return Object.values(score.gates).length > 0 && Object.values(score.gates).every(Boolean);
 }
 
-export function summarizeValidPairs(pairs, { runs = 1 } = {}) {
+export function summarizeValidPairs(pairs, { runs = 1, regulatedScenarioIds = [] } = {}) {
   const valid = pairs.filter((pair) => pair?.valid !== false && pair?.WITH && pair?.BASE);
   const n = valid.length;
   const withValues = valid.map((p) => Number(taskSuccess(p.WITH)));
   const baseValues = valid.map((p) => Number(taskSuccess(p.BASE)));
   const pairedLift = withValues.map((value, i) => value - baseValues[i]);
   const gateNames = ['G_FLOOR', 'G_PHYS', 'G_CON', 'G_REAL'];
+  const regulated = new Set(regulatedScenarioIds);
 
   const byScenario = new Map();
   for (const pair of valid) {
@@ -79,6 +80,14 @@ export function summarizeValidPairs(pairs, { runs = 1 } = {}) {
     byScenario.set(pair.scenarioId, values);
   }
   const passPower = [...byScenario.values()].map((values) => values.length === runs && values.every(Boolean));
+  const regulatedPassPower = [...byScenario.entries()]
+    .filter(([scenarioId]) => regulated.has(scenarioId))
+    .map(([, values]) => values.length === runs && values.every(Boolean));
+  const gateRates = Object.fromEntries(gateNames.map((gate) => {
+    const WITH = mean(valid.map((p) => Number(Boolean(p.WITH.gates?.[gate]))));
+    const BASE = mean(valid.map((p) => Number(Boolean(p.BASE.gates?.[gate]))));
+    return [gate, { WITH, BASE, lift: round(WITH - BASE) }];
+  }));
 
   return {
     n_valid_pairs: n,
@@ -94,9 +103,19 @@ export function summarizeValidPairs(pairs, { runs = 1 } = {}) {
       rate: mean(passPower.map(Number)),
       scenarios_complete: passPower.length,
     },
-    diagnostic_gate_lift: Object.fromEntries(gateNames.map((gate) => [gate, mean(valid.map(
-      (p) => Number(Boolean(p.WITH.gates?.[gate])) - Number(Boolean(p.BASE.gates?.[gate])),
-    ))])),
+    regulated_pass_power_k: {
+      k: runs,
+      rate: mean(regulatedPassPower.map(Number)),
+      scenarios_complete: regulatedPassPower.length,
+      scenario_ids: [...regulated],
+    },
+    gate_rates: gateRates,
+    floor_lift: gateRates.G_FLOOR.lift,
+    physics_lift: gateRates.G_PHYS.lift,
+    base_fail: mean(valid.map((p) => Number(
+      !p.BASE.gates?.G_FLOOR || !p.BASE.gates?.G_PHYS,
+    ))),
+    diagnostic_gate_lift: Object.fromEntries(gateNames.map((gate) => [gate, gateRates[gate].lift])),
     diagnostic_gate_score_delta: mean(valid.map((p) => p.WITH.gateScore - p.BASE.gateScore)),
   };
 }
