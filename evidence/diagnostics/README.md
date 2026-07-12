@@ -52,3 +52,10 @@ findings. Command output, personal paths, trace identifiers, and credentials are
 [`offline-core10-20260712.md`](./offline-core10-20260712.md) records the complete local test and
 fixture-causality evaluation after the publication hardening pass. It proves the benchmark and
 release machinery, not live-model product lift.
+
+## Post-isolation live diagnostic
+
+[`grok-core10-20260712.md`](./grok-core10-20260712.md) records the first repeated live core10 result
+after the isolation boundary. It reports the 29 valid pairs, the invalid WITH arm, the no-lift cases,
+and the timing tradeoff. Because one scheduled arm was invalid, it remains diagnostic and cannot be
+promoted through a selective retry.

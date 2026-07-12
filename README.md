@@ -17,14 +17,59 @@ The hard part is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/
 
 callsmith encodes provider reality as **packs**, product taste as **floors**, and design quality as **evals**. The coding agent owns dialogue, stack choice, and implementation.
 
-### The +4 delta
+### Same brief. Same model. Different artifact.
 
-> My agent no longer hallucinates voice-stack physics, skips consent/handoff floors, or ships a pretty demo that fails on PSTN reality.
+In a repeated live CallsmithBench diagnostic, Grok-4.5 received the same voice-agent briefs, budget,
+and output schema with and without Callsmith.
 
-**Evidence status:** the scorer and isolated runner are complete, but no product-lift number is
-published until repeated core10 runs pass across two model families. Earlier traces remain visible as
-[superseded diagnostics](./evidence/diagnostics/README.md), including the benchmark contamination they
-exposed. See [Callsmith evidence](./evidence/README.md) and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
+| Valid paired result | BASE | WITH |
+|---|---:|---:|
+| Complete task success | 10.3% (3/29) | 100% (29/29) |
+| Floor gate | 62.1% | 100% |
+| Physics gate | 10.3% | 100% |
+| Contract gate | 10.3% | 100% |
+| Reality gate | 48.3% | 100% |
+
+That is a **+89.7 percentage-point diagnostic lift** (95% paired-bootstrap interval: +75.9 to
++100.0 points). It is not yet Callsmith's release claim: one of 30 scheduled WITH arms failed to
+write its answers artifact, and the two-family replication is still outstanding.
+
+The useful part is visible in the receipts:
+
+- **Clinic:** BASE kept an invalid 90-day retention value, a weak handoff, an unknown TTS provider,
+  and a malformed contract. WITH rewrote the floors, selected known packs, and produced a contract
+  that passed all four gates.
+- **Exotel:** BASE described the bridge but failed the custom-transform physics and structured
+  contract checks. WITH made the bridge ownership and transforms reviewable and passed all gates.
+- **WhatsApp:** BASE treated an asynchronous medical voice-note workflow inconsistently. WITH
+  removed the PSTN stack, disabled live barge-in, and bound escalation and retention into the receipt.
+
+Three pairs showed no lift because BASE already passed. WITH also took 58.1 seconds at the median,
+versus 54.0 seconds for BASE. The invalid arm stays in the record; it will not be selectively replaced.
+
+See the [diagnostic report](./evidence/diagnostics/grok-core10-20260712.md),
+[publication standard](./evidence/README.md), and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
+
+#### What CallsmithBench actually does
+
+CallsmithBench gives the same coding model the same realistic voice-agent brief twice. BASE receives
+the repository, output schema, and normal model knowledge. WITH receives those exact inputs plus
+Callsmith's skill, provider packs, floors, and validators. Both arms must write final artifacts—not
+just explain what they would build.
+
+Independent deterministic scorers then read `voice.answers.json` and the structured handoff contract:
+
+| Gate | What it checks |
+|---|---|
+| **G_FLOOR** | Consent, retention, and human handoff meet the scenario's minimum floor |
+| **G_PHYS** | Surfaces, providers, audio formats, transforms, and interruption ownership are compatible |
+| **G_CON** | The machine-readable contract is complete and agrees with the final answers |
+| **G_REAL** | Hard traps are avoided: invented providers, PSTN assumptions on WhatsApp, unsafe ticket-only escalation, and deleted generators |
+
+The scenarios include medical clinics, Exotel custom bridges, WhatsApp voice notes, unknown providers,
+and orchestration paths where native media handling changes the required transforms. This is
+**real-agent, real-repository, final-artifact evidence**. It measures design correctness before
+implementation; it does not claim production call quality, uptime, or real-user task completion.
 
 ### Product wedge
 
@@ -50,13 +95,69 @@ exposed. See [Callsmith evidence](./evidence/README.md) and [Honest Numbers](./e
 
 ## Install
 
-**As an agent skill (primary):**
+### One repository link — complete plugin
+
+Paste this repository into your client's marketplace/plugin installer:
+
+```text
+https://github.com/Nachi-Kulkarni/Callsmith_skills
+```
+
+That installation includes the Callsmith skill, provider packs, policy and contract references,
+verification CLI source, examples, evidence documentation, and Context7 MCP configuration.
+
+**Codex app:** open **Plugins → Add marketplace**, paste the repository link, install **Callsmith**,
+then start a new task.
+
+**Codex CLI:**
+
+```bash
+codex plugin marketplace add Nachi-Kulkarni/Callsmith_skills
+codex plugin add callsmith@callsmith-marketplace
+```
+
+**Claude Code:**
+
+```text
+/plugin marketplace add Nachi-Kulkarni/Callsmith_skills
+/plugin install callsmith@callsmith-marketplace
+```
+
+**Grok Build:**
+
+```bash
+grok plugin install Nachi-Kulkarni/Callsmith_skills
+```
+
+### Skill-only install
 
 ```bash
 npx skills add Nachi-Kulkarni/Callsmith_skills
 ```
 
-Then invoke `/callsmith` in Claude Code, Cursor, Codex, Copilot, Gemini CLI, or OpenCode.
+Then invoke `/callsmith` in Claude Code, Cursor, Codex, Copilot, Gemini CLI, or OpenCode. The
+skill-only route may not install Context7 automatically; run `npx ctx7 setup` when needed.
+
+### Current provider documentation
+
+Callsmith ships dated provider packs so every decision remains reviewable, but voice SDKs and APIs
+change faster than a release. For version-specific implementation docs, install Context7 once:
+
+```bash
+npx ctx7 setup
+```
+
+Choose MCP mode when your client supports it, or CLI + Skills mode when it does not. This repository
+also includes a project-level [`.mcp.json`](./.mcp.json) using Context7's stdio package, which works
+in unattended Grok sessions without an OAuth prompt. An API key is optional but recommended by
+Context7 for higher rate limits.
+
+Callsmith still works without Context7. The agent must fall back to official provider documentation
+through whatever web-fetch/browse capability is available, record the source URL, source date when
+available, and access date, and refuse to invent an API when neither source is available. Expired
+pack evidence, changed SDK versions, and volatile facts such as model names, API shapes, regions,
+pricing, and audio behavior trigger a fresh lookup.
+See [current-documentation policy](./reference/current-docs.md).
 
 **Optional verification CLI:**
 

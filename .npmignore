@@ -3,4 +3,11 @@ evals/csb/runs/
 test/
 .git/
 .env
+.env.*
 *.log
+*.tgz
+coverage/
+.nyc_output/
+.npm/
+.grok/
+nohup.out

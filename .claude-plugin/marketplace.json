@@ -1,0 +1,31 @@
+{
+  "name": "callsmith-marketplace",
+  "owner": {
+    "name": "Nachi Kulkarni",
+    "url": "https://github.com/Nachi-Kulkarni"
+  },
+  "metadata": {
+    "description": "Official Callsmith plugin marketplace for voice-agent engineering",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "callsmith",
+      "description": "Design production voice agents with verified provider physics, safety floors, contracts, and eval gates.",
+      "version": "1.6.0",
+      "author": {
+        "name": "Nachi Kulkarni",
+        "url": "https://github.com/Nachi-Kulkarni"
+      },
+      "homepage": "https://github.com/Nachi-Kulkarni/Callsmith_skills",
+      "tags": [
+        "voice-agent",
+        "telephony",
+        "realtime-audio",
+        "provider-packs",
+        "agent-skill"
+      ],
+      "source": "./"
+    }
+  ]
+}

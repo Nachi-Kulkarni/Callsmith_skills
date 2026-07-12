@@ -14,6 +14,31 @@ mean(success(WITH) - success(BASE))
 Success is binary. `G_FLOOR`, `G_PHYS`, `G_CON`, and `G_REAL` must all pass. A strong average cannot
 hide an unsafe or physically impossible result.
 
+## The strongest live diagnostic so far
+
+On 2026-07-12, Grok-4.5 at `high` completed 29 of 30 scheduled paired core10 trials validly. Across
+the valid pairs, WITH succeeded 29/29 and BASE succeeded 3/29: a paired lift of 0.897, with a 95%
+paired-bootstrap interval from 0.759 to 1.000.
+
+This is diagnostic evidence, not the release result. The missing pair was not a transport outage:
+the WITH actor completed its turn but did not update `voice.answers.json`. Excluding that pair is why
+the run is marked `run_valid: false` and `publishable: false`. Selectively rerunning and replacing the
+failed arm would condition the result on failure and is not allowed. The next eligible attempt is a
+new, complete, predeclared run.
+
+| Valid paired result | BASE | WITH | Lift |
+|---|---:|---:|---:|
+| Complete task success | 10.3% | 100% | +89.7 pp |
+| Floor gate | 62.1% | 100% | +37.9 pp |
+| Physics gate | 10.3% | 100% | +89.7 pp |
+| Contract gate | 10.3% | 100% | +89.7 pp |
+| Reality gate | 48.3% | 100% | +51.7 pp |
+
+BASE already succeeded in three valid pairs: `clinic-implement-golden` trial 1, `bank-kyc` trial 2,
+and `whatsapp-not-pstn` trial 3. Median actor time was 54.0 seconds for BASE and 58.1 seconds for WITH;
+WITH was slower in 13 of 29 valid pairs and faster in 16. These are actor wall-clock measurements,
+not deployed call latency or token economics.
+
 ## What it can establish
 
 - Whether Callsmith changes final design artifacts relative to the same model without Callsmith.

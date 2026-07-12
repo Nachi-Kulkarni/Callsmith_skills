@@ -46,6 +46,10 @@
     "access": "public"
   },
   "files": [
+    ".mcp.json",
+    ".claude-plugin",
+    ".codex-plugin",
+    "skills",
     "bin",
     "src",
     "data",

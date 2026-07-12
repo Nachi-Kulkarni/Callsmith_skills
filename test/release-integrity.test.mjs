@@ -24,6 +24,23 @@ describe('release integrity', () => {
     }
   });
 
+  it('ships a root-native marketplace plugin with Context7', () => {
+    const codex = JSON.parse(read('.codex-plugin/plugin.json'));
+    const claude = JSON.parse(read('.claude-plugin/plugin.json'));
+    const marketplace = JSON.parse(read('.claude-plugin/marketplace.json'));
+    const mcp = JSON.parse(read('.mcp.json'));
+
+    assert.equal(codex.name, 'callsmith');
+    assert.equal(codex.skills, './skills/');
+    assert.equal(codex.mcpServers, './.mcp.json');
+    assert.equal(claude.name, codex.name);
+    assert.equal(marketplace.name, 'callsmith-marketplace');
+    assert.equal(marketplace.plugins[0].source, './');
+    assert.equal(marketplace.plugins[0].name, codex.name);
+    assert.deepEqual(mcp.mcpServers.context7.args, ['-y', '@upstash/context7-mcp']);
+    assert.ok(fs.existsSync(path.join(ROOT, 'skills/callsmith/SKILL.md')));
+  });
+
   it('keeps committed contracts visible to normal git staging', () => {
     const ignore = read('.gitignore');
     assert.doesNotMatch(ignore, /^callsmith\.recipe\.md$/m);

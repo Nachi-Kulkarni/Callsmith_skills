@@ -4,9 +4,14 @@ This directory is the public proof surface for Callsmith.
 
 ## Current status
 
-No product-lift number is published yet. Earlier live runs helped improve the product and benchmark,
-but they predate the complete actor-isolation boundary. They are retained only as
-[diagnostic history](./diagnostics/README.md), not pooled into a CallsmithBench headline.
+No release-level product-lift number is published yet. A post-isolation Grok-4.5 core10 diagnostic
+showed +0.897 lift across 29 valid pairs, but one of 30 scheduled WITH arms failed to update its
+answers artifact. The run therefore remains non-publishable, and a selective retry cannot repair the
+estimand. Read the [diagnostic report](./diagnostics/grok-core10-20260712.md) and
+[Honest Numbers](./HONEST-NUMBERS.md).
+
+Earlier runs that predate the complete actor-isolation boundary remain
+[diagnostic history](./diagnostics/README.md) and are not pooled into a CallsmithBench headline.
 
 A public claim requires two frozen model-family evaluations. For each family:
 

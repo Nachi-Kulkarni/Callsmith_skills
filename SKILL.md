@@ -2,7 +2,7 @@
 name: callsmith
 description: Design production voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, architect, or harden a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, barge-in, or media streams. You are the compiler: dig deeper, apply hard floors, load provider packs for physics, write a short handoff contract, then implement. callsmith validates packs/physics — it does not generate the app.
 argument-hint: "[audit|critique|latency|ttft|harden|check|packs] [target]"
-allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Read, Write, Edit
+allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
 # callsmith
@@ -48,13 +48,14 @@ These are agent modes, not generators.
 
 1. **Converse** — dig deeper on vague intent (domain, surface, language, compliance, tools, handoff stakes).
 2. **Load packs** — for each provider under consideration, read `providers/<kind>/<id>.json` (or `callsmith pack show <id>`). Do not invent sample rates, barge-in mechanics, or potholes.
-3. **Apply floors** — load `reference/policy.md` and rewrite design when defaults violate policy. Change **answers fields**, not only prose. Tell the user before → after.
-4. **Normalize vocabulary** — every policy/stack field uses the canonical option IDs in `reference/policy.md`. Free-form synonyms fail tools and gates.
-5. **Physics check** — if the user has answers JSON, run `callsmith check --answers <file>`. Unknown providers: **do not synthesize** — research, write a pack, or refuse to ship.
-6. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
-7. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
-8. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
-9. **Quality modes** — audit / critique / harden / latency as needed. Use ttft only to isolate the LLM leg.
+3. **Verify current APIs** — before implementation, load `reference/current-docs.md`, note today's date, and check version-specific SDK/API usage through Context7 when available. Compare the lookup date with pack evidence/expiry dates. If Context7 is unavailable, use an available web-fetch/browse tool to read the provider's official documentation. Record source and access date. Never guess an API from model memory.
+4. **Apply floors** — load `reference/policy.md` and rewrite design when defaults violate policy. Change **answers fields**, not only prose. Tell the user before → after.
+5. **Normalize vocabulary** — every policy/stack field uses the canonical option IDs in `reference/policy.md`. Free-form synonyms fail tools and gates.
+6. **Physics check** — if the user has answers JSON, run `callsmith check --answers <file>`. Unknown providers: **do not synthesize** — research, write a pack, or refuse to ship.
+7. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
+8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
+9. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
+10. **Quality modes** — audit / critique / harden / latency as needed. Use ttft only to isolate the LLM leg.
 
 Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
 Not menu coverage 1.0.
@@ -95,7 +96,7 @@ Optional: keep `voice.answers.json` for `callsmith check` — values must use **
 | Choosing providers | Only relevant `providers/**/*.json` |
 | Physics | `callsmith check` or pack fields (ingest/egress/interruption) |
 | Quality | `reference/audit.md`, `reference/latency.md`, etc. |
-| Implement | Framework docs + pack potholes for chosen stack |
+| Implement | Current version-specific docs + pack potholes for chosen stack |
 
 ```bash
 callsmith packs
