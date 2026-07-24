@@ -2,6 +2,29 @@
 
 All notable changes to callsmith are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+- Added `/callsmith prompts` for focused production runtime-prompt writing and review.
+- Added the frozen licensed measurement corpus, live-adapter preflight/receipt runner, and CSB-Load SIGTERM drain gate — both runners machine-proven in CI (zero-spend trace replay; reference worker passes, dropped-call worker fails) — plus three locked pilot stack configs (`evals/measure/stacks/`) and the adapter contract. Live pack numbers still await provider credentials and spend approval.
+- Replaced flat deployment regions with structured media/worker/model/recording/transcript matrices and added advisory vs regulated fail-closed region checks. Verified region data landed only where primary docs support it (Twilio media edges, Telnyx anchor sites, Pipecat Cloud regions incl. Mumbai, ElevenLabs isolated EU/India environments); unverifiable packs stay `unknown` rather than claim coverage.
+- Extended contract receipts with optional deployment target, region, and drain ownership; refreshed pack transfer, stream-lifecycle, prompt-cache, and TTS segmentation guidance from official sources.
+- Added the weekly scheduled CI evidence gate — the repo pages its owner when pack evidence expires or drifts — and `MAINTENANCE.md`, the wake-up contract for the feature-complete posture.
+
+## [1.7.0-agent-compiler] — Deploy playbook + deployment physics
+
+### Added
+- **`/callsmith deploy`** (`reference/deploy.md`) — cloud-vs-self-host playbook: managed paths (LiveKit Cloud managed agents, Pipecat Cloud) vs self-host, the ten deployment decisions (compute model, concurrency, drain, cold start/warm pools, region physics, SIP ownership, secrets inventory, LB/WebSocket reality, observability, cost break-even), residency floor tie-in, and a Deployment Plan output template.
+- **`/callsmith architecture`** (`reference/architecture.md`) — S2S vs cascaded vs hybrid decision matrix scored from packs (turn-gap budget classes, cost/min, tool determinism, auditability); hybrid turn-type ownership; noob rules; one winner, no ties.
+- **Optional pack `deployment` block** (schema-gated): `hosted_option` (managed_runtime, region_pinning), `self_host_notes`, `concurrency_model`, structured `regions`, `drain_behavior` — populated across the pack library.
+- **Deep potholes from production scar tissue:** Silero (shared ONNX session, 32 ms window batching, thread contention, state reset on barge-in, double-VAD ownership), Twilio (agent self-interruption echo, mark tracking for played audio, transfer legs), Exotel (echo without mark/clear, Connect transfer flow), LiveKit (deploy drain, warm-pool cold start), Pipecat (bot-per-call drain, PSTN AEC), custom FastAPI (AEC ownership, drain/single-process), Gemini Live (session duration limit + resumption), OpenAI Realtime (truncate on barge-in with audio_end_ms accounting).
+- **`check` prints the Operations section** (requested → effective hosting model, adjustments, responsibilities) and the env-keys secrets checklist.
+- **Menu deploy targets:** `livekit_cloud`, `pipecat_cloud`, `cloud_vm` answer options.
+- **CSB scenario `deploy-managed-cloud-pilot`** — no-ops managed brief vs custom-bridge poison; the suite grows to 11 scenarios.
+- **harden.md transfer physics** — warm/blind transfer mechanics, consent before transfer, failure fallback, summary injection into the human leg.
+
+### Changed
+- CSB publication gate: a repeated full suite is now ≥10 scenarios (core10 or superset) after the suite grew to 11.
+
 ## [1.6.0-agent-compiler] — Regime change: agent compiler + verification
 
 ### Removed (deterministic generation)

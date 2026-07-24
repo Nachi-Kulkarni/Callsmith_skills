@@ -49,6 +49,9 @@ export function verifyPacks(providers, menu, options = {}) {
     verifyLatencyEvidence(pack, addFailure);
 
     checks++;
+    verifyRegions(pack.deployment?.regions, addFailure);
+
+    checks++;
     if (!pack.cost_estimates) {
       addFailure('missing cost_estimates');
     } else if (typeof pack.cost_estimates.per_minute_usd !== 'number') {
@@ -80,6 +83,16 @@ export function verifyPacks(providers, menu, options = {}) {
     failures,
     warnings,
   };
+}
+
+function verifyRegions(regions, addFailure) {
+  if (!regions) return addFailure('missing deployment.regions matrix');
+  for (const field of ['media_edges', 'worker_regions', 'model_regions', 'recording_regions', 'transcript_regions']) {
+    if (!Array.isArray(regions[field]) || !regions[field].length) addFailure(`deployment.regions.${field} must be non-empty`);
+  }
+  if (!parseDateOnly(regions.verified_at)) addFailure('deployment.regions.verified_at must be a real YYYY-MM-DD date');
+  validateUrls(regions.sources, 'deployment region source', addFailure);
+  if (!regions.sources?.length) addFailure('deployment.regions.sources must contain primary evidence URLs');
 }
 
 function verifyProvenance(verification, { now, staleAfterDays, addFailure, addWarning }) {

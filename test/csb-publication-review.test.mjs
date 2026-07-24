@@ -8,6 +8,7 @@ import {
   reviewPublication,
   writePublicationReview,
 } from '../evals/csb/scripts/review-publication.mjs';
+import { listScenarioIds } from '../evals/csb/harness/score.mjs';
 import {
   createRawPublishableRun,
   writeManifest,
@@ -32,7 +33,8 @@ describe('CSB product-claim review', () => {
 
       assert.equal(review.product_claim_eligible, true, review.failures.join('; '));
       assert.deepEqual(review.model_families.sort(), ['luna', 'terra']);
-      assert.equal(review.combined.n_valid_pairs, 60);
+      // 2 bundles × 3 runs × current suite size (core10 or superset).
+      assert.equal(review.combined.n_valid_pairs, 2 * 3 * listScenarioIds().length);
       assert.equal(review.combined.WITH, 1);
       assert.equal(review.combined.BASE, 0);
       assert.equal(review.combined.lift, 1);

@@ -1,0 +1,13 @@
+{
+  "stack": "replay-fixture",
+  "region": "us",
+  "cohort": "warm",
+  "corpus": "../utterances/manifest.json",
+  "max_spend_usd": 0,
+  "pack_metrics": {
+    "gemini-live": { "metric": "turn_gap_ms", "trace_metric": "turn_gap_ms" },
+    "livekit": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" },
+    "silero": { "metric": "endpointing_ms", "trace_metric": "endpointing_ms" }
+  },
+  "notes": "Zero-spend CI config: scores a recorded trace (run.mjs --trace) so the measurement boundary is machine-tested without credentials. Live runs clone a stacks/*.json config instead."
+}

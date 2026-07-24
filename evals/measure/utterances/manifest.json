@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "source": "Free Spoken Digit Dataset v1.0.8, https://github.com/Jakobovski/free-spoken-digit-dataset/tree/v1.0.8",
+  "license": "CC-BY-SA-4.0; attribution: Zohar Jackson, Cesar Souza, Jason Flaks, Yuxin Pan, Hereman Nicolas, Adhish Thite",
+  "playback_profiles": {
+    "clean": "play once",
+    "long": "repeat three times with deterministic 250 ms gaps",
+    "noise": "mix seeded pink noise at 12 dB SNR",
+    "barge_in": "start the paired speaker 300 ms after the primary",
+    "silence": "emit duration-matched silence instead of source audio"
+  },
+  "utterances": [
+    { "id": "digit-0-clean", "file": "0_jackson_0.wav", "sha256": "eea86018ce1730baaf7f5dd6ec88c1f727dd90203521a9115b489310a248ea05", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-0-noise", "file": "0_nicolas_0.wav", "sha256": "527b1d27c2b931204b24995f035580dd248b908978a27756b4698ce0aa7e1aa8", "license": "CC-BY-SA-4.0", "profile": "noise" },
+    { "id": "digit-1-clean", "file": "1_jackson_0.wav", "sha256": "b3739400f793620875bb7849bfd8629dc6b2966ed6bda8276aa14178a612f13a", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-1-barge", "file": "1_nicolas_0.wav", "sha256": "d57a29689b0abf1ab609ab401dd4053dbc18c317a4ed9ebed6a9aa034e9bab0a", "license": "CC-BY-SA-4.0", "profile": "barge_in", "pair": "1_jackson_0.wav" },
+    { "id": "digit-2-long", "file": "2_jackson_0.wav", "sha256": "214bac0c813b584410e3cb8cace2673d256b3fd735810bd516b2bfd0c2298620", "license": "CC-BY-SA-4.0", "profile": "long" },
+    { "id": "digit-2-clean", "file": "2_nicolas_0.wav", "sha256": "e55aea8bd4d83d0ae4de1b5a4b67a613f17aa00406cd726c352a061001308beb", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-3-noise", "file": "3_jackson_0.wav", "sha256": "5152a17feb7dba43cfabdb4284262004da3038d5c02a6a5282e851b7ad2bb2e2", "license": "CC-BY-SA-4.0", "profile": "noise" },
+    { "id": "digit-3-barge", "file": "3_nicolas_0.wav", "sha256": "5da068172b180b74cd8ed019d131679249387b0199cb972992adf18e21f1d82d", "license": "CC-BY-SA-4.0", "profile": "barge_in", "pair": "3_jackson_0.wav" },
+    { "id": "digit-4-clean", "file": "4_jackson_0.wav", "sha256": "e0febd48e7cf7cfdca949d0d07769e0fc708fb2e8e7648691fa7e6ed7a5b1ded", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-4-silence", "file": "4_nicolas_0.wav", "sha256": "dc6ae853b163bebf1774701a4f7e6e27bbace3472ba3628ec2d61b2e6ab1d0c7", "license": "CC-BY-SA-4.0", "profile": "silence" },
+    { "id": "digit-5-long", "file": "5_jackson_0.wav", "sha256": "070af5213084191c4de1156125bb792c28cea2728798043283e3def0dadd55b4", "license": "CC-BY-SA-4.0", "profile": "long" },
+    { "id": "digit-5-clean", "file": "5_nicolas_0.wav", "sha256": "808a05f646857095e97450f6824440c271c5a17029d24065a7ff27ea7813f61d", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-6-noise", "file": "6_jackson_0.wav", "sha256": "fe7705fdfaddc378d72c479664ab8aacd53fa78a99c3d130ad74b1ff40212595", "license": "CC-BY-SA-4.0", "profile": "noise" },
+    { "id": "digit-6-barge", "file": "6_nicolas_0.wav", "sha256": "48d22b265d86c14e6b4462f51122834bc66e99e3966e95f2279a9d07ffcb9e95", "license": "CC-BY-SA-4.0", "profile": "barge_in", "pair": "6_jackson_0.wav" },
+    { "id": "digit-7-clean", "file": "7_jackson_0.wav", "sha256": "bd4f5fa8db9a8a8d14a88236da314cd38fce2370cc406181b2485e03437d55d3", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-7-silence", "file": "7_nicolas_0.wav", "sha256": "615dc2a2ba6e915521151479bbec3724bd1f5e0c839bb57b693c45f897a174a3", "license": "CC-BY-SA-4.0", "profile": "silence" },
+    { "id": "digit-8-long", "file": "8_jackson_0.wav", "sha256": "25172d71c574ee504094d4b704efa478a253d29ee7da562ce6ec4800ffdb6eaf", "license": "CC-BY-SA-4.0", "profile": "long" },
+    { "id": "digit-8-noise", "file": "8_nicolas_0.wav", "sha256": "8e2af922d9417b55344ab3ff7d14148c77551c877d5a5543103a6dc07625bc12", "license": "CC-BY-SA-4.0", "profile": "noise" },
+    { "id": "digit-9-clean", "file": "9_jackson_0.wav", "sha256": "6b25bbf21f65cf5a6c9713ecf05b5d34641bbcfaac56b9d4d694f65758e12ff0", "license": "CC-BY-SA-4.0", "profile": "clean" },
+    { "id": "digit-9-barge", "file": "9_nicolas_0.wav", "sha256": "44e8eb48a33839ac22c10c702963fbb53463858187a721f3addbacfe0e5cf14b", "license": "CC-BY-SA-4.0", "profile": "barge_in", "pair": "9_jackson_0.wav" }
+  ]
+}

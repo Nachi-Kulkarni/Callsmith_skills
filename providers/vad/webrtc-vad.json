@@ -77,5 +77,12 @@
   "doc_urls": [
     "https://github.com/wiseman/py-webrtcvad"
   ],
-  "context7": null
+  "context7": null,
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Runs in-process in the worker; state must be isolated per call even when the binary/model is shared.",
+    "concurrency_model": "inline",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["any"], "model_regions": ["not_applicable"], "recording_regions": ["not_applicable"], "transcript_regions": ["not_applicable"], "routing": "pinned", "residency_controls": "documented", "verified_at": "2026-07-21", "sources": ["https://github.com/wiseman/py-webrtcvad"] },
+    "drain_behavior": "n/a"
+  }
 }

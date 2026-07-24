@@ -248,15 +248,30 @@
       ]
     },
     {
+      "id": "region",
+      "title": "Which region must carry the call?",
+      "required": false,
+      "default": "unknown",
+      "options": [
+        { "id": "unknown", "label": "Not pinned", "maps": { "region": "unknown" } },
+        { "id": "in", "label": "India", "maps": { "region": "in" } },
+        { "id": "us", "label": "United States", "maps": { "region": "us" } },
+        { "id": "eu", "label": "European Union", "maps": { "region": "eu" } }
+      ]
+    },
+    {
       "id": "deployment",
       "title": "Where will it run?",
       "default": "railway",
       "options": [
-        { "id": "local",   "label": "Local dev only", "maps": { "deployment": "local" } },
-        { "id": "railway", "label": "Railway",        "maps": { "deployment": "railway" } },
-        { "id": "render",  "label": "Render",         "maps": { "deployment": "render" } },
-        { "id": "fly",     "label": "Fly.io",         "maps": { "deployment": "fly" } },
-        { "id": "k8s",     "label": "Kubernetes",     "maps": { "deployment": "k8s" } }
+        { "id": "local",         "label": "Local dev only", "maps": { "deployment": "local" } },
+        { "id": "livekit_cloud", "label": "LiveKit Cloud",  "blurb": "Managed agent workers, scaling, and drain; hosted SIP. Pilot default for LiveKit stacks.", "maps": { "deployment": "livekit_cloud" } },
+        { "id": "pipecat_cloud", "label": "Pipecat Cloud",  "blurb": "Hosted bot runners with managed scaling. Pilot default for Pipecat stacks.", "maps": { "deployment": "pipecat_cloud" } },
+        { "id": "railway",       "label": "Railway",        "maps": { "deployment": "railway" } },
+        { "id": "render",        "label": "Render",         "maps": { "deployment": "render" } },
+        { "id": "fly",           "label": "Fly.io",         "maps": { "deployment": "fly" } },
+        { "id": "cloud_vm",      "label": "Cloud VM (AWS/GCP)", "blurb": "Single VM or ASG you supervise; you own drain, warm pools, and LB timeouts.", "maps": { "deployment": "cloud_vm" } },
+        { "id": "k8s",           "label": "Kubernetes",     "maps": { "deployment": "k8s" } }
       ]
     }
   ]

@@ -57,6 +57,16 @@
       "id": "dtmf_passthrough",
       "severity": "note",
       "note": "DTMF arrives as events, not in-band audio. Route it as a discrete signal; do not try to detect it from the audio stream."
+    },
+    {
+      "id": "agent_self_interruption_echo",
+      "severity": "blocker",
+      "note": "No echo canceller exists in your bridge and Exotel offers no mark/clear — buffered outbound audio plays out, and carrier/speakerphone echo of the agent's own TTS into the inbound leg false-triggers VAD: the bot interrupts itself in a loop. Gate VAD while the agent speaks, or use orchestration-level AEC when available."
+    },
+    {
+      "id": "transfer_via_connect_flow",
+      "severity": "note",
+      "note": "human_handoff=transfer on Exotel uses a Connect/transfer flow: a second leg to the human number. Blind transfer drops the agent leg; warm transfer needs a bridge/conference flow. Record the failure fallback (callback) in the contract — a no-answer transfer with no fallback strands the caller."
     }
   ],
   "env_keys": [
@@ -109,5 +119,28 @@
     "inbound",
     "outbound"
   ],
-  "native_capabilities": []
+  "native_capabilities": [],
+  "deployment": {
+    "hosted_option": {
+      "name": "exotel-cloud",
+      "managed_runtime": false,
+      "region_pinning": true,
+      "pricing_url": "https://exotel.com/pricing/",
+      "note": "Exotel runs the India carrier/media edge, not your agent. India-local media POPs make it the residency-friendly default for Indian regulated deployments — co-locate your worker in India."
+    },
+    "self_host_notes": "Your bridge/worker hosts wherever the orchestration pack says; keep it in India near the Exotel media POP or pay 150-300 ms of avoidable RTT on every audio frame.",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["in"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["not_applicable"],
+      "routing": "pinned",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-21",
+      "sources": ["https://developer.exotel.com/api/"]
+    },
+    "drain_behavior": "n/a"
+  }
 }

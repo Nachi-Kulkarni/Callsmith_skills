@@ -4,8 +4,8 @@
   "label": "AssemblyAI",
   "verification": {
     "grade": "official_docs",
-    "verified_at": "2026-07-10",
-    "expires_at": "2026-10-08",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
     "sources": [
       "https://www.assemblyai.com/docs/Guides/real-time_streaming_transcription"
     ]
@@ -33,7 +33,8 @@
   "potholes": [
     { "id": "requires_16k_pcm", "severity": "blocker", "note": "AssemblyAI streaming requires 16 kHz 16-bit mono PCM. Telephony μ-law 8 kHz must be decoded + resampled first.", "mitigated_by": ["audio_normalization"] },
     { "id": "turn_vs_partial", "severity": "warning", "note": "Turn events have end_of_turn field; only act on finalized turns (end_of_turn: true) for tool-calling or database writes." },
-    { "id": "session_billing", "severity": "note", "note": "Streaming is billed per session duration, not audio sent. Always send a Terminate message when done to avoid 3-hour auto-close billing." }
+    { "id": "session_billing", "severity": "note", "note": "Streaming is billed per session duration, not audio sent. Always send a Terminate message when done to avoid 3-hour auto-close billing." },
+    { "id": "stream_lifecycle", "severity": "warning", "note": "Sessions remain open until Terminate or the 3-hour cap. KeepAlive is only needed with inactivity_timeout; wait for the Termination receipt because billing follows open-session duration, including idle time." }
   ],
   "env_keys": ["ASSEMBLYAI_API_KEY"],
   "doc_urls": ["https://www.assemblyai.com/docs/Guides/real-time_streaming_transcription"],
@@ -64,5 +65,12 @@
     "per_minute_usd": 0.0062,
     "notes": "Universal-3.5 streaming ($0.37/hr)"
   },
-  "context7": { "library_id": null, "topics": ["streaming", "universal-3-5-pro", "turn-based"] }
+  "context7": { "library_id": null, "topics": ["streaming", "universal-3-5-pro", "turn-based"] },
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed streaming API; no model self-host path is declared in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["unknown"], "recording_regions": ["not_applicable"], "transcript_regions": ["unknown"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://www.assemblyai.com/docs/streaming/message-sequence", "https://www.assemblyai.com/docs/faq/how-does-universal-streaming-session-based-pricing-work"] },
+    "drain_behavior": "n/a"
+  }
 }

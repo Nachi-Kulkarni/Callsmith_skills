@@ -1,6 +1,12 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly self-watch: verify-packs evidence expiry and pack drift turn this
+    # red with no human in the loop. Red is the only pager (see MAINTENANCE.md).
+    - cron: '17 5 * * 1'
 
 jobs:
   test:

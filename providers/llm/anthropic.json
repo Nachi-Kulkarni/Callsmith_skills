@@ -4,8 +4,8 @@
   "label": "Anthropic (Claude Sonnet 4.6)",
   "verification": {
     "grade": "official_docs",
-    "verified_at": "2026-07-10",
-    "expires_at": "2026-10-08",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
     "sources": [
       "https://docs.anthropic.com/en/api/messages-streaming",
       "https://docs.anthropic.com/en/docs/build-with-claude/tool-use",
@@ -71,6 +71,11 @@
       "id": "extended_thinking",
       "severity": "note",
       "note": "Claude Sonnet 4 supports extended thinking. For voice agents, disable thinking (thinking={'type': 'disabled'}) to reduce latency."
+    },
+    {
+      "id": "prompt_prefix_and_tts_segmentation",
+      "severity": "note",
+      "note": "Keep tools and stable instructions in an exact prefix and apply cache_control at a deliberate breakpoint. Stream complete sentence or clause boundaries to TTS; preserve the cached prefix across turns."
     }
   ],
   "env_keys": [
@@ -89,5 +94,12 @@
   "context7": {
     "library_id": "/anthropics/anthropic-sdk-python",
     "topics": ["streaming", "tool-use"]
+  },
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed API; no model self-host path is declared in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["unknown"], "recording_regions": ["not_applicable"], "transcript_regions": ["unknown"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://docs.anthropic.com/en/api/messages-streaming", "https://platform.claude.com/docs/en/build-with-claude/prompt-caching"] },
+    "drain_behavior": "n/a"
   }
 }

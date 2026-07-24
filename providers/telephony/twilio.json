@@ -54,6 +54,21 @@
       "id": "dialcard_webhook_state",
       "severity": "note",
       "note": "Call + stream lifecycle are separate. The stream can start after connect and stop before hangup. Map both to a single session state machine."
+    },
+    {
+      "id": "agent_self_interruption_echo",
+      "severity": "blocker",
+      "note": "PSTN media streams carry no echo canceller in your process. Outbound TTS can leak back into the inbound leg (carrier echo, caller speakerphone), the VAD fires on the agent's own voice, and the bot interrupts itself in a loop. Mitigate with orchestration-level AEC (e.g. LiveKit server-side AEC on SIP), gating VAD while the agent speaks, or echo-aware endpointing."
+    },
+    {
+      "id": "mark_tracking_played_audio",
+      "severity": "warning",
+      "note": "Twilio buffers outbound audio you already sent. Attach a mark per chunk and track mark acknowledgements to know what the caller actually heard; on barge-in send clear and treat un-marked audio as unplayed when resuming, or the transcript and the caller's reality diverge."
+    },
+    {
+      "id": "transfer_mechanics",
+      "severity": "note",
+      "note": "human_handoff=transfer on Twilio is a second leg: conference the caller with a Dialed human leg (warm) or redirect the call (blind). Record the transfer-failure fallback (callback/voicemail) in the contract; a failed Dial with no fallback strands the caller."
     }
   ],
   "env_keys": [
@@ -104,5 +119,28 @@
     "inbound",
     "outbound"
   ],
-  "native_capabilities": []
+  "native_capabilities": [],
+  "deployment": {
+    "hosted_option": {
+      "name": "twilio-cloud",
+      "managed_runtime": false,
+      "region_pinning": true,
+      "pricing_url": "https://www.twilio.com/voice/pricing",
+      "note": "Twilio runs the carrier/media edge, not your agent. Regional voice products and edge locations exist; pin the region near both callers and your worker for latency and residency."
+    },
+    "self_host_notes": "Your bridge/worker is yours to host wherever the orchestration pack says. Twilio-side concurrency is carrier-grade; your side scales on concurrent media streams.",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["us", "eu"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["not_applicable"],
+      "routing": "configurable",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-24",
+      "sources": ["https://www.twilio.com/docs/global-infrastructure", "https://www.twilio.com/docs/global-infrastructure/edge-locations"]
+    },
+    "drain_behavior": "n/a"
+  }
 }

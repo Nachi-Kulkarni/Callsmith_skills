@@ -50,6 +50,11 @@ versus 54.0 seconds for BASE. The invalid arm stays in the record; it will not b
 See the [diagnostic report](./evidence/diagnostics/grok-core10-20260712.md),
 [publication standard](./evidence/README.md), and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
 
+Operational evidence is a separate track. Callsmith now ships a hashed 20-clip licensed corpus,
+provider-adapter measurement boundary, structured region/residency checks, and a real SIGTERM drain
+gate. No provider latency number is published yet: the three live pilots still require provider
+credentials, spend approval, retained raw traces, sanitization, and review.
+
 #### What CallsmithBench actually does
 
 CallsmithBench gives the same coding model the same realistic voice-agent brief twice. BASE receives
@@ -223,7 +228,7 @@ curl -fsSL https://raw.githubusercontent.com/Nachi-Kulkarni/Callsmith_skills/mai
 
 Example contract: [`examples/clinic-triage/`](./examples/clinic-triage/). Its versioned machine-readable receipt is documented in [`reference/contract.md`](./reference/contract.md); prose alone cannot satisfy policy floors.
 
-Playbooks: `/callsmith audit` · `critique` · `latency` · `harden` — with `ttft` retained only to isolate the LLM submetric. See `reference/`.
+Playbooks: `/callsmith audit` · `critique` · `architecture` · `latency` · `ttft` · `prompts` · `harden` · `deploy`. See `reference/`.
 
 ## A five-minute first win
 
@@ -289,9 +294,12 @@ Add a provider by dropping a validated JSON pack into `providers/`. **Unknown pr
 | `/callsmith` | Dig deeper → floors → pack-informed contract → implement |
 | `/callsmith audit` | Readiness scorecard |
 | `/callsmith critique` | Opinionated architecture critique |
+| `/callsmith architecture` | S2S vs cascaded vs hybrid — decided with pack numbers, no ties |
 | `/callsmith latency` | Optimize user speech-end → first audible audio with a full turn trace |
 | `/callsmith ttft` | Diagnose the LLM first-token submetric only |
+| `/callsmith prompts` | Write or review the production runtime prompt |
 | `/callsmith harden` | Production-readiness pass |
+| `/callsmith deploy` | Cloud vs self-host: drain, regions, warm pools, concurrency, break-even |
 
 ### Verification CLI
 
@@ -328,6 +336,9 @@ Generation commands (`init`, `forge`, `scaffold`, `simulate`, `intake`, …) are
 | [`reference/policy.md`](./reference/policy.md) | Canonical IDs, channel rules, and conservative product floors |
 | [`reference/contract.md`](./reference/contract.md) | Structured receipt schema and explicit-risk override |
 | [`reference/latency.md`](./reference/latency.md) | Turn Gap instrumentation, attribution, budgets, and experiment loop |
+| [`reference/prompts.md`](./reference/prompts.md) | Production runtime-prompt writing and review |
+| [`reference/architecture.md`](./reference/architecture.md) | S2S vs cascaded vs hybrid decision matrix |
+| [`reference/deploy.md`](./reference/deploy.md) | Cloud vs self-host deployment physics: drain, regions, warm pools, concurrency |
 | [`reference/workflow.md`](./reference/workflow.md) | Committed artifacts, CI gate, and thin runtime adapters |
 
 ## License

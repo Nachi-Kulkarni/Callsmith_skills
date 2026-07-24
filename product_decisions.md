@@ -191,7 +191,7 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 
 | Decision | Detail |
 |---|---|
-| Packs are the stdlib | Audio ingest/egress, interruption, potholes, evidence-labeled latency/cost planning inputs, env keys, source URLs |
+| Packs are the stdlib | Audio ingest/egress, interruption, potholes, evidence-labeled latency/cost planning inputs, env keys, source URLs, optional evidence-graded `deployment` physics |
 | Evidence expires | Every factual pack records grade, verification date, expiry, and primary sources; expired evidence fails verification |
 | Add provider = drop JSON | Validated by schema; no code change required for new facts |
 | Unknown provider | Research → write/install pack → re-validate. **Do not synthesize a fake pack.** |
@@ -207,7 +207,7 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | Hooks **[OPEN]** | Pre-ship constraints (floors + pack load) without competing CLI generator |
 | Plugins | Packs as extensibility; future agent-runtime plugins optional |
 | Workflows | Agent multi-step: dig-deeper → contract → implement → harden → eval |
-| Playbooks (`reference/*`) | Optional modes: audit, critique, latency, ttft submetric isolation, harden |
+| Playbooks (`reference/*`) | Optional modes: audit, critique, architecture, latency, ttft, prompts (runtime conversation), harden, deploy |
 
 ---
 
@@ -226,6 +226,12 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | C9 | Contract validate CLI shape | **DONE** — versioned receipt validates provider IDs, policy basis, jurisdiction, regulated defaults, and percentile turn-gap SLOs |
 | C10 | P0 wedge = pack inspect + floor receipts + contract validate + eval gate | **DECIDED** |
 | C11 | Companion docs (`product.md`, `subtraction.md`, README) must not contradict this file | **DECIDED** |
+| C12 | `deploy` + `architecture` are playbooks (agent modes) backed by pack deployment physics; deterministic generation stays deleted | **DECIDED** |
+| C13 | Packs may carry an optional evidence-graded `deployment` block; CSB publication gate accepts a repeated full suite of ≥10 scenarios (core10 or superset) | **DECIDED** |
+| C14 | Measured latency requires a hashed licensed corpus, pinned config/region/cohort, raw turn traces, nearest-rank percentiles, and quality vetoes; no provider number is inferred | **DECIDED** |
+| C15 | The optional receipt deployment block is additive; managed target/drain claims and regulated residency paths fail closed against structured pack regions | **DECIDED** |
+| C16 | CSB-Load sends real SIGTERM under concurrency and passes only with zero drops/leaks/stale replay plus bounded p95 turn-gap degradation | **DECIDED** |
+| C17 | `prompts` edits the production runtime prompt; safety, audio, and tool enforcement remain code-owned | **DECIDED** |
 
 ---
 
@@ -249,3 +255,6 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | 2026-07-09 | CallsmithBench (CSB) eval design: ablation CSB-Δ, 4 sealed gates, dual oracle, core10 — `evals/csb/DESIGN.md`. |
 | 2026-07-09 | CSB Phase 1 shipped: schema v1, machine oracles, fixture scorer, CI tests. CSB-Δ unpublished until paired agent run. |
 | 2026-07-10 | Contract receipt v1 replaced keyword-only floor theater; committed contract history is the cross-session evidence trail. |
+| 2026-07-20 | Playbooks `deploy` + `architecture`; optional pack `deployment` blocks (8 packs) + deep potholes (Silero reuse/echo/truncate/session-limit/transfer); menu deploy targets; `check` prints Operations + env keys; scenario `deploy-managed-cloud-pilot` grows suite to 11; publication gate ≥10. |
+| 2026-07-21 | Frozen measurement corpus/harness, structured region matrices, optional deployment receipt enforcement, and CSB-Load drain gate. Provider measurements remain unpublished until live raw traces clear review. |
+| 2026-07-22 | Added `/callsmith prompts` as the runtime-prompt writing and review playbook. |

@@ -4,10 +4,11 @@
   "label": "Plivo",
   "verification": {
     "grade": "official_docs",
-    "verified_at": "2026-07-10",
-    "expires_at": "2026-10-08",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
     "sources": [
-      "https://www.plivo.com/docs/voice/stream"
+      "https://www.plivo.com/docs/voice/stream",
+      "https://www.plivo.com/docs/voice/use-cases/transfer-to-human-agent"
     ]
   },
   "transport": "websocket",
@@ -32,7 +33,8 @@
   ],
   "potholes": [
     { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model.", "mitigated_by": ["audio_normalization"] },
-    { "id": "xml_element_stream", "severity": "warning", "note": "Plivo uses XML elements to start streaming; the WebSocket connects only after the XML element is processed. Handle the async bridge." }
+    { "id": "xml_element_stream", "severity": "warning", "note": "Plivo uses XML elements to start streaming; the WebSocket connects only after the XML element is processed. Handle the async bridge." },
+    { "id": "human_transfer", "severity": "warning", "note": "Use Dial to bridge the caller to a DID or authenticated SIP endpoint. Stop the AI media path only after the destination answers; handle Dial completion/failure so the caller is not stranded." }
   ],
   "env_keys": ["PLIVO_AUTH_ID", "PLIVO_AUTH_TOKEN"],
   "doc_urls": ["https://www.plivo.com/docs/voice/stream"],
@@ -63,5 +65,12 @@
     "per_minute_usd": 0.008,
     "notes": "US domestic voice leg"
   },
-  "context7": { "library_id": null, "topics": ["media-stream", "voice-xml"] }
+  "context7": { "library_id": null, "topics": ["media-stream", "voice-xml"] },
+  "deployment": {
+    "hosted_option": { "name": "plivo-cloud", "managed_runtime": false, "region_pinning": false, "note": "Carrier/media service only; region and residency behavior remain unverified in this pack." },
+    "self_host_notes": "Your media worker is self-hosted. Co-location advice remains unknown until the media-edge path is measured.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["unknown"], "worker_regions": ["not_applicable"], "model_regions": ["not_applicable"], "recording_regions": ["unknown"], "transcript_regions": ["not_applicable"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://www.plivo.com/docs/voice/stream"] },
+    "drain_behavior": "n/a"
+  }
 }

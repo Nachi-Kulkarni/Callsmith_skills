@@ -9,6 +9,7 @@ import {
   sanitizeJsonValue,
   sanitizeTrace,
 } from '../evals/csb/scripts/build-evidence.mjs';
+import { listScenarioIds } from '../evals/csb/harness/score.mjs';
 import { createRawPublishableRun } from '../test-support/csb-fixture.mjs';
 
 describe('CSB evidence publication', () => {
@@ -65,7 +66,8 @@ describe('CSB evidence publication', () => {
       assert.ok(result.files.includes('REDACTION.md'));
       assert.ok(result.files.includes('REPRODUCE.md'));
       assert.ok(result.files.includes('case-studies/README.md'));
-      assert.equal(result.files.filter((file) => file.startsWith('case-studies/trial-')).length, 30);
+      // 3 trials per scenario in the current suite (core10 or superset).
+      assert.equal(result.files.filter((file) => file.startsWith('case-studies/trial-')).length, 3 * listScenarioIds().length);
       assert.ok(result.files.includes('trial-001/bank-kyc/BASE/actor.events.sanitized.jsonl'));
       assert.equal(fs.existsSync(path.join(out, 'do-not-copy.txt')), false);
       assert.equal(result.files.some((file) => file.endsWith('actor.events.jsonl')), false);

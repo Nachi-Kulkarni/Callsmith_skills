@@ -44,6 +44,16 @@
       "id": "interruption_via_track",
       "severity": "warning",
       "note": "LiveKit interruption is detected from the input track; you must clear/republish the outbound stream segment to actually stop playback to the caller."
+    },
+    {
+      "id": "drain_on_deploy",
+      "severity": "warning",
+      "note": "Deploys must drain: stop agent dispatch, let in-flight calls finish, then exit. Killing a worker mid-call drops callers. LiveKit Cloud manages drain for hosted agents; self-host must implement it."
+    },
+    {
+      "id": "warm_pool_cold_start",
+      "severity": "warning",
+      "note": "First-call latency hides plugin/model loading (VAD model load, STT/TTS connection setup). Pre-warm at worker startup and keep provider connections alive; measure cold and warm calls as separate cohorts."
     }
   ],
   "env_keys": [
@@ -98,5 +108,28 @@
   ],
   "native_capabilities": [
     "audio_normalization"
-  ]
+  ],
+  "deployment": {
+    "hosted_option": {
+      "name": "livekit-cloud",
+      "managed_runtime": true,
+      "region_pinning": true,
+      "pricing_url": "https://livekit.io/pricing",
+      "note": "LiveKit Cloud runs managed agent workers (lk agent create / register) with platform-managed scaling and drain, hosted SIP trunking, and region pinning. Best default for pilots; per-participant pricing."
+    },
+    "self_host_notes": "Self-hosted LiveKit server is free; you own SFU/media nodes, agent worker pools, TURN, and the SIP bridge. A worker multiplexes many calls per process — cap concurrent calls per worker before VAD/turn-detector CPU contention degrades endpointing, and implement SIGTERM drain (stop dispatch, finish calls, exit).",
+    "concurrency_model": "worker_pool",
+    "regions": {
+      "media_edges": ["unknown"],
+      "worker_regions": ["unknown"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "pinned",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-21",
+      "sources": ["https://docs.livekit.io/home/cloud/regions/"]
+    },
+    "drain_behavior": "platform_managed"
+  }
 }

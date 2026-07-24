@@ -19,7 +19,7 @@ describe('provider packs', () => {
   });
 
   it('verify-packs has no failures', () => {
-    const report = verifyPacks(loadProviders(), loadMenu(), { now: '2026-07-10T12:00:00Z' });
+    const report = verifyPacks(loadProviders(), loadMenu(), { now: '2026-07-21T12:00:00Z' });
     assert.equal(report.failures.length, 0, JSON.stringify(report.failures, null, 2));
   });
 
@@ -34,7 +34,7 @@ describe('provider packs', () => {
   it('labels community evidence without pretending it is first-party verification', () => {
     const community = structuredClone(loadProviders().twilio);
     community.verification.grade = 'community';
-    const report = verifyPacks({ twilio: community }, { groups: [] }, { now: '2026-07-10T12:00:00Z' });
+    const report = verifyPacks({ twilio: community }, { groups: [] }, { now: '2026-07-21T12:00:00Z' });
     assert.equal(report.failures.length, 0, JSON.stringify(report.failures, null, 2));
     assert.ok(report.warnings.some(({ message }) => /community-sourced/i.test(message)));
   });
@@ -53,7 +53,7 @@ describe('provider packs', () => {
     const original = loadProviders().openai;
     const missing = structuredClone(original);
     delete missing.latency_evidence;
-    const missingReport = verifyPacks({ openai: missing }, { groups: [] }, { now: '2026-07-10T12:00:00Z' });
+    const missingReport = verifyPacks({ openai: missing }, { groups: [] }, { now: '2026-07-21T12:00:00Z' });
     assert.ok(missingReport.failures.some(({ message }) => message.includes('latency_estimates require latency_evidence')));
 
     const measured = structuredClone(original);
@@ -65,7 +65,7 @@ describe('provider packs', () => {
       percentiles_ms: { p50: 280, p95: 510, p99: 740 },
       methodology: '500 warmed streaming requests over the production network path.',
     }];
-    const measuredReport = verifyPacks({ openai: measured }, { groups: [] }, { now: '2026-07-10T12:00:00Z' });
+    const measuredReport = verifyPacks({ openai: measured }, { groups: [] }, { now: '2026-07-21T12:00:00Z' });
     assert.equal(measuredReport.failures.length, 0, JSON.stringify(measuredReport.failures, null, 2));
   });
 
@@ -86,4 +86,31 @@ describe('provider packs', () => {
       assert.ok(typeof p.ingest.sample_rate === 'number', `${p.id} missing sample_rate`);
     }
   });
+
+  it('orchestration packs carry deployment physics for the deploy playbook', () => {
+    const providers = loadProviders();
+    for (const id of ['livekit', 'pipecat', 'custom-fastapi']) {
+      const dep = providers[id].deployment;
+      assert.ok(dep, `${id} missing deployment block`);
+      assert.ok(typeof dep.concurrency_model === 'string', `${id} concurrency_model`);
+      assert.ok(typeof dep.drain_behavior === 'string', `${id} drain_behavior`);
+    }
+    // The custom bridge must never pretend a managed option exists.
+    assert.equal(providers['custom-fastapi'].deployment.hosted_option, null);
+    assert.equal(providers['custom-fastapi'].deployment.drain_behavior, 'user_implemented');
+    assert.equal(providers.livekit.deployment.hosted_option.managed_runtime, true);
+    assert.equal(providers.pipecat.deployment.hosted_option.managed_runtime, true);
+  });
+
+  it('deployment blocks (when present) declare honest hosted_option shape', () => {
+    for (const pack of Object.values(loadProviders())) {
+      if (!pack.deployment) continue;
+      if (pack.deployment.hosted_option != null) {
+        assert.equal(typeof pack.deployment.hosted_option.name, 'string', `${pack.id} hosted_option.name`);
+        assert.equal(typeof pack.deployment.hosted_option.managed_runtime, 'boolean', `${pack.id} managed_runtime`);
+        assert.equal(typeof pack.deployment.hosted_option.region_pinning, 'boolean', `${pack.id} region_pinning`);
+      }
+    }
+  });
+
 });

@@ -53,6 +53,20 @@ describe('skill / constitution structure', () => {
     assert.match(pd, /pack physics inspect \+ floor receipts \+ contract validate \+ eval gate/);
     assert.match(pd, /The agent compiles/);
   });
+
+  it('SKILL.md routes deploy + architecture + prompts playbooks and the reference files exist', () => {
+    const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
+    assert.match(skill, /reference\/deploy\.md/);
+    assert.match(skill, /reference\/architecture\.md/);
+    assert.match(skill, /reference\/prompts\.md/);
+    for (const f of ['deploy.md', 'architecture.md', 'prompts.md']) {
+      assert.ok(fs.existsSync(path.join(ROOT, 'reference', f)), `reference/${f} missing`);
+    }
+    const deploy = fs.readFileSync(path.join(ROOT, 'reference', 'deploy.md'), 'utf8');
+    assert.match(deploy, /livekit-cloud|LiveKit Cloud/);
+    assert.match(deploy, /pipecat-cloud|Pipecat Cloud/);
+    assert.match(deploy, /drain/i);
+  });
 });
 
 describe('no synthesis', () => {
@@ -111,5 +125,61 @@ describe('physics inspect', () => {
     const answers = path.join(ROOT, 'examples', 'clinic-triage', 'voice.answers.json');
     const r = run('check', '--answers', answers);
     assert.equal(r.status, 0, r.stderr + r.stdout);
+  });
+});
+
+describe('region physics', () => {
+  const exotelAnswers = (overrides) => ({
+    surface: 'inbound_pstn',
+    architecture: 'realtime_s2s',
+    telephony: 'exotel',
+    orchestration: 'custom_fastapi',
+    realtime_model: 'gemini_live',
+    vad: 'silero',
+    language: 'english',
+    barge_in: 'required',
+    latency: 'balanced',
+    business_logic: 'support',
+    tools: 'none',
+    deployment: 'cloud_vm',
+    ...overrides,
+  });
+  const writeAnswers = (name, answers) => {
+    const file = path.join(ROOT, 'test', name);
+    fs.writeFileSync(file, JSON.stringify(answers, null, 2));
+    return file;
+  };
+
+  it('advises but does not block an unverified region for unregulated traffic', () => {
+    const file = writeAnswers('_region-advisory.answers.json', exotelAnswers({ region: 'eu' }));
+    try {
+      const r = run('check', '--answers', file);
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      assert.match(r.stdout, /Advisory \[region_unverified\] Exotel/);
+    } finally {
+      fs.unlinkSync(file);
+    }
+  });
+
+  it('fails closed when regulated collections pins an unverifiable region', () => {
+    const file = writeAnswers('_region-blocker.answers.json', exotelAnswers({ region: 'eu', business_logic: 'collections' }));
+    try {
+      const r = run('check', '--answers', file);
+      assert.equal(r.status, 1, r.stderr + r.stdout);
+      assert.match(r.stderr + r.stdout, /region_unverified/);
+    } finally {
+      fs.unlinkSync(file);
+    }
+  });
+
+  it('does not flag the telephony leg when the region pin is verified', () => {
+    const file = writeAnswers('_region-verified.answers.json', exotelAnswers({ region: 'in' }));
+    try {
+      const r = run('check', '--answers', file);
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      assert.doesNotMatch(r.stdout, /region_unverified\] Exotel/);
+    } finally {
+      fs.unlinkSync(file);
+    }
   });
 });

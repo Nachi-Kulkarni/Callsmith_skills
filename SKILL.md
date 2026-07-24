@@ -1,7 +1,7 @@
 ---
 name: callsmith
 description: Design production voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, architect, or harden a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, barge-in, or media streams. You are the compiler: dig deeper, apply hard floors, load provider packs for physics, write a short handoff contract, then implement. callsmith validates packs/physics — it does not generate the app.
-argument-hint: "[audit|critique|latency|ttft|harden|check|packs] [target]"
+argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|check|packs] [target]"
 allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
@@ -34,14 +34,21 @@ Primary install for users: `npx skills add Nachi-Kulkarni/Callsmith_skills` then
 
 ## Command routing (playbooks)
 
-| Argument | Load |
-|---|---|
-| `audit` | `reference/audit.md` |
-| `critique` | `reference/critique.md` |
-| `latency` | `reference/latency.md` |
-| `ttft` | `reference/ttft.md` |
-| `harden` | `reference/harden.md` |
+Exactly eight modes. Load **only** the matching file when invoked:
 
+| Argument | Load | When |
+|---|---|---|
+| `audit` | `reference/audit.md` | Score an existing design; punch list, no edits |
+| `critique` | `reference/critique.md` | Opinionated stack second opinion; pick a winner |
+| `architecture` | `reference/architecture.md` | S2S vs cascaded vs hybrid; decide with numbers, no ties |
+| `latency` | `reference/latency.md` | Turn Gap (speech end → first audible) |
+| `ttft` | `reference/ttft.md` | LLM-leg only; use after latency points at TTFT |
+| `prompts` | `reference/prompts.md` | Write or review the production runtime prompt |
+| `harden` | `reference/harden.md` | Pre-pilot resilience / safety / state machine |
+| `deploy` | `reference/deploy.md` | Cloud vs self-host; drain, regions, warm pools, concurrency |
+
+No argument → default compile loop below.
+`check` / `packs` → verification CLI only (not playbooks).
 These are agent modes, not generators.
 
 ## Your job (compile loop)
@@ -55,7 +62,7 @@ These are agent modes, not generators.
 7. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
 8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
 9. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
-10. **Quality modes** — audit / critique / harden / latency as needed. Use ttft only to isolate the LLM leg.
+10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency as needed. Use ttft only to isolate the LLM leg. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers.
 
 Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
 Not menu coverage 1.0.
@@ -84,7 +91,7 @@ Write a **non-empty** single markdown file (default `callsmith.recipe.md`). Miss
 
 **Contract ↔ answers consistency:** if the contract discusses consent/retention/handoff, the answers fields must already meet floors. Prose “HIPAA may apply” + `recording_consent: none` is flag-only theater (fail).
 
-The receipt records the policy basis, jurisdiction for regulated domains, installed provider pack IDs, and a percentile `turn_gap_ms` SLO. Callsmith floors are conservative product defaults, not legal advice. A below-default design requires a named explicit-risk acceptance and reason; never silently weaken it.
+The receipt records the policy basis, jurisdiction for regulated domains, installed provider pack IDs, and a percentile `turn_gap_ms` SLO. Its optional deployment block records target, region, and drain owner; managed-runtime and regulated-residency claims must agree with pack physics. Callsmith floors are conservative product defaults, not legal advice.
 
 Optional: keep `voice.answers.json` for `callsmith check` — values must use **canonical ids** above, not free-form prose.
 
@@ -95,8 +102,10 @@ Optional: keep `voice.answers.json` for `callsmith check` — values must use **
 | Start | User brief + this skill + floors |
 | Choosing providers | Only relevant `providers/**/*.json` |
 | Physics | `callsmith check` or pack fields (ingest/egress/interruption) |
-| Quality | `reference/audit.md`, `reference/latency.md`, etc. |
+| Quality | `reference/audit.md`, `reference/prompts.md`, `reference/latency.md`, etc. |
 | Implement | Current version-specific docs + pack potholes for chosen stack |
+| Deploy | `reference/deploy.md` + pack `deployment` fields + `check` Operations |
+| Measure / drain | `evals/measure/README.md` + `evals/load/README.md` |
 
 ```bash
 callsmith packs
@@ -105,6 +114,8 @@ callsmith pack validate
 callsmith check --answers voice.answers.json   # optional answers file
 callsmith contract validate --file callsmith.recipe.md --answers voice.answers.json --domain medical
 callsmith doctor
+npm run bench:measure -- --config stack.json --out fresh-dir --live
+npm run bench:load -- --config load.json --out fresh-dir
 ```
 
 ## Verification CLI (facts only)
@@ -153,6 +164,9 @@ That difference lives in packs — not in model marketing docs.
 - Mix input formats into a realtime model
 - Equate WS close with hangup
 - Skip transcript/consent on regulated flows
+- Self-host for a no-ops pilot, or claim managed convenience on a custom bridge
+- Deploy without drain (killing workers mid-call) or with VAD reloaded per call/frame
+- S2S-vs-cascaded by vibes when the brief is regulated + tool-heavy (cascaded) or ultra-low-latency (S2S)
 
 ## Asking style
 

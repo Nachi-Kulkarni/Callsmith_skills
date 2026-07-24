@@ -44,6 +44,16 @@
       "id": "endpointing_service",
       "severity": "warning",
       "note": "Turn endpointing uses a VAD/endpointing service separate from STT. Mis-tuning it causes false barge-in or long pauses."
+    },
+    {
+      "id": "drain_and_bot_per_call",
+      "severity": "warning",
+      "note": "Self-hosted Pipecat typically runs a bot process per call. Killing the runner mid-call drops the caller: implement SIGTERM drain (stop spawning, finish calls, exit) and autoscale on concurrent calls, not CPU."
+    },
+    {
+      "id": "pstn_echo_no_aec",
+      "severity": "warning",
+      "note": "WebSocket telephony transports (Twilio/Exotel serializers) run no echo cancellation. Carrier or speakerphone echo of the bot's own TTS can false-trigger barge-in; enable an audio filter/AEC or gate VAD while the bot speaks."
     }
   ],
   "env_keys": [],
@@ -94,5 +104,28 @@
   ],
   "native_capabilities": [
     "audio_normalization"
-  ]
+  ],
+  "deployment": {
+    "hosted_option": {
+      "name": "pipecat-cloud",
+      "managed_runtime": true,
+      "region_pinning": true,
+      "pricing_url": "https://www.daily.co/pricing/pipecat-cloud/",
+      "note": "Pipecat Cloud (by Daily) runs hosted bot runners with managed scaling. Pilot-friendly; verify current region coverage and per-minute pricing before committing a regulated deployment."
+    },
+    "self_host_notes": "Open source; self-host as a bot runner on VMs or Fly machines, typically one bot process per call. You own process supervision, drain on SIGTERM, warm pools for VAD/provider connections, and frame-level tracing.",
+    "concurrency_model": "process_per_call",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["us", "eu", "in"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "configurable",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-24",
+      "sources": ["https://docs.pipecat.ai/deployment/pipecat-cloud/introduction", "https://docs.pipecat.ai/api-reference/cli/cloud/regions"]
+    },
+    "drain_behavior": "platform_managed"
+  }
 }

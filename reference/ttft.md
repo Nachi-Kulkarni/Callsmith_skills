@@ -1,17 +1,18 @@
 # TTFT Pilot
 
-> TTFT is only the LLM submetric. For the user-perceived metric from acoustic speech end to first audible agent audio, use [`latency.md`](latency.md). The `/callsmith ttft` route remains compatible for LLM-provider diagnosis; `/callsmith latency` is the primary end-to-end optimization route.
+> **TTFT is only the LLM submetric.** User-perceived silence is Turn Gap — use [`latency.md`](latency.md) (`/callsmith latency`) for end-to-end. Use this route to compare LLM providers or prove the LLM leg is (or is not) the bottleneck.
 
-Measure time-to-first-token for the LLM leg in cascaded or hybrid voice-agent stacks. Agent ritual — not a bundled deterministic library.
+Measure time-to-first-token for the LLM leg in cascaded or hybrid stacks. Agent ritual — not a bundled deterministic library.
 
 ## When to run
 
-- Architecture is cascaded or hybrid.
-- Comparing LLM providers.
-- Latency budget is near the target.
-- User says the bot “feels slow” before TTS begins.
+- Architecture is cascaded or hybrid
+- Comparing LLM providers
+- Latency budget is near the target
+- User says the bot “feels slow” **before TTS begins**
+- `/callsmith latency` attribution already points at LLM TTFT
 
-Skip pure realtime S2S unless a comparable text-token stream is actually in the path.
+**Skip** pure realtime S2S unless a comparable text-token stream is actually in the path. If the complaint is “whole call feels laggy,” start with `/callsmith latency`, not TTFT.
 
 ## Ask for a key
 

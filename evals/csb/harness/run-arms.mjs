@@ -371,8 +371,10 @@ function buildSummary(results, configValue, { sourceStable = true } = {}) {
     && invalidArms.length === 0
     && metricPairs.length === expectedPairs
     && sourceStable;
+  // core10 suite or a superset that includes it (the suite grew past 10 scenarios
+  // when deploy-managed-cloud-pilot was added; a full-suite run remains required).
   const repeatedCore10 = configValue.runs >= 3
-    && configValue.scenarios.length === 10
+    && configValue.scenarios.length >= 10
     && ['BASE', 'WITH'].every((arm) => configValue.arms.includes(arm));
   const namedModelFamily = typeof configValue.actor.family === 'string' && configValue.actor.family.length > 0;
   const actorIsolationEligible = ['codex', 'grok'].includes(configValue.actor.tool)

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadScenario } from '../evals/csb/harness/score.mjs';
+import { loadScenario, listScenarioIds } from '../evals/csb/harness/score.mjs';
 import { prepareArmWorkspace } from '../evals/csb/harness/prepare.mjs';
 import { buildActorPrompt } from '../evals/csb/harness/prompts.mjs';
 import {
@@ -393,7 +393,8 @@ describe('CSB run-arms CLI', () => {
     assert.equal(r.status, 0, r.stderr + r.stdout);
     const config = JSON.parse(fs.readFileSync(path.join(out, 'config.json'), 'utf8'));
     assert.equal(config.scenarios.includes('clinic-floor-poison'), false);
-    assert.equal(config.scenarios.length, 9);
+    // Exactly one scenario excluded from the current suite (core10 or superset).
+    assert.equal(config.scenarios.length, listScenarioIds().length - 1);
     assert.deepEqual(config.arms, ['WITH']);
   });
 

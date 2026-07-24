@@ -18,7 +18,7 @@ import { validatePacks } from '../src/lib/validate.mjs';
 import { verifyPacks } from '../src/lib/verify-packs.mjs';
 import { validateContract, validateContractAnswers } from '../src/lib/contract.mjs';
 
-const VERSION = '1.6.0-agent-compiler';
+const VERSION = '1.7.0-agent-compiler';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -152,12 +152,14 @@ function cmdCheck() {
   }
 
   const impossible = detectImpossibilities(expanded, providers);
-  if (impossible.length) {
+  const blockers = impossible.filter((item) => item.severity !== 'advisory');
+  const advisories = impossible.filter((item) => item.severity === 'advisory');
+  if (blockers.length) {
     if (args.json === true) {
       console.log(JSON.stringify({ impossible }, null, 2));
     } else {
       console.error('\nStack is impossible (from pack physics):\n');
-      for (const i of impossible) console.error(`  [${i.code}] ${i.message}`);
+      for (const i of blockers) console.error(`  [${i.code}] ${i.message}`);
     }
     process.exitCode = 1;
     return;
@@ -166,10 +168,11 @@ function cmdCheck() {
   const r = resolve(expanded, providers);
 
   if (args.json === true) {
-    console.log(JSON.stringify({ impossible: [], resolve: r }, null, 2));
+    console.log(JSON.stringify({ impossible: [], advisories, resolve: r }, null, 2));
   } else {
     console.log('\n=== callsmith check (physics from packs) ===\n');
     console.log('Impossibilities: none');
+    for (const item of advisories) console.log(`Advisory [${item.code}] ${item.message}`);
     if (r.pipeline?.length) {
       console.log('\nPipeline:');
       for (const n of r.pipeline) console.log(`  ${n.role}: ${n.id}`);
@@ -204,6 +207,15 @@ function cmdCheck() {
     }
     if (r.cost) {
       console.log(`Cost planning allowance: ≈$${r.cost.per_minute_usd ?? r.cost.total_per_minute_usd ?? '?'}/min (verify current account pricing)`);
+    }
+    if (r.operations) {
+      const ops = r.operations;
+      console.log(`\nOperations: ${ops.hosting_label} (requested: ${ops.requested_hosting_model}) — owner: ${ops.infrastructure_owner}`);
+      for (const a of ops.adjustments || []) console.log(`  adjust: ${a}`);
+      for (const resp of ops.responsibilities || []) console.log(`  - ${resp}`);
+    }
+    if (r.envKeys?.length) {
+      console.log(`\nEnv keys (secrets manager, never the repo): ${r.envKeys.join(', ')}`);
     }
     console.log();
   }
@@ -260,6 +272,8 @@ function cmdDoctor() {
   for (const playbook of [
     'audit.md',
     'critique.md',
+    'architecture.md',
+    'deploy.md',
     'ttft.md',
     'harden.md',
     'contract.md',

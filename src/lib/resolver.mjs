@@ -557,6 +557,22 @@ export function detectImpossibilities(answers, providers) {
     }
   }
 
+  if (flags.region && flags.region !== 'unknown') {
+    for (const [role, selection] of Object.entries(sel)) {
+      const pack = selection?.id ? providers[selection.id] : null;
+      const regions = pack?.deployment?.regions;
+      const values = role === 'telephony' ? regions?.media_edges : role === 'orchestration' ? regions?.worker_regions : regions?.model_regions;
+      if (!values || values.some((value) => ['any', 'global', 'not_applicable'].includes(value))) continue;
+      if (values.includes('unknown') || !values.includes(flags.region)) {
+        impossible.push({
+          code: 'region_unverified',
+          severity: flags.business_logic === 'collections' ? 'blocker' : 'advisory',
+          message: `${pack.label} has no verified ${flags.region} region path (${values.join(', ')}).`,
+        });
+      }
+    }
+  }
+
   const telephony = flags.needs_telephony && sel.telephony ? providers[sel.telephony.id] : null;
   const orch = sel.orchestration ? providers[sel.orchestration.id] : null;
   if (telephony) {

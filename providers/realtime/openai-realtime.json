@@ -59,6 +59,11 @@
       "note": "On server VAD, speech_started signals barge-in. Stop outbound playback and clear the buffer; coordinate your audio sink with this event."
     },
     {
+      "id": "truncate_on_barge_in",
+      "severity": "blocker",
+      "note": "response.cancel alone leaves already-buffered audio playing. On speech_started also send conversation.item.truncate with the correct item_id and audio_end_ms from your own playback clock, or the caller hears overlapping speech. Track played-audio time per response item — guessing audio_end_ms is the #1 Realtime API bug."
+    },
+    {
       "id": "input_24k_or_mulaw8k",
       "severity": "warning",
       "note": "Two valid input formats: 24 kHz PCM (best quality, needs resample from telephony) or μ-law 8 kHz (no resample, lossy). Pick one deliberately; do not mix."
@@ -123,5 +128,22 @@
   "directions": [
     "inbound",
     "outbound"
-  ]
+  ],
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "API service — nothing to self-host. Co-locate your worker with the serving region; verify data-residency options for regulated deployments. The native SIP transport can carry the PSTN leg itself (removing your bridge) but only when OpenAI is the telephony ingress.",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["unknown"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "unknown",
+      "residency_controls": "unknown",
+      "verified_at": "2026-07-21",
+      "sources": ["https://platform.openai.com/docs/guides/realtime"]
+    },
+    "drain_behavior": "n/a"
+  }
 }

@@ -119,6 +119,20 @@ const SURFACE_VALUES = new Set([
   'webrtc_app',
   'whatsapp_voice',
 ]);
+const DEPLOYMENT_TARGETS = new Set(['local', 'livekit_cloud', 'pipecat_cloud', 'railway', 'render', 'fly', 'cloud_vm', 'k8s']);
+const DEPLOYMENT_REGIONS = new Set(['unknown', 'in', 'us', 'eu']);
+const DRAIN_OWNERS = new Set(['platform_managed', 'user_implemented']);
+const MANAGED_TARGETS = { livekit_cloud: 'livekit', pipecat_cloud: 'pipecat' };
+
+function regionFields(pack) {
+  const regions = pack?.deployment?.regions;
+  if (!regions) return [];
+  return pack.kind === 'telephony'
+    ? [['media_edges', regions.media_edges]]
+    : pack.kind === 'orchestration'
+      ? [['worker_regions', regions.worker_regions]]
+      : [['model_regions', regions.model_regions], ['transcript_regions', regions.transcript_regions]];
+}
 
 // These are product safety defaults, not claims about universal legal requirements.
 // A legal review or explicit written risk acceptance may override them in the receipt.
@@ -270,6 +284,39 @@ export function validateContractReceipt(receipt, opts = {}) {
     }
   }
 
+  const deployment = receipt.deployment;
+  if (deployment !== undefined) {
+    if (!deployment || typeof deployment !== 'object' || Array.isArray(deployment)) {
+      fail('contract receipt deployment must be an object');
+    } else {
+      if (!DEPLOYMENT_TARGETS.has(deployment.target)) fail('contract deployment.target must be a canonical menu id');
+      if (!DEPLOYMENT_REGIONS.has(deployment.region)) fail('contract deployment.region must be unknown, in, us, or eu');
+      if (!DRAIN_OWNERS.has(deployment.drain_owner)) fail('contract deployment.drain_owner must be platform_managed or user_implemented');
+      const expectedOrchestrator = MANAGED_TARGETS[deployment.target];
+      if (expectedOrchestrator && receipt.providers?.orchestration !== expectedOrchestrator) {
+        fail(`contract deployment target ${deployment.target} requires orchestration pack ${expectedOrchestrator}`);
+      }
+      const expectedDrain = expectedOrchestrator ? 'platform_managed' : 'user_implemented';
+      if (deployment.drain_owner && deployment.drain_owner !== expectedDrain) {
+        fail(`contract deployment target ${deployment.target} requires drain_owner ${expectedDrain}`);
+      }
+      if (deployment.region !== 'unknown' && known && opts.providers && typeof opts.providers === 'object') {
+        for (const id of Object.values(receipt.providers || {})) {
+          const pack = opts.providers[id];
+          for (const [field, values] of regionFields(pack)) {
+            if (!values || values.some((value) => ['any', 'global', 'not_applicable'].includes(value))) continue;
+            const issue = values.includes('unknown')
+              ? `${id}.${field} is unknown for requested region ${deployment.region}`
+              : !values.includes(deployment.region) ? `${id}.${field} does not include requested region ${deployment.region}` : null;
+            if (!issue) continue;
+            if (CONTRACT_DEFAULT_FLOORS[receipt.domain]) fail(`regulated residency check failed: ${issue}`);
+            else warnings.push(`region advisory: ${issue}`);
+          }
+        }
+      }
+    }
+  }
+
   return { status: errors.length ? 'FAIL' : 'PASS', errors, warnings, floors };
 }
 
@@ -383,6 +430,10 @@ export function validateContractAnswers(receipt, answers, menu) {
   compare('recording_consent', receipt.policy?.recording_consent, answers.recording_consent);
   compare('transcript_retention', receipt.policy?.transcript_retention, answers.transcript_retention);
   compare('human_handoff', receipt.policy?.human_handoff, answers.human_handoff);
+  if (receipt.deployment) {
+    compare('deployment.target', receipt.deployment.target, answers.deployment);
+    compare('deployment.region', receipt.deployment.region, answers.region ?? 'unknown');
+  }
 
   try {
     const expanded = expandAnswers(answers, menu, { strict: true });

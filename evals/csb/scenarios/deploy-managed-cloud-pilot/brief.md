@@ -1,0 +1,1 @@
+A two-person startup wants an inbound Twilio phone agent with Gemini Live for lead qualification. Nobody on the team can run infrastructure — they asked for the fewest moving parts to operate, ideally a managed cloud that runs the agent worker for them, and deploys that never drop a live caller.

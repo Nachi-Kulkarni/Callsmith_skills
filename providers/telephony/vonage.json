@@ -4,10 +4,11 @@
   "label": "Vonage",
   "verification": {
     "grade": "official_docs",
-    "verified_at": "2026-07-10",
-    "expires_at": "2026-10-08",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
     "sources": [
-      "https://developer.vonage.com/en/voice/voice-api/concepts/websockets"
+      "https://developer.vonage.com/en/voice/voice-api/concepts/websockets",
+      "https://developer.vonage.com/en/voice/voice-api/ncco-reference"
     ]
   },
   "transport": "websocket",
@@ -33,7 +34,8 @@
   "potholes": [
     { "id": "pcm_not_mulaw", "severity": "warning", "note": "Vonage streams raw L16 PCM, not μ-law. This is closer to model-native format — usually only a resample is needed, not a full μ-law decode/encode bridge." },
     { "id": "ncco_websocket", "severity": "warning", "note": "The media stream connects via an NCCO connect action with a WebSocket endpoint; ensure the answer URL returns the correct NCCO with content-type before streaming." },
-    { "id": "buffer_clear", "severity": "warning", "note": "Vonage buffers outbound audio (3072 packets ≈ 60s). Send {\"action\":\"clear\"} to flush for barge-in." }
+    { "id": "buffer_clear", "severity": "warning", "note": "Vonage buffers outbound audio (3072 packets ≈ 60s). Send {\"action\":\"clear\"} to flush for barge-in." },
+    { "id": "human_transfer", "severity": "warning", "note": "Use NCCO connect for a new human endpoint or transfer to move legs between conversations. Transfer is terminal for the source conversation; consume transfer and destination events before closing the bot WebSocket." }
   ],
   "env_keys": ["VONAGE_API_KEY", "VONAGE_API_SECRET", "VONAGE_APPLICATION_ID"],
   "doc_urls": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"],
@@ -64,5 +66,12 @@
     "per_minute_usd": 0.009,
     "notes": "US domestic voice leg"
   },
-  "context7": { "library_id": "/websites/developer_vonage_en_api", "topics": ["voice-api", "websockets", "ncco"] }
+  "context7": { "library_id": "/websites/developer_vonage_en_api", "topics": ["voice-api", "websockets", "ncco"] },
+  "deployment": {
+    "hosted_option": { "name": "vonage-cloud", "managed_runtime": false, "region_pinning": false, "note": "Carrier/media service only; region and residency behavior remain unverified in this pack." },
+    "self_host_notes": "Your media worker is self-hosted. Co-location advice remains unknown until the media-edge path is measured.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["unknown"], "worker_regions": ["not_applicable"], "model_regions": ["not_applicable"], "recording_regions": ["unknown"], "transcript_regions": ["not_applicable"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"] },
+    "drain_behavior": "n/a"
+  }
 }

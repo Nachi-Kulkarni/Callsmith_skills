@@ -4,8 +4,8 @@
   "label": "ElevenLabs (Flash v2.5)",
   "verification": {
     "grade": "official_docs",
-    "verified_at": "2026-07-10",
-    "expires_at": "2026-10-08",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
     "sources": [
       "https://elevenlabs.io/docs/overview/models",
       "https://elevenlabs.io/docs/api-reference/reducing-latency",
@@ -57,6 +57,11 @@
       "id": "flash_text_normalization",
       "severity": "warning",
       "note": "Flash v2.5 disables text normalization by default to preserve latency, so normalize phone numbers, dates, and currencies before TTS (or use the Enterprise normalization option)."
+    },
+    {
+      "id": "stream_lifecycle",
+      "severity": "warning",
+      "note": "Keep one WebSocket for streaming LLM text. auto_mode avoids manual chunk schedules; without it, insufficient text stalls generation. Voice choice, speaker boost, style, and higher-fidelity formats can add latency."
     }
   ],
   "env_keys": [
@@ -107,5 +112,12 @@
   "directions": [
     "inbound",
     "outbound"
-  ]
+  ],
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed streaming API; no model self-host path is declared in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["us", "eu", "in"], "recording_regions": ["not_applicable"], "transcript_regions": ["not_applicable"], "routing": "configurable", "residency_controls": "documented", "verified_at": "2026-07-24", "sources": ["https://elevenlabs.io/docs/api-reference/reducing-latency", "https://elevenlabs.io/docs/api-reference/voices/settings/get", "https://elevenlabs.io/docs/overview/administration/data-residency"] },
+    "drain_behavior": "n/a"
+  }
 }

@@ -1,0 +1,17 @@
+{
+  "stack": "pipecat-cascaded-webrtc",
+  "region": "us",
+  "cohort": "warm",
+  "corpus": "../utterances/manifest.json",
+  "required_env": ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "DEEPGRAM_API_KEY", "OPENAI_API_KEY", "CARTESIA_API_KEY"],
+  "max_spend_usd": 7,
+  "adapter": ["node", "evals/measure/adapters/pipecat-cascaded.mjs"],
+  "pack_metrics": {
+    "deepgram": { "metric": "transcript_commit_ms", "trace_metric": "transcript_commit_ms" },
+    "openai": { "metric": "llm_ttft_ms", "trace_metric": "llm_ttft_ms" },
+    "cartesia": { "metric": "tts_first_chunk_ms", "trace_metric": "tts_first_chunk_ms" },
+    "pipecat": { "metric": "pre_tts_queue_ms", "trace_metric": "pre_tts_queue_ms" },
+    "livekit": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" }
+  },
+  "notes": "Pilot 3 (cascaded/WebRTC): LiveKit transport -> Pipecat -> Deepgram STT -> OpenAI LLM (gpt-4o-mini class) -> Cartesia TTS. Moved off PSTN in the budget program: pilots 1 vs 3 now isolate architecture (S2S vs cascaded) with transport held constant — cleaner attribution, no telephony bill. Expected spend near $0: Deepgram signup credits (~$200) cover STT, Cartesia free tier covers TTS, OpenAI mini-class model is pennies for ~120 turns. Per-leg metrics make the S2S-vs-cascaded decision matrix real. p99 labeled directional until topped up. Adapter contract: evals/measure/adapters/README.md."
+}

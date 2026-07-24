@@ -76,7 +76,8 @@ export function reviewPublication(bundleDirs, { provenanceVerifier = verifyCheck
     if (!['codex', 'grok'].includes(bundle.config.actor?.tool) || !isPublicationIsolation(bundle.config.actor.tool, bundle.config.actor.isolation)) {
       failures.push(`${label}: actor lacks the publication isolation boundary`);
     }
-    if (bundle.config.runs < 3 || bundle.config.scenarios?.length !== 10) failures.push(`${label}: repeated core10 is incomplete`);
+    // core10 suite or a superset that includes it (suite grew past 10 with deploy-managed-cloud-pilot).
+    if (bundle.config.runs < 3 || (bundle.config.scenarios?.length ?? 0) < 10) failures.push(`${label}: repeated core10 is incomplete`);
     if (bundle.summary.invalid_arms?.length) failures.push(`${label}: invalid arms are present`);
     if (!(metrics.task_success?.lift > 0)) failures.push(`${label}: task-success lift is not positive`);
     if (!(metrics.floor_lift >= 0.5)) failures.push(`${label}: floor lift is below +0.5`);

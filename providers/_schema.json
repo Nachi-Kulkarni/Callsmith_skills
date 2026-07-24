@@ -174,6 +174,41 @@
         "library_id": { "type": ["string", "null"] },
         "topics": { "type": "array", "items": { "type": "string" } }
       }
+    },
+    "deployment": {
+      "type": "object",
+      "description": "Optional deployment physics for the deploy playbook and `check` operations output: where and how this provider runs in production. Volatile facts inherit the pack-level verification dates and are refreshed with the pack. Absent means unknown — never inferred.",
+      "properties": {
+        "hosted_option": {
+          "type": ["object", "null"],
+          "required": ["name", "managed_runtime", "region_pinning"],
+          "properties": {
+            "name": { "type": "string" },
+            "managed_runtime": { "type": "boolean", "description": "True when the hosted option also runs your agent/bot compute, not just media transport or API serving." },
+            "region_pinning": { "type": "boolean" },
+            "pricing_url": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        },
+        "self_host_notes": { "type": "string" },
+        "concurrency_model": { "type": "string", "enum": ["worker_pool", "process_per_call", "managed", "inline", "custom"], "description": "How one deployment unit carries calls: worker_pool multiplexes, process_per_call isolates one call per process, managed is provider-side, inline runs inside your process." },
+        "regions": {
+          "type": "object",
+          "required": ["media_edges", "worker_regions", "model_regions", "recording_regions", "transcript_regions", "routing", "residency_controls", "verified_at", "sources"],
+          "properties": {
+            "media_edges": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "worker_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "model_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "recording_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "transcript_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "routing": { "type": "string", "enum": ["pinned", "configurable", "automatic", "unknown"] },
+            "residency_controls": { "type": "string", "enum": ["documented", "partial", "unknown"] },
+            "verified_at": { "type": "string" },
+            "sources": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+          }
+        },
+        "drain_behavior": { "type": "string", "enum": ["platform_managed", "user_implemented", "n/a"], "description": "Who owns graceful shutdown of in-flight calls on deploy/restart for the hosted path; self-host drain duties belong in self_host_notes." }
+      }
     }
   }
 }

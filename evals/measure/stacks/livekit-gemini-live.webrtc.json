@@ -1,0 +1,15 @@
+{
+  "stack": "livekit-cloud-gemini-live-webrtc",
+  "region": "us",
+  "cohort": "warm",
+  "corpus": "../utterances/manifest.json",
+  "required_env": ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "GOOGLE_API_KEY"],
+  "max_spend_usd": 10,
+  "adapter": ["node", "evals/measure/adapters/livekit-gemini-live.mjs"],
+  "pack_metrics": {
+    "gemini-live": { "metric": "turn_gap_ms", "trace_metric": "turn_gap_ms" },
+    "livekit": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" },
+    "silero": { "metric": "endpointing_ms", "trace_metric": "endpointing_ms" }
+  },
+  "notes": "Pilot 1 (S2S/WebRTC): LiveKit Cloud worker + Gemini Live; a synthetic room participant plays the frozen corpus. Budget-lean cohort: >=120 valid turns per cohort, multiple utterances per call to cut setup overhead; expected spend near $0 on LiveKit/Gemini free tiers (cap is retry headroom). p50/p95 publishable; p99 thin and labeled directional until the cohort is topped up. Clone with cohort=cold for the cold cohort — cohorts are never mixed. Region, machine class, and model versions are pinned at run time and land in the config hash. Free-tier rate limits mean runs spread over days, not hours. Adapter contract: evals/measure/adapters/README.md."
+}

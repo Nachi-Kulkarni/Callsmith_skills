@@ -77,5 +77,12 @@
   "doc_urls": [
     "https://developers.deepgram.com/docs/endpointing"
   ],
-  "context7": null
+  "context7": null,
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Endpointing runs inside the managed Deepgram stream; no independent self-host path is declared.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["unknown"], "recording_regions": ["not_applicable"], "transcript_regions": ["unknown"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://developers.deepgram.com/docs/endpointing"] },
+    "drain_behavior": "n/a"
+  }
 }

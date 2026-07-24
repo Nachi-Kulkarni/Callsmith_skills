@@ -65,6 +65,31 @@
       "id": "model_download",
       "severity": "note",
       "note": "Silero model (~2MB) is downloaded on first use. In production, pre-warm it at startup to avoid cold-start delay on the first call."
+    },
+    {
+      "id": "onnx_session_reuse",
+      "severity": "blocker",
+      "note": "Load one ONNX InferenceSession per worker process and reuse it forever. Re-initializing the model per call — or worse, per frame — stalls the audio hot path (tens to hundreds of ms) and surfaces as unexplained endpointing delay."
+    },
+    {
+      "id": "window_batching",
+      "severity": "warning",
+      "note": "Silero consumes fixed windows (512 samples = 32 ms at 16 kHz). Buffer inbound frames and run inference once per window; running it per WebSocket message (arbitrary chunking) wastes CPU and corrupts speech-probability context."
+    },
+    {
+      "id": "onnx_thread_contention",
+      "severity": "warning",
+      "note": "Default ONNX Runtime threading on a multi-call worker causes CPU contention that appears as endpointing jitter at high concurrency. Set intra-op threads deliberately and cap concurrent calls per worker."
+    },
+    {
+      "id": "vad_state_reset",
+      "severity": "blocker",
+      "note": "Reset VAD internal state on call end and after barge-in. Stale recurrent state causes phantom end-of-speech on the next utterance or the next call sharing the worker."
+    },
+    {
+      "id": "double_vad_ownership",
+      "severity": "warning",
+      "note": "Run VAD exactly once. A framework turn detector (LiveKit silero.VAD.load(), Pipecat SileroVADAnalyzer) plus a second custom Silero instance doubles CPU and produces disagreeing endpoints. Pick one owner."
     }
   ],
   "env_keys": [],
@@ -77,5 +102,22 @@
   "doc_urls": [
     "https://github.com/snakers4/silero-vad"
   ],
-  "context7": null
+  "context7": null,
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Runs in-process inside the agent worker. Warm pool: pre-load one shared ONNX session per worker at startup and size concurrent calls per worker so VAD CPU never starves endpointing; see onnx_session_reuse and onnx_thread_contention potholes.",
+    "concurrency_model": "inline",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["any"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["not_applicable"],
+      "transcript_regions": ["not_applicable"],
+      "routing": "pinned",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-21",
+      "sources": ["https://github.com/snakers4/silero-vad"]
+    },
+    "drain_behavior": "n/a"
+  }
 }

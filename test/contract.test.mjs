@@ -11,7 +11,7 @@ import {
   validateContractReceipt,
   REQUIRED_SECTIONS,
 } from '../src/lib/contract.mjs';
-import { loadMenu } from '../src/lib/resolver.mjs';
+import { loadMenu, loadProviders } from '../src/lib/resolver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = path.join(ROOT, 'bin', 'callsmith.mjs');
@@ -148,3 +148,127 @@ describe('contract validate (G5)', () => {
     assert.ok(accepted.warnings.length);
   });
 });
+
+describe('contract deployment receipt (optional section)', () => {
+  const providers = loadProviders();
+  const receipt = (overrides = {}) => ({
+    schema_version: 1,
+    domain: 'general',
+    surface: 'inbound_pstn',
+    providers: { telephony: 'twilio', orchestration: 'livekit', realtime: 'gemini-live' },
+    policy: {
+      basis: 'organization_policy',
+      retention_basis: 'Internal policy.',
+      recording_consent: 'announce',
+      transcript_retention: 'thirty_days',
+      human_handoff: 'transfer',
+    },
+    latency_slo: { metric: 'turn_gap_ms', percentile: 95, target_ms: 1200 },
+    ...overrides,
+  });
+
+  it('accepts a self-host deployment section', () => {
+    const r = validateContractReceipt(
+      receipt({ deployment: { target: 'railway', region: 'us', drain_owner: 'user_implemented' } }),
+      { providers },
+    );
+    assert.equal(r.status, 'PASS', r.errors.join('; '));
+  });
+
+  it('pins managed targets to their orchestration pack and platform drain', () => {
+    const ok = validateContractReceipt(
+      receipt({ deployment: { target: 'livekit_cloud', region: 'us', drain_owner: 'platform_managed' } }),
+      { providers },
+    );
+    assert.equal(ok.status, 'PASS', ok.errors.join('; '));
+
+    const wrongOrchestrator = validateContractReceipt(
+      receipt({
+        providers: { telephony: 'twilio', orchestration: 'pipecat', realtime: 'gemini-live' },
+        deployment: { target: 'livekit_cloud', region: 'us', drain_owner: 'platform_managed' },
+      }),
+      { providers },
+    );
+    assert.equal(wrongOrchestrator.status, 'FAIL');
+    assert.match(wrongOrchestrator.errors.join('; '), /requires orchestration pack livekit/);
+
+    const wrongDrain = validateContractReceipt(
+      receipt({ deployment: { target: 'livekit_cloud', region: 'us', drain_owner: 'user_implemented' } }),
+      { providers },
+    );
+    assert.equal(wrongDrain.status, 'FAIL');
+    assert.match(wrongDrain.errors.join('; '), /requires drain_owner platform_managed/);
+  });
+
+  it('refuses platform-managed drain claims on self-host targets', () => {
+    const r = validateContractReceipt(
+      receipt({
+        providers: { telephony: 'twilio', orchestration: 'custom-fastapi', realtime: 'gemini-live' },
+        deployment: { target: 'k8s', region: 'us', drain_owner: 'platform_managed' },
+      }),
+      { providers },
+    );
+    assert.equal(r.status, 'FAIL');
+    assert.match(r.errors.join('; '), /requires drain_owner user_implemented/);
+  });
+
+  it('rejects non-canonical deployment targets', () => {
+    const r = validateContractReceipt(
+      receipt({ deployment: { target: 'heroku', region: 'us', drain_owner: 'user_implemented' } }),
+      { providers },
+    );
+    assert.equal(r.status, 'FAIL');
+    assert.match(r.errors.join('; '), /canonical menu id/);
+  });
+
+  it('fails closed on regulated residency mismatch, advises otherwise', () => {
+    const regulated = validateContractReceipt(
+      receipt({
+        domain: 'medical',
+        providers: { telephony: 'exotel', orchestration: 'livekit', realtime: 'gemini-live' },
+        policy: {
+          jurisdiction: 'IN',
+          basis: 'organization_policy',
+          retention_basis: 'Clinic policy.',
+          recording_consent: 'announce',
+          transcript_retention: 'thirty_days',
+          human_handoff: 'transfer',
+        },
+        deployment: { target: 'railway', region: 'eu', drain_owner: 'user_implemented' },
+      }),
+      { providers },
+    );
+    assert.equal(regulated.status, 'FAIL');
+    assert.match(regulated.errors.join('; '), /regulated residency check failed: exotel\.media_edges/);
+
+    const general = validateContractReceipt(
+      receipt({
+        providers: { telephony: 'exotel', orchestration: 'livekit', realtime: 'gemini-live' },
+        deployment: { target: 'railway', region: 'eu', drain_owner: 'user_implemented' },
+      }),
+      { providers },
+    );
+    assert.equal(general.status, 'PASS', general.errors.join('; '));
+    assert.match(general.warnings.join('; '), /region advisory: exotel\.media_edges/);
+  });
+
+  it('compares receipt deployment against the canonical answers', () => {
+    const text = fs.readFileSync(EXAMPLE, 'utf8');
+    const report = validateContract(text, { domain: 'medical' });
+    const answers = JSON.parse(fs.readFileSync(EXAMPLE_ANSWERS, 'utf8'));
+    report.receipt.deployment = {
+      target: answers.deployment ?? 'local',
+      region: answers.region ?? 'unknown',
+      drain_owner: 'user_implemented',
+    };
+    const ok = validateContractAnswers(report.receipt, answers, loadMenu());
+    assert.equal(ok.status, 'PASS', ok.errors.join('; '));
+    assert.ok(ok.checks.some((check) => check.id === 'deployment.target' && check.ok));
+
+    answers.deployment = 'fly';
+    const mismatch = validateContractAnswers(report.receipt, answers, loadMenu());
+    assert.equal(mismatch.status, 'FAIL');
+    assert.match(mismatch.errors.join('; '), /deployment\.target mismatch/);
+  });
+});
+
