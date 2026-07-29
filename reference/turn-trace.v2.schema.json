@@ -56,6 +56,7 @@
       "required": ["turn_id", "speech_end_ms", "speech_end_source", "quality"],
       "properties": {
         "turn_id": { "type": "string", "minLength": 1 },
+        "utterance_id": { "type": "string", "minLength": 1, "description": "The corpus utterance this turn measured. Required by the measurement runner to prove corpus coverage (the observed turn set must equal the declared schedule). Optional in the schema; the runner enforces it for measurement runs." },
         "speech_end_ms": { "$ref": "#/$defs/timestamp" },
         "speech_end_source": { "enum": ["labeled", "detector"] },
         "eou_detected_ms": { "$ref": "#/$defs/timestamp" },

@@ -24,6 +24,9 @@ function args(argv) {
   return out;
 }
 
+// Verify the corpus and return the manifest so the runner can build the
+// measurement schedule (the set of utterance IDs a run must cover). A corpus
+// hash alone proves the files are intact; it does NOT prove which were played.
 function verifyCorpus(file) {
   const manifest = read(file);
   if (!Array.isArray(manifest.utterances) || manifest.utterances.length < 20) fail('corpus needs at least 20 utterances');
@@ -32,7 +35,7 @@ function verifyCorpus(file) {
     const audio = path.resolve(base, item.file);
     if (!item.license || !fs.existsSync(audio) || sha256File(audio) !== item.sha256) fail(`corpus receipt failed: ${item.id}`);
   }
-  return sha256File(file);
+  return { sha256: sha256File(file), manifest };
 }
 
 // Fail closed if the config advertises a metric the run's profile cannot observe.
@@ -67,35 +70,113 @@ function assertTraceProfile(trace, configProfile) {
   }
 }
 
-// Live provenance pins. Every field below is required and cross-checked; a run
-// missing any is rejected. Built at run time by the adapter, never typed into a
-// tracked config template. The adapter hash is computed by the runner.
+// Live provenance pins. Every field is required and cross-checked; a run missing
+// any is rejected. Built at run time by the adapter, never typed into a tracked
+// config template. The adapter hash is computed by the runner.
 const PROVENANCE_FIELDS = [
   'target_commit', 'runtime_version', 'sdk_versions', 'model_ids',
   'machine_class', 'region', 'audio_format', 'network_profile',
 ];
-function validateProvenance(provenance, adapterSha256) {
-  if (!provenance || typeof provenance !== 'object') fail('provenance.json is required for a live run');
-  for (const field of PROVENANCE_FIELDS) {
-    const value = provenance[field];
-    if (value === undefined || value === null || value === '') fail(`provenance.${field} is required`);
+// ponytail: structural + cross-check validation is O(fields); no schema lib needed.
+// target_commit must be an immutable 40-hex git SHA. A branch or tag can move.
+const COMMIT_RE = /^[0-9a-f]{40}$/i;
+const nonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+function validatePinnedMap(value, field, description) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) {
+    fail(`provenance.${field} must be a non-empty object (${description})`);
   }
-  if (!adapterSha256) fail('adapter source could not be hashed; a resolvable adapter path is required');
+  for (const [key, item] of Object.entries(value)) {
+    if (!nonEmptyString(key) || !nonEmptyString(item)) {
+      fail(`provenance.${field} keys and values must be non-empty strings`);
+    }
+  }
+}
+
+// Structural provenance check (pre-trace): non-empty strings, sdk/model maps with
+// at least one pinned entry, and an immutable target commit. Presence-only is not enough.
+function validateProvenanceStructure(provenance) {
+  if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) fail('provenance.json is required for a live run');
+  for (const field of PROVENANCE_FIELDS.filter((name) => !['sdk_versions', 'model_ids'].includes(name))) {
+    if (!nonEmptyString(provenance[field])) fail(`provenance.${field} must be a non-empty string`);
+  }
+  if (!COMMIT_RE.test(provenance.target_commit)) fail(`provenance.target_commit must be an immutable 40-hex git SHA, got "${provenance.target_commit}"`);
+  validatePinnedMap(provenance.sdk_versions, 'sdk_versions', 'provider SDK -> pinned version');
+  validatePinnedMap(provenance.model_ids, 'model_ids', 'role -> pinned model id');
+}
+
+// Cross-check provenance against the config and trace environment. The adapter
+// must observe the same region, audio format, and network profile the run pinned;
+// a mismatch means provenance describes a different stack than what was measured.
+function validateProvenanceConsistency(provenance, config, trace) {
+  const env = trace.environment || {};
+  const checks = [
+    ['region', provenance.region, config.region],
+    ['audio_format', provenance.audio_format, env.audio_format],
+    ['network_profile', provenance.network_profile, env.network_profile],
+  ];
+  for (const [field, provValue, expected] of checks) {
+    if (provValue !== expected) {
+      fail(`provenance.${field} "${provValue}" does not match the measured ${field === 'region' ? 'config' : 'trace'} value "${expected}"`);
+    }
+  }
+}
+
+// Resolve the declared measurement schedule: the exact set of utterance IDs a run
+// must cover, expanded by repeats. A `probe` is a one-ID schedule; a `cohort` is
+// the explicit ID list (no "play everything" default — coverage must be provable).
+// ponytail: O(ids×repeats); the manifest is always small (<100 utterances).
+function resolveSchedule(config, corpus) {
+  const known = new Set(corpus.manifest.utterances.map((u) => u.id));
+  const ids = config.schedule?.utterance_ids;
+  if (!Array.isArray(ids) || ids.length === 0) fail('config.schedule.utterance_ids is required: declare the exact utterance IDs this run must cover (probe = one id; cohort = full list)');
+  for (const id of ids) {
+    if (!known.has(id)) fail(`config.schedule.utterance_ids contains unknown utterance "${id}" (not in corpus)`);
+  }
+  const repeats = config.schedule?.repeats ?? 1;
+  if (!Number.isInteger(repeats) || repeats < 1) fail('config.schedule.repeats must be a positive integer');
+  if (new Set(ids).size !== ids.length) fail('config.schedule.utterance_ids must not contain duplicates; use schedule.repeats');
+  // Multiset: each declared id must appear `repeats` times across turns.
+  const expected = {};
+  for (const id of ids) expected[id] = (expected[id] || 0) + repeats;
+  return { expected, count: ids.length * repeats };
+}
+
+// Every trace turn must carry the utterance_id it measured, and the observed
+// multiset must equal the declared schedule exactly (no dropped, no extras).
+function assertCoverage(schedule, trace) {
+  const observed = {};
+  trace.turns.forEach((turn, i) => {
+    const uid = turn.utterance_id;
+    if (typeof uid !== 'string' || uid.length === 0) fail(`turns[${i}].utterance_id is required to prove corpus coverage`);
+    observed[uid] = (observed[uid] || 0) + 1;
+  });
+  const allIds = new Set([...Object.keys(schedule.expected), ...Object.keys(observed)]);
+  for (const id of allIds) {
+    if (schedule.expected[id] !== observed[id]) {
+      fail(`corpus coverage mismatch for "${id}": declared ${schedule.expected[id] ?? 0} turn(s), observed ${observed[id] ?? 0}`);
+    }
+  }
 }
 
 function main(argv = process.argv.slice(2)) {
   const options = args(argv);
   if (options.help) {
-    console.log('Usage: run.mjs --config config.json --out fresh-dir [--trace trace.json | --live] [--approve-spend-usd N]');
+    console.log('Usage: run.mjs --config config.json --out fresh-dir (--trace trace.json | --live --approve-spend-usd N)');
     return 0;
   }
   if (!options.config || !options.out) fail('--config and --out are required');
+  // Execution modes are mutually exclusive: --trace replays a recorded trace;
+  // --live runs the adapter. Both at once let --trace win and skip provenance,
+  // producing publishable evidence with no adapter hash or pins.
+  if (options.trace && options.live) fail('pass exactly one of --trace or --live (not both)');
+  if (!options.trace && !options.live) fail('pass --trace <trace.json> or --live');
   const configFile = path.resolve(options.config);
   const config = read(configFile);
   if (!config.region || !['warm', 'cold'].includes(config.cohort)) fail('config requires region and cohort=warm|cold');
   if (fs.existsSync(options.out)) fail('output directory must not exist');
-  const corpus = path.resolve(path.dirname(configFile), config.corpus || 'utterances/manifest.json');
-  const corpusSha256 = verifyCorpus(corpus);
+  const corpusFile = path.resolve(path.dirname(configFile), config.corpus || 'utterances/manifest.json');
+  const corpus = verifyCorpus(corpusFile);
   const missing = (config.required_env || []).filter((key) => !process.env[key]);
   if (missing.length) fail(`missing required environment keys: ${missing.join(', ')}`);
 
@@ -117,6 +198,8 @@ function main(argv = process.argv.slice(2)) {
   // Preflight: validate config profile and every advertised metric BEFORE any
   // spend or directory creation. A misconfigured config must never reach the adapter.
   preflightMetrics(config, configProfile);
+  // The declared schedule must resolve against the corpus before any execution.
+  const schedule = resolveSchedule(config, corpus);
 
   fs.mkdirSync(options.out, { recursive: false });
   const rawTrace = path.join(options.out, 'raw-trace.json');
@@ -127,24 +210,29 @@ function main(argv = process.argv.slice(2)) {
   if (options.trace) {
     fs.copyFileSync(options.trace, rawTrace);
   } else {
-    if (!options.live || !Array.isArray(config.adapter) || !config.adapter.length) fail('provider execution requires --live and config.adapter argv');
+    if (!Array.isArray(config.adapter) || !config.adapter.length) fail('provider execution requires config.adapter argv');
     // Resolve and hash the adapter BEFORE spawning. A missing adapter file fails closed here.
     const adapterPath = config.adapter[1] && config.adapter[1].endsWith('.mjs') ? path.resolve(config.adapter[1]) : null;
     if (!adapterPath || !fs.existsSync(adapterPath)) fail(`adapter source not found: ${config.adapter.slice(1).join(' ')}`);
     adapterSha256 = sha256File(adapterPath);
-    const run = spawnSync(config.adapter[0], [...config.adapter.slice(1), '--corpus', corpus, '--trace', rawTrace], { stdio: 'inherit', env: process.env });
+    const run = spawnSync(config.adapter[0], [...config.adapter.slice(1), '--config', configFile, '--corpus', corpusFile, '--trace', rawTrace], { stdio: 'inherit', env: process.env });
     if (run.status !== 0) fail(`adapter failed (${run.status ?? run.error?.message})`);
     const provenanceFile = path.join(options.out, 'provenance.json');
     const spendFile = path.join(options.out, 'spend.json');
     if (!fs.existsSync(provenanceFile)) fail('live run produced no provenance.json');
     provenance = read(provenanceFile);
     spend = fs.existsSync(spendFile) ? read(spendFile) : null;
-    validateProvenance(provenance, adapterSha256);
+    // Structural provenance pins as soon as the file is read.
+    validateProvenanceStructure(provenance);
   }
 
   const trace = read(rawTrace);
   // The produced trace must declare the same profile the config pinned.
   assertTraceProfile(trace, configProfile);
+  // Coverage: the observed turns must equal the declared schedule exactly.
+  assertCoverage(schedule, trace);
+  // For a live run, provenance must describe the same stack the trace measured.
+  if (provenance) validateProvenanceConsistency(provenance, config, trace);
   const summary = summarizeTrace(trace);
   const configSha256 = sha256File(configFile);
 
@@ -165,7 +253,7 @@ function main(argv = process.argv.slice(2)) {
       percentiles_ms: { p50: summary.metrics[name].p50, p95: summary.metrics[name].p95, p99: summary.metrics[name].p99 },
       n_applicable: summary.metrics[name].n_applicable,
       n_observed: summary.metrics[name].n_observed,
-      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
+      methodology: `Callsmith controlled corpus ${corpus.sha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
     }));
 
   // Per-provider attribution requires n_applicable === n_observed (defense-in-depth
@@ -183,7 +271,7 @@ function main(argv = process.argv.slice(2)) {
       profile: configProfile,
       sample_size: m.n_observed,
       percentiles_ms: { p50: m.p50, p95: m.p95, p99: m.p99 },
-      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
+      methodology: `Callsmith controlled corpus ${corpus.sha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
     }];
   }).filter(() => !vetoed));
 
@@ -194,8 +282,9 @@ function main(argv = process.argv.slice(2)) {
     cohort: config.cohort,
     instrumentation_profile: configProfile,
     publishable: !vetoed,
-    corpus_sha256: corpusSha256,
+    corpus_sha256: corpus.sha256,
     config_sha256: configSha256,
+    scheduled_turns: schedule.count,
     sample_size: summary.samples,
     p99_status: summary.samples >= 100 ? 'measured' : 'directional',
     quality: summary.quality,

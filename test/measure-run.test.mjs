@@ -21,7 +21,13 @@ const MANIFEST = path.join(ROOT, 'evals', 'measure', 'utterances', 'manifest.jso
 
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'callsmith-measure-'));
-const run = (args) => spawnSync(process.execPath, [RUNNER, ...args], { encoding: 'utf8', cwd: ROOT });
+const run = (args, env = {}) => spawnSync(process.execPath, [RUNNER, ...args], { encoding: 'utf8', cwd: ROOT, env: { ...process.env, ...env } });
+// A one-utterance probe schedule + matching turn annotation, for single-turn
+// replay tests. Every measurement run now declares the exact utterance IDs it
+// must cover; a probe is a one-ID schedule.
+const PROBE_UTTERANCE = 'digit-0-clean';
+const probeSchedule = () => ({ utterance_ids: [PROBE_UTTERANCE] });
+const probeTurn = (turn) => ({ ...turn, utterance_id: PROBE_UTTERANCE });
 
 describe('measurement runner (replay)', () => {
   it('scores a recorded trace into callsmith_measurement evidence', () => {
@@ -31,21 +37,24 @@ describe('measurement runner (replay)', () => {
     const receipt = JSON.parse(fs.readFileSync(path.join(out, 'measurement.json'), 'utf8'));
     const trace = JSON.parse(fs.readFileSync(TRACE, 'utf8'));
     const summary = summarizeTrace(trace);
-    assert.equal(receipt.schema_version, 1);
+    assert.equal(receipt.schema_version, 2);
+    assert.equal(receipt.instrumentation_profile, 'cascaded_full');
     assert.equal(receipt.stack, 'replay-fixture');
     assert.equal(receipt.region, 'us');
     assert.equal(receipt.cohort, 'warm');
+    assert.equal(receipt.scheduled_turns, trace.turns.length);
     assert.equal(receipt.sample_size, trace.turns.length);
     assert.equal(receipt.p99_status, 'directional', 'under 100 valid turns p99 must stay directional');
     assert.equal(receipt.corpus_sha256, sha256(MANIFEST));
     assert.deepEqual(receipt.metrics, summary.metrics);
     assert.deepEqual(receipt.quality, summary.quality);
-    const evidence = receipt.pack_evidence['gemini-live'];
+    // Honest cascaded pack attribution: a genuine per-leg span (OpenAI TTFT).
+    const evidence = receipt.pack_evidence['openai'];
     assert.equal(evidence.source, 'callsmith_measurement');
     assert.equal(evidence.region, 'us');
     assert.equal(evidence.sample_size, trace.turns.length);
     // percentiles_ms is the clean percentile subset; coverage lives on the metric.
-    assert.deepEqual(evidence.percentiles_ms, { p50: summary.metrics.turn_gap_ms.p50, p95: summary.metrics.turn_gap_ms.p95, p99: summary.metrics.turn_gap_ms.p99 });
+    assert.deepEqual(evidence.percentiles_ms, { p50: summary.metrics.llm_ttft_ms.p50, p95: summary.metrics.llm_ttft_ms.p95, p99: summary.metrics.llm_ttft_ms.p99 });
     assert.match(evidence.methodology, /warm cohort/);
     assert.match(evidence.methodology, /raw trace retained/);
   });
@@ -137,17 +146,17 @@ describe('measurement runner (replay)', () => {
         providers: { realtime: 'gemini-live' },
       },
       clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
-      turns: [{
+      turns: [probeTurn({
         turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector',
         provider_first_output_ms: 1300, audio_first_playout_ms: 1340, audio_first_audible_ms: 1370,
         quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 },
-      }],
+      })],
     };
     const traceFile = path.join(dir, 's2s.json');
     fs.writeFileSync(traceFile, JSON.stringify(s2sTrace));
     const config = {
       stack: 's2s-replay', region: 'us', cohort: 'warm', corpus: MANIFEST,
-      instrumentation_profile: 's2s_transport',
+      instrumentation_profile: 's2s_transport', schedule: probeSchedule(),
       stack_metrics: ['turn_gap_ms', 'speech_end_to_provider_output_ms'],
       pack_metrics: {},
     };
@@ -213,12 +222,12 @@ describe('measurement runner (replay)', () => {
         network_profile: 'n', audio_format: 'a', providers: { realtime: 'g' },
       },
       clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
-      turns: [{ turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector', provider_first_output_ms: 1200, audio_first_playout_ms: 1240, audio_first_audible_ms: 1270, quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 } }],
+      turns: [probeTurn({ turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector', provider_first_output_ms: 1200, audio_first_playout_ms: 1240, audio_first_audible_ms: 1270, quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 } })],
     };
     const traceFile = path.join(dir, 's2s.json');
     fs.writeFileSync(traceFile, JSON.stringify(s2sTrace));
     // Config pins end_to_end but the trace declares s2s_transport -> mismatch.
-    const config = { stack: 'mismatch', region: 'us', cohort: 'warm', corpus: MANIFEST, instrumentation_profile: 'end_to_end', stack_metrics: ['turn_gap_ms'], pack_metrics: {} };
+    const config = { stack: 'mismatch', region: 'us', cohort: 'warm', corpus: MANIFEST, instrumentation_profile: 'end_to_end', schedule: probeSchedule(), stack_metrics: ['turn_gap_ms'], pack_metrics: {} };
     fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
     const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', traceFile]);
     assert.equal(r.status, 2);
@@ -231,11 +240,11 @@ describe('measurement runner (replay)', () => {
       schema_version: 2, track: 'live', run_id: 'r',
       environment: { architecture: 'realtime_s2s', instrumentation_profile: 's2s_transport', surface: 'webrtc_app', transport: 'webrtc', region: 'us', runtime: 'replay', network_profile: 'n', audio_format: 'a', providers: { realtime: 'g' } },
       clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
-      turns: [{ turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector', provider_first_output_ms: 1200, audio_first_playout_ms: 1240, audio_first_audible_ms: 1270, quality: { premature_cutoff: false, false_interruption: true, response_correct: true, audio_underruns: 0 } }],
+      turns: [probeTurn({ turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector', provider_first_output_ms: 1200, audio_first_playout_ms: 1240, audio_first_audible_ms: 1270, quality: { premature_cutoff: false, false_interruption: true, response_correct: true, audio_underruns: 0 } })],
     };
     const traceFile = path.join(dir, 'veto.json');
     fs.writeFileSync(traceFile, JSON.stringify(vetoTrace));
-    const config = { stack: 'veto', region: 'us', cohort: 'warm', corpus: MANIFEST, instrumentation_profile: 's2s_transport', stack_metrics: ['turn_gap_ms'], pack_metrics: {} };
+    const config = { stack: 'veto', region: 'us', cohort: 'warm', corpus: MANIFEST, instrumentation_profile: 's2s_transport', schedule: probeSchedule(), stack_metrics: ['turn_gap_ms'], pack_metrics: {} };
     fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
     const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', traceFile]);
     assert.equal(r.status, 1, 'a vetoed run exits non-zero');
@@ -244,4 +253,151 @@ describe('measurement runner (replay)', () => {
     assert.deepEqual(receipt.pack_evidence, {});
     assert.deepEqual(receipt.stack_evidence, []);
   });
+
+  // ---- Gate 1A.1 regression: the five evidence-integrity holes ----
+
+  it('requires exactly one of --trace or --live (both at once must be rejected)', () => {
+    const dir = tmp();
+    const trace = path.join(ROOT, 'evals', 'csb', 'latency', 'fixtures', 's2s-valid.json');
+    const config = {
+      stack: 'xor', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 's2s_transport', schedule: probeSchedule(),
+      stack_metrics: ['turn_gap_ms'], pack_metrics: {},
+      max_spend_usd: 5, adapter: ['node', path.join(dir, 'noop.mjs')],
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    // Both flags: previously the trace branch won and skipped live provenance,
+    // producing publishable evidence with no adapter hash. Now it must fail closed.
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', trace, '--live', '--approve-spend-usd', '5']);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /exactly one of --trace or --live/);
+    assert.equal(fs.existsSync(path.join(dir, 'run')), false, 'output dir created despite mode rejection');
+  });
+
+  it('requires a declared schedule and proves corpus coverage (20 utterances, 12 turns is not covered)', () => {
+    const dir = tmp();
+    const trace = path.join(ROOT, 'evals', 'measure', 'fixtures', 'replay-trace.json');
+    // No schedule: previously a 12-turn trace produced publishable evidence against
+    // a 20-utterance corpus. Now the run must declare and prove coverage.
+    const config = { stack: 'nosched', region: 'us', cohort: 'warm', corpus: MANIFEST, instrumentation_profile: 'cascaded_full' };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', trace]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /schedule\.utterance_ids is required/);
+  });
+
+  it('rejects a turn set that does not match the declared schedule (dropped utterance)', () => {
+    const dir = tmp();
+    // A 2-id schedule but a trace with only one of them covered.
+    const trace = {
+      schema_version: 2, track: 'live', run_id: 'cov',
+      environment: { architecture: 'cascaded', instrumentation_profile: 'cascaded_full', surface: 'webrtc_app', transport: 'webrtc', region: 'us', runtime: 'r', network_profile: 'n', audio_format: 'a', providers: { stt: 'd' } },
+      clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
+      turns: [probeTurn(cascadedTurn('only-one'))],
+    };
+    const traceFile = path.join(dir, 'cov.json');
+    fs.writeFileSync(traceFile, JSON.stringify(trace));
+    const config = {
+      stack: 'cov', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 'cascaded_full',
+      schedule: { utterance_ids: [PROBE_UTTERANCE, 'digit-1-clean'] },
+      pack_metrics: {},
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', traceFile]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /coverage mismatch for "digit-1-clean"/);
+  });
+
+  it('rejects ambiguous schedule repeats before execution', () => {
+    const dir = tmp();
+    const config = {
+      stack: 'bad-schedule', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 'cascaded_full',
+      schedule: { utterance_ids: [PROBE_UTTERANCE], repeats: 1.5 },
+      pack_metrics: {},
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', TRACE]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /schedule\.repeats must be a positive integer/);
+    assert.equal(fs.existsSync(path.join(dir, 'run')), false);
+  });
+
+  it('rejects bogus live provenance (empty sdk/model maps, junk target_commit, mismatched region)', () => {
+    const dir = tmp();
+    // A fake adapter that writes a valid cascaded trace but BOGUS provenance.
+    const adapter = path.join(dir, 'fake.mjs');
+    fs.writeFileSync(adapter, `import fs from 'node:fs'; import path from 'node:path';
+const a = process.argv.slice(2); const tracePath = a[a.indexOf('--trace') + 1]; const outDir = path.dirname(tracePath);
+const trace = JSON.parse(process.env.CALLSMITH_FAKE_TRACE);
+trace.turns.forEach(t => { t.utterance_id = ${JSON.stringify(PROBE_UTTERANCE)}; });
+fs.writeFileSync(tracePath, JSON.stringify(trace));
+fs.writeFileSync(path.join(outDir, 'provenance.json'), JSON.stringify({
+  target_commit: 'x', runtime_version: 'node-1', sdk_versions: {}, model_ids: {},
+  machine_class: 'calculator', region: 'mars', audio_format: 'wrong', network_profile: 'pigeon',
+}));
+`);
+    const baseTrace = {
+      schema_version: 2, track: 'live', run_id: 'fake',
+      environment: { architecture: 'cascaded', instrumentation_profile: 'cascaded_full', surface: 'webrtc_app', transport: 'webrtc', region: 'us', runtime: 'fake', network_profile: 'n', audio_format: 'a', providers: { stt: 'd' } },
+      clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
+      turns: [cascadedTurn('fake-1')],
+    };
+    const config = {
+      stack: 'fake', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 'cascaded_full', schedule: probeSchedule(),
+      pack_metrics: {}, max_spend_usd: 5, adapter: ['node', adapter],
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--live', '--approve-spend-usd', '5'], { CALLSMITH_FAKE_TRACE: JSON.stringify(baseTrace) });
+    // Structural check fails first on the junk target_commit / empty maps.
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /target_commit must be an immutable 40-hex git SHA|sdk_versions must be a non-empty|model_ids must be a non-empty/);
+  });
+
+  it('rejects live provenance whose region/audio/network do not match the measured run', () => {
+    const dir = tmp();
+    const adapter = path.join(dir, 'fake2.mjs');
+    fs.writeFileSync(adapter, `import fs from 'node:fs'; import path from 'node:path';
+const a = process.argv.slice(2); const configPath = a[a.indexOf('--config') + 1]; const tracePath = a[a.indexOf('--trace') + 1]; const outDir = path.dirname(tracePath);
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+if (!config.schedule?.utterance_ids?.includes(${JSON.stringify(PROBE_UTTERANCE)})) process.exit(3);
+const trace = JSON.parse(process.env.CALLSMITH_FAKE_TRACE);
+trace.turns.forEach(t => { t.utterance_id = ${JSON.stringify(PROBE_UTTERANCE)}; });
+fs.writeFileSync(tracePath, JSON.stringify(trace));
+// Structurally valid provenance, but region mismatched vs config (us vs eu).
+fs.writeFileSync(path.join(outDir, 'provenance.json'), JSON.stringify({
+  target_commit: '0123456789abcdef0123456789abcdef01234567',
+  runtime_version: 'node-20', sdk_versions: { x: '1' }, model_ids: { y: 'm' },
+  machine_class: 'm5.large', region: 'eu', audio_format: 'a', network_profile: 'n',
+}));
+`);
+    const baseTrace = {
+      schema_version: 2, track: 'live', run_id: 'fake2',
+      environment: { architecture: 'cascaded', instrumentation_profile: 'cascaded_full', surface: 'webrtc_app', transport: 'webrtc', region: 'us', runtime: 'fake', network_profile: 'n', audio_format: 'a', providers: { stt: 'd' } },
+      clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
+      turns: [cascadedTurn('fake2-1')],
+    };
+    const config = {
+      stack: 'fake2', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 'cascaded_full', schedule: probeSchedule(),
+      pack_metrics: {}, max_spend_usd: 5, adapter: ['node', adapter],
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--live', '--approve-spend-usd', '5'], { CALLSMITH_FAKE_TRACE: JSON.stringify(baseTrace) });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /provenance\.region "eu" does not match/);
+  });
 });
+
+// A minimal valid cascaded_full turn for live-provenance regression tests.
+function cascadedTurn(turnId) {
+  return {
+    turn_id: turnId, speech_end_ms: 1000, speech_end_source: 'detector',
+    eou_detected_ms: 1100, transcript_final_ms: 1150, llm_request_ms: 1160,
+    llm_first_token_ms: 1300, text_committed_ms: 1350, tts_request_ms: 1360,
+    tts_first_chunk_ms: 1500, audio_first_playout_ms: 1550, audio_first_audible_ms: 1580,
+    quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 },
+  };
+}

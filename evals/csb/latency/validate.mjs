@@ -119,6 +119,13 @@ export function validateTurnTrace(trace) {
     else if (turnIds.has(turn.turn_id)) errors.push(`${at}.turn_id must be unique`);
     else turnIds.add(turn.turn_id);
 
+    // Hybrid per-turn `path` was a deferred feature and has been removed; v2 JSON
+    // Schema rejects it via additionalProperties:false, and the runtime validator
+    // must too (it is the authority). A profile applies uniformly to the trace.
+    if (turn.path !== undefined) {
+      errors.push(`${at}.path is not supported: per-turn paths were removed; instrumentation_profile applies to the whole trace`);
+    }
+
     // Required boundary set is profile-driven (v2) or the ten cascaded legs (v1).
     const profile = isV2 ? env.instrumentation_profile : null;
     const required = requiredBoundaries(profile);

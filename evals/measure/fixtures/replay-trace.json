@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "track": "live",
-  "run_id": "replay-fixture-v1",
+  "run_id": "replay-fixture-v2",
   "environment": {
-    "architecture": "realtime_s2s",
+    "architecture": "cascaded",
     "surface": "inbound_pstn",
     "transport": "sip+websocket",
     "region": "us",
@@ -14,7 +14,8 @@
       "telephony": "fixture",
       "orchestration": "fixture",
       "realtime": "fixture"
-    }
+    },
+    "instrumentation_profile": "cascaded_full"
   },
   "clock": {
     "type": "monotonic",
@@ -40,7 +41,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-0-clean"
     },
     {
       "turn_id": "replay-turn-02",
@@ -60,7 +62,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-1-clean"
     },
     {
       "turn_id": "replay-turn-03",
@@ -80,7 +83,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-2-clean"
     },
     {
       "turn_id": "replay-turn-04",
@@ -100,7 +104,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-3-noise"
     },
     {
       "turn_id": "replay-turn-05",
@@ -120,7 +125,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-4-clean"
     },
     {
       "turn_id": "replay-turn-06",
@@ -140,7 +146,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-5-clean"
     },
     {
       "turn_id": "replay-turn-07",
@@ -160,7 +167,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-6-noise"
     },
     {
       "turn_id": "replay-turn-08",
@@ -180,7 +188,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-7-clean"
     },
     {
       "turn_id": "replay-turn-09",
@@ -200,7 +209,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-8-noise"
     },
     {
       "turn_id": "replay-turn-10",
@@ -220,7 +230,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-9-clean"
     },
     {
       "turn_id": "replay-turn-11",
@@ -240,7 +251,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-2-long"
     },
     {
       "turn_id": "replay-turn-12",
@@ -260,7 +272,8 @@
         "false_interruption": false,
         "response_correct": true,
         "audio_underruns": 0
-      }
+      },
+      "utterance_id": "digit-5-long"
     }
   ]
 }

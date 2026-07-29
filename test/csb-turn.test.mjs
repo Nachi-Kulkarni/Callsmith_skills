@@ -160,15 +160,33 @@ test("a negative optional timestamp is rejected even though the field is not req
 });
 
 test("a per-turn path override no longer bypasses profile requirements", () => {
-  // Hybrid per-turn paths are removed; path has no effect. A cascaded_full turn
-  // claiming path=realtime_s2s still must satisfy the cascaded contract.
+  // Hybrid per-turn paths are removed; path is now explicitly rejected by the
+  // runtime validator (and by v2 JSON Schema's additionalProperties:false).
   const turn = cascadedV2Turn({ path: "realtime_s2s" });
-  delete turn.eou_detected_ms;
-  delete turn.transcript_final_ms;
-  delete turn.llm_request_ms;
   const result = validateTurnTrace(cascadedV2Trace([turn]));
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some((error) => error.includes("eou_detected_ms must be a non-negative number")));
+  assert.ok(result.errors.some((error) => error.includes(".path is not supported")), `got: ${result.errors.join("; ")}`);
+});
+
+test("the replay fixture is an honest cascaded trace, not invalid S2S attribution", () => {
+  // Regression: the replay fixture used to declare realtime_s2s while attributing
+  // turn_gap_ms to gemini-live as pack evidence — the exact attribution rule the
+  // S2S contract removed. It is now v2 cascaded_full with genuine per-leg packs.
+  const replay = JSON.parse(fs.readFileSync(
+    path.join(root, "evals", "measure", "fixtures", "replay-stack.json"), "utf8",
+  ));
+  const trace = JSON.parse(fs.readFileSync(
+    path.join(root, "evals", "measure", "fixtures", "replay-trace.json"), "utf8",
+  ));
+  assert.equal(trace.schema_version, 2);
+  assert.equal(trace.environment.architecture, "cascaded");
+  assert.equal(trace.environment.instrumentation_profile, "cascaded_full");
+  assert.equal(replay.instrumentation_profile, "cascaded_full");
+  assert.equal(replay.pack_metrics["gemini-live"], undefined, "no opaque-S2S pack attribution");
+  // The schedule declares every utterance the trace must cover.
+  assert.ok(Array.isArray(replay.schedule?.utterance_ids) && replay.schedule.utterance_ids.length === trace.turns.length);
+  // Every turn carries its utterance_id, proving corpus coverage.
+  assert.ok(trace.turns.every((t) => typeof t.utterance_id === "string" && t.utterance_id.length > 0));
 });
 
 test("fast valid fixture improves p95 and passes all quality gates", () => {

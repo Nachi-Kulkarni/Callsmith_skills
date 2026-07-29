@@ -3,16 +3,36 @@
 A stack adapter is the live boundary of `evals/measure/run.mjs`. The runner spawns it as:
 
 ```
-<config.adapter argv...> --corpus <manifest.json> --trace <out-trace.json>
+<config.adapter argv...> --config <stack-config.json> --corpus <manifest.json> --trace <out-trace.json>
 ```
 
 The adapter MUST:
 
-1. Play every utterance in the corpus manifest at the caller boundary of the stack under test — a WebRTC synthetic participant or a PSTN loopback call — honoring each utterance's `playback_profiles` entry exactly (`clean`, `long`, `noise`, `barge_in`, `silence`).
-2. Record one turn per utterance in the out trace, on a single monotonic millisecond clock (`track: live`), with per-turn quality flags and barge-in/cancellation timestamps when a barge-in profile plays.
+1. Read the config passed by `--config` and play exactly the utterances its schedule declares — no more, no less — at the caller boundary of the stack under test (a WebRTC synthetic participant or a PSTN loopback call), honoring each utterance's playback profile.
+2. Record one turn per scheduled utterance in the out trace, on a single monotonic millisecond clock (`track: live`), tagging every turn with its `utterance_id` (the corpus id it measured). The runner proves coverage by matching the observed turn set against the declared schedule exactly — a dropped or extra utterance fails the run closed. Include per-turn quality flags and barge-in/cancellation timestamps when a barge-in profile plays.
 3. Write `provenance.json` into the out directory (see below).
 4. Optionally write `spend.json` into the out directory.
-5. Exit 0. The runner verifies corpus hashes, scores the trace, and owns percentiles — adapters never compute statistics.
+5. Exit 0. The runner verifies corpus hashes, the declared schedule, profile/metric preflight, coverage, provenance, and quality vetoes; it owns percentiles — adapters never compute statistics.
+
+## Schedule and corpus coverage
+
+The stack config declares the exact measurement schedule:
+
+```json
+{
+  "schedule": {
+    "utterance_ids": ["digit-0-clean", "digit-1-clean"],
+    "repeats": 2
+  }
+}
+```
+
+- `utterance_ids` must be a non-empty, duplicate-free list of IDs from the corpus manifest.
+- `repeats` is optional and defaults to `1`; when present it must be a positive integer.
+- A one-turn Gate 1B probe uses one ID with one repeat. A cohort declares its full ID set and repeat count.
+- The adapter emits one trace turn per scheduled occurrence and sets that turn's `utterance_id` to the corresponding manifest ID.
+- The runner compares the observed `utterance_id` multiset with the expanded schedule. Missing, duplicate, unknown, or extra occurrences fail closed; turn order is not significant.
+- A tracked live-stack template that does not yet declare a schedule is intentionally non-runnable. Gate 1B adds the one-ID probe schedule with its tested adapter; Gate 3 expands that declaration for the measured cohort.
 
 ## Trace schema: v1 or v2
 
@@ -47,6 +67,11 @@ Write provenance at run time into the out directory — never type it into the t
 
 The runner itself computes `adapter_sha256` from the adapter source path — do not supply it. A missing or incomplete provenance file fails the run closed.
 
+Provenance is validated in two stages:
+
+1. **Structural** (before the trace is scored): every scalar field is a non-empty string; `target_commit` is an immutable 40-hex Git SHA; `sdk_versions` and `model_ids` are non-empty maps whose keys and values are non-empty strings. Presence-only is not enough.
+2. **Consistency** (after the trace is read): `region` must match the config, and `audio_format` + `network_profile` must match the trace environment — the provenance must describe the same stack that was measured.
+
 ## spend.json (optional)
 
 If the provider APIs expose actual usage, write it so the receipt records real spend rather than only the approval ceiling:
@@ -58,4 +83,4 @@ If the provider APIs expose actual usage, write it so the receipt records real s
 
 `max_spend_usd` in the config is an **approval ceiling**, not an enforced provider bill cap; `--approve-spend-usd` authorizes spend that covers it, and provider billing remains externally measured.
 
-Adapters are per-stack integration code that run against live provider APIs with real credentials and real spend. They are deliberately **not committed untested**: an adapter lands in the same change as the first retained raw trace it produced, sanitized and reviewed per `reference/latency.md`. Until then, the locked experiment designs live in `evals/measure/stacks/*.json`, and CI replays `evals/measure/fixtures/replay-trace.json` through the runner so the whole pipeline minus the provider leg is machine-proven.
+Adapters are per-stack integration code that run against live provider APIs with real credentials and real spend. They are deliberately **not committed untested**: an adapter lands in the same change as the first retained raw trace it produced, sanitized and reviewed per `reference/latency.md`. Until then, the locked experiment designs live in `evals/measure/stacks/*.json`, and CI replays `evals/measure/fixtures/replay-trace.json` (an honest v2 cascaded trace) through the runner so the whole pipeline minus the provider leg — schedule coverage, provenance stages, profile preflight, percentiles, vetoes — is machine-proven.

@@ -59,6 +59,7 @@
       ],
       "properties": {
         "turn_id": { "type": "string", "minLength": 1 },
+        "utterance_id": { "type": "string", "minLength": 1, "description": "The corpus utterance this turn measured. Optional in the schema; the measurement runner requires it to prove corpus coverage." },
         "speech_end_ms": { "$ref": "#/$defs/timestamp" },
         "speech_end_source": { "enum": ["labeled", "detector"] },
         "eou_detected_ms": { "$ref": "#/$defs/timestamp" },

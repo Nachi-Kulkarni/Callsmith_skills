@@ -3,11 +3,19 @@
   "region": "us",
   "cohort": "warm",
   "corpus": "../utterances/manifest.json",
+  "instrumentation_profile": "cascaded_full",
   "max_spend_usd": 0,
-  "pack_metrics": {
-    "gemini-live": { "metric": "turn_gap_ms", "trace_metric": "turn_gap_ms" },
-    "livekit": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" },
-    "silero": { "metric": "endpointing_ms", "trace_metric": "endpointing_ms" }
+  "schedule": {
+    "utterance_ids": [
+      "digit-0-clean", "digit-1-clean", "digit-2-clean", "digit-3-noise",
+      "digit-4-clean", "digit-5-clean", "digit-6-noise", "digit-7-clean",
+      "digit-8-noise", "digit-9-clean", "digit-2-long", "digit-5-long"
+    ]
   },
-  "notes": "Zero-spend CI config: scores a recorded trace (run.mjs --trace) so the measurement boundary is machine-tested without credentials. Live runs clone a stacks/*.json config instead."
+  "pack_metrics": {
+    "deepgram": { "metric": "transcript_commit_ms", "trace_metric": "transcript_commit_ms" },
+    "openai": { "metric": "llm_ttft_ms", "trace_metric": "llm_ttft_ms" },
+    "cartesia": { "metric": "tts_first_chunk_ms", "trace_metric": "tts_first_chunk_ms" }
+  },
+  "notes": "Zero-spend CI config: replays a recorded cascaded trace (run.mjs --trace) so the measurement boundary is machine-tested without credentials. Honest cascaded attribution: every pack metric is a per-leg span the stack genuinely observes (Deepgram STT commit, OpenAI TTFT, Cartesia first chunk). Live runs clone a stacks/*.json config instead."
 }
