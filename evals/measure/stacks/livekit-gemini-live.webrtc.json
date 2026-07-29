@@ -3,13 +3,11 @@
   "region": "us",
   "cohort": "warm",
   "corpus": "../utterances/manifest.json",
+  "instrumentation_profile": "s2s_transport",
   "required_env": ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "GOOGLE_API_KEY"],
   "max_spend_usd": 10,
   "adapter": ["node", "evals/measure/adapters/livekit-gemini-live.mjs"],
-  "pack_metrics": {
-    "gemini-live": { "metric": "turn_gap_ms", "trace_metric": "turn_gap_ms" },
-    "livekit": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" },
-    "silero": { "metric": "endpointing_ms", "trace_metric": "endpointing_ms" }
-  },
-  "notes": "Pilot 1 (S2S/WebRTC): LiveKit Cloud worker + Gemini Live; a synthetic room participant plays the frozen corpus. Budget-lean cohort: >=120 valid turns per cohort, multiple utterances per call to cut setup overhead; expected spend near $0 on LiveKit/Gemini free tiers (cap is retry headroom). p50/p95 publishable; p99 thin and labeled directional until the cohort is topped up. Clone with cohort=cold for the cold cohort — cohorts are never mixed. Region, machine class, and model versions are pinned at run time and land in the config hash. Free-tier rate limits mean runs spread over days, not hours. Adapter contract: evals/measure/adapters/README.md."
+  "stack_metrics": ["turn_gap_ms", "speech_end_to_provider_output_ms", "provider_to_playout_ms"],
+  "pack_metrics": {},
+  "notes": "Pilot 1 (S2S/WebRTC): LiveKit Cloud worker + Gemini Live; a synthetic room participant plays the frozen corpus. Profile s2s_transport: Gemini Live is an opaque speech-to-speech stream exposing only first-output (first modelTurn), interruption, turn-complete, and transcription boundaries — there is NO LLM-request/first-token, text-commit, or separate TTS-request/first-chunk event. Those legs are unobservable and deliberately not advertised. turn_gap and the provider/transport spans cross multiple components (caller -> LiveKit -> Gemini -> LiveKit), so they are stack-level evidence, not per-provider pack attribution; pack_metrics stays empty until a span's boundaries isolate a single provider. Budget-lean cohort: >=120 valid turns per cohort; expected spend near $0 on LiveKit/Gemini free tiers (cap is retry headroom). p50/p95 publishable; p99 thin and labeled directional until the cohort is topped up. Provenance (target commit, runtime/SDK, model IDs, machine class) is produced by the adapter at run time into provenance.json, never typed into this template. Adapter contract: evals/measure/adapters/README.md."
 }

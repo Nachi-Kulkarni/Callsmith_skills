@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateTurnTrace } from "./validate.mjs";
+import { METRIC_BOUNDARIES, PROFILE_METRICS, metricBoundariesAvailable } from "./metrics.mjs";
 
 export function nearestRank(values, percentile) {
   if (!Array.isArray(values) || values.length === 0) throw new Error("percentile requires at least one value");
@@ -10,33 +11,41 @@ export function nearestRank(values, percentile) {
   return sorted[Math.ceil(percentile * sorted.length) - 1];
 }
 
+// Compute every metric whose two boundaries are present on this turn. Absent
+// boundaries yield no value (undefined), never a fabricated duration.
+// ponytail: O(metrics) per turn; fine at cohort scale (<1000 turns). Streaming
+// recompute would be the upgrade path if cohorts ever grow large.
 export function deriveTurnMetrics(turn) {
-  return {
-    turn_gap_ms: turn.audio_first_audible_ms - turn.speech_end_ms,
-    endpointing_ms: turn.eou_detected_ms - turn.speech_end_ms,
-    transcript_commit_ms: turn.transcript_final_ms - turn.eou_detected_ms,
-    pre_llm_queue_ms: turn.llm_request_ms - turn.transcript_final_ms,
-    llm_ttft_ms: turn.llm_first_token_ms - turn.llm_request_ms,
-    text_aggregation_ms: turn.text_committed_ms - turn.llm_first_token_ms,
-    pre_tts_queue_ms: turn.tts_request_ms - turn.text_committed_ms,
-    tts_first_chunk_ms: turn.tts_first_chunk_ms - turn.tts_request_ms,
-    delivery_playout_ms: turn.audio_first_audible_ms - turn.tts_first_chunk_ms,
-  };
+  const out = {};
+  for (const [metric, [start, end]] of Object.entries(METRIC_BOUNDARIES)) {
+    if (metricBoundariesAvailable(metric, turn)) out[metric] = turn[end] - turn[start];
+  }
+  return out;
+}
+
+// The metrics this trace's profile is permitted to publish. v1/cascaded_full
+// yields the cascaded set; v2 s2s_transport / end_to_end yield the S2S set.
+function applicableMetricNames(trace) {
+  const profile = trace.schema_version === 2 ? trace.environment?.instrumentation_profile : null;
+  return PROFILE_METRICS[profile] || PROFILE_METRICS.cascaded_full;
 }
 
 export function summarizeTrace(trace) {
   const validation = validateTurnTrace(trace);
   if (!validation.ok) throw new Error(`invalid turn trace:\n- ${validation.errors.join("\n- ")}`);
-  const turns = trace.turns.map(deriveTurnMetrics);
-  const metricNames = Object.keys(turns[0]);
-  const metrics = Object.fromEntries(metricNames.map((name) => {
-    const values = turns.map((turn) => turn[name]);
-    return [name, {
-      p50: nearestRank(values, 0.5),
-      p95: nearestRank(values, 0.95),
-      p99: nearestRank(values, 0.99),
-    }];
-  }));
+  const perTurn = trace.turns.map(deriveTurnMetrics);
+  const metrics = {};
+  for (const name of applicableMetricNames(trace)) {
+    const observed = perTurn.map((m) => m[name]).filter((v) => v !== undefined);
+    if (observed.length === 0) continue; // unobservable under this profile: omit, do not publish
+    metrics[name] = {
+      n_applicable: perTurn.length,
+      n_observed: observed.length,
+      p50: nearestRank(observed, 0.5),
+      p95: nearestRank(observed, 0.95),
+      p99: nearestRank(observed, 0.99),
+    };
+  }
   const counts = {
     premature_cutoff: trace.turns.filter((turn) => turn.quality.premature_cutoff).length,
     false_interruption: trace.turns.filter((turn) => turn.quality.false_interruption).length,

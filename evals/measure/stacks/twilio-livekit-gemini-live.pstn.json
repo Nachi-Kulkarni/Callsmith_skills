@@ -3,14 +3,11 @@
   "region": "us",
   "cohort": "warm",
   "corpus": "../utterances/manifest.json",
+  "instrumentation_profile": "s2s_transport",
   "required_env": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "GOOGLE_API_KEY"],
   "max_spend_usd": 8,
   "adapter": ["node", "evals/measure/adapters/twilio-livekit-gemini-live.mjs"],
-  "pack_metrics": {
-    "gemini-live": { "metric": "turn_gap_ms", "trace_metric": "turn_gap_ms" },
-    "twilio": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" },
-    "livekit": { "metric": "pre_llm_queue_ms", "trace_metric": "pre_llm_queue_ms" },
-    "silero": { "metric": "endpointing_ms", "trace_metric": "endpointing_ms" }
-  },
-  "notes": "Pilot 2 (S2S/PSTN): Twilio SIP trunk into LiveKit with Gemini Live; the sole telephony leg in the budget program, isolating transport vs pilot 1. Budget-lean cohort: >=120 valid turns (~30-60 call-minutes; expected ~$3-5 for number rental + minutes, cap is retry headroom). Twilio trial accounts are NOT acceptable for measurement (verified-number restriction + trial whisper corrupt the audio path). Same corpus, region, and machine class as pilot 1 so the WebRTC<->PSTN delta is attributable. p99 labeled directional until topped up. Adapter contract: evals/measure/adapters/README.md."
+  "stack_metrics": ["turn_gap_ms", "speech_end_to_provider_output_ms", "provider_to_playout_ms"],
+  "pack_metrics": {},
+  "notes": "Pilot 2 (S2S/PSTN): Twilio SIP trunk into LiveKit with Gemini Live; the sole telephony leg in the budget program, isolating transport vs pilot 1. Profile s2s_transport: opaque Gemini Live (no LLM/TTS legs observable); Twilio Media Streams `mark` is playback-COMPLETED, not onset, so it cannot populate audio_first_playout_ms — a caller-boundary loopback capture is required for playout/audible onset (recorded as playback_completed_ms otherwise). turn_gap and transport spans span caller -> Twilio -> LiveKit -> Gemini -> LiveKit -> Twilio, so they are stack-level evidence; pack_metrics stays empty until a span isolates a single provider. Budget-lean cohort: >=120 valid turns (~30-60 call-minutes; expected ~$3-5 for number rental + minutes, cap is retry headroom). Twilio trial accounts are NOT acceptable for measurement (verified-number restriction + trial whisper corrupt the audio path). Same corpus, region, and machine class as pilot 1 so the WebRTC<->PSTN delta is attributable. p99 labeled directional until topped up. Provenance is produced by the adapter at run time into provenance.json. Adapter contract: evals/measure/adapters/README.md."
 }

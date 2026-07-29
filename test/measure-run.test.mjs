@@ -44,7 +44,8 @@ describe('measurement runner (replay)', () => {
     assert.equal(evidence.source, 'callsmith_measurement');
     assert.equal(evidence.region, 'us');
     assert.equal(evidence.sample_size, trace.turns.length);
-    assert.deepEqual(evidence.percentiles_ms, summary.metrics.turn_gap_ms);
+    // percentiles_ms is the clean percentile subset; coverage lives on the metric.
+    assert.deepEqual(evidence.percentiles_ms, { p50: summary.metrics.turn_gap_ms.p50, p95: summary.metrics.turn_gap_ms.p95, p99: summary.metrics.turn_gap_ms.p99 });
     assert.match(evidence.methodology, /warm cohort/);
     assert.match(evidence.methodology, /raw trace retained/);
   });
@@ -92,5 +93,86 @@ describe('measurement runner (replay)', () => {
     const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', TRACE]);
     assert.equal(r.status, 2);
     assert.match(r.stderr, /missing required environment keys/);
+  });
+
+  it('rejects a metric advertised under a profile that cannot observe it', () => {
+    const dir = tmp();
+    const s2sTrace = {
+      schema_version: 2, track: 'live', run_id: 'replay-s2s',
+      environment: {
+        architecture: 'realtime_s2s', instrumentation_profile: 's2s_transport',
+        surface: 'webrtc_app', transport: 'webrtc', region: 'us', runtime: 'replay',
+        network_profile: 'recorded', audio_format: 'pcm16-16000-mono',
+        providers: { realtime: 'gemini-live' },
+      },
+      clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
+      turns: [{
+        turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector',
+        provider_first_output_ms: 1300, audio_first_playout_ms: 1340, audio_first_audible_ms: 1370,
+        quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 },
+      }],
+    };
+    const traceFile = path.join(dir, 's2s.json');
+    fs.writeFileSync(traceFile, JSON.stringify(s2sTrace));
+    // An S2S profile advertising a cascaded-only metric (llm_ttft_ms) must fail closed.
+    const config = {
+      stack: 's2s-replay', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 's2s_transport',
+      pack_metrics: { 'gemini-live': { metric: 'llm_ttft_ms', trace_metric: 'llm_ttft_ms' } },
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', traceFile]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /not observable under profile "s2s_transport"/);
+  });
+
+  it('emits stack metrics for an s2s_transport trace and keeps pack evidence empty', () => {
+    const dir = tmp();
+    const s2sTrace = {
+      schema_version: 2, track: 'live', run_id: 'replay-s2s-stack',
+      environment: {
+        architecture: 'realtime_s2s', instrumentation_profile: 's2s_transport',
+        surface: 'webrtc_app', transport: 'webrtc', region: 'us', runtime: 'replay',
+        network_profile: 'recorded', audio_format: 'pcm16-16000-mono',
+        providers: { realtime: 'gemini-live' },
+      },
+      clock: { type: 'monotonic', unit: 'ms', origin_id: 'c' },
+      turns: [{
+        turn_id: 't1', speech_end_ms: 1000, speech_end_source: 'detector',
+        provider_first_output_ms: 1300, audio_first_playout_ms: 1340, audio_first_audible_ms: 1370,
+        quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 },
+      }],
+    };
+    const traceFile = path.join(dir, 's2s.json');
+    fs.writeFileSync(traceFile, JSON.stringify(s2sTrace));
+    const config = {
+      stack: 's2s-replay', region: 'us', cohort: 'warm', corpus: MANIFEST,
+      instrumentation_profile: 's2s_transport',
+      stack_metrics: ['turn_gap_ms', 'speech_end_to_provider_output_ms'],
+      pack_metrics: {},
+    };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    const r = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'run'), '--trace', traceFile]);
+    assert.equal(r.status, 0, r.stderr);
+    const receipt = JSON.parse(fs.readFileSync(path.join(dir, 'run', 'measurement.json'), 'utf8'));
+    assert.equal(receipt.instrumentation_profile, 's2s_transport');
+    const stackMetrics = Object.fromEntries(receipt.stack_evidence.map((e) => [e.metric, e]));
+    assert.ok(stackMetrics.turn_gap_ms);
+    assert.ok(stackMetrics.speech_end_to_provider_output_ms);
+    assert.deepEqual(receipt.pack_evidence, {});
+  });
+
+  it('requires --approve-spend-usd for --live and rejects approval above the ceiling', () => {
+    const dir = tmp();
+    const config = { stack: 'live-probe', region: 'us', cohort: 'warm', corpus: MANIFEST, max_spend_usd: 5, adapter: ['node', 'evals/measure/adapters/livekit-gemini-live.mjs'] };
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(config));
+    // No approval at all.
+    const noApproval = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'a'), '--live']);
+    assert.equal(noApproval.status, 2);
+    assert.match(noApproval.stderr, /requires --approve-spend-usd/);
+    // Approval above ceiling.
+    const overCeiling = run(['--config', path.join(dir, 'config.json'), '--out', path.join(dir, 'b'), '--live', '--approve-spend-usd', '20']);
+    assert.equal(overCeiling.status, 2);
+    assert.match(overCeiling.stderr, /exceeds config\.max_spend_usd/);
   });
 });

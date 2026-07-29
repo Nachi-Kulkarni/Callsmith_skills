@@ -18,7 +18,7 @@ TTFT remains useful as the LLM-only submetric `llm_first_token_ms - llm_request_
 - Keep raw per-turn samples. Aggregate only after validation.
 - Compare runs only when architecture, surface, transport, region, runtime, provider/model versions, network profile, and audio format are equivalent or the difference is the declared experiment.
 
-The portable JSON contract is [`turn-trace.schema.json`](turn-trace.schema.json). Required stages are:
+The portable JSON contract is [`turn-trace.schema.json`](turn-trace.schema.json) (v1) or [`turn-trace.v2.schema.json`](turn-trace.v2.schema.json) (profile-aware). Required stages for a cascaded trace are:
 
 ```text
 speech_end → EOU detected → transcript final → LLM request → first token
@@ -26,7 +26,20 @@ speech_end → EOU detected → transcript final → LLM request → first token
            → first playout → first audible audio
 ```
 
-For a realtime speech-to-speech provider, use the provider's transcript/semantic-commit and response/audio events for the corresponding fields. Equal timestamps are valid when stages are fused; omitting stages is not.
+For a realtime speech-to-speech provider, use the provider's transcript/semantic-commit and response/audio events for the corresponding fields. Equal timestamps are valid when stages are fused; omitting stages is not. Omitting a boundary promised by the selected instrumentation profile is invalid. Boundaries the provider does not expose must not be synthesized.
+
+### Instrumentation profiles (schema v2)
+
+A realtime speech-to-speech provider (e.g. Gemini Live) is an opaque in→out audio stream: it exposes first output (first `modelTurn`), interruption, turn-complete, and transcription streams, but **no** LLM-request, LLM-first-token, text-commit, TTS-request, or separate TTS-first-chunk event. v2 declares an `environment.instrumentation_profile` so the required timestamp set matches what the stack can actually observe:
+
+- `cascaded_full` — requires the ten cascaded legs above.
+- `s2s_transport` — requires only `speech_end_ms`, `provider_first_output_ms`, `audio_first_playout_ms`, `audio_first_audible_ms`.
+- `end_to_end` — requires only `speech_end_ms` and `audio_first_audible_ms` (fallback when no provider/transport boundary is defensible).
+
+`provider_first_output_ms` is the boundary for the first response received from the provider (Gemini first `modelTurn`). It is distinct from `audio_first_playout_ms` (response submitted to the playout path) and `audio_first_audible_ms` (first non-silent audio heard at the measurement boundary). Equal values are valid only when one real callback genuinely represents both boundaries — never as placeholder values.
+
+For PSTN, Twilio Media Streams `mark` acknowledges that buffered audio **completed playback**, not that it began. It cannot populate `audio_first_playout_ms` as onset; a caller-boundary loopback capture is required. Absent that, record `playback_completed_ms` and never infer onset by subtracting chunk duration.
+
 
 ## Spans and attribution
 
@@ -42,6 +55,14 @@ Compute these spans per turn before percentiles:
 | Pre-TTS queue | `tts_request - text_committed` | orchestration |
 | TTS first chunk | `tts_first_chunk - tts_request` | TTS |
 | Delivery + playout | `audio_first_audible - tts_first_chunk` | transport/client buffer |
+
+S2S spans (profile `s2s_transport`) — each spans multiple providers, so they are stack-level, not per-provider attribution:
+
+| Span | Calculation | Scope |
+|---|---|---|
+| Speech end → provider output | `provider_first_output - speech_end` | caller → transport → S2S model (stack) |
+| Provider → playout | `audio_first_playout - provider_first_output` | S2S model → transport playout (stack) |
+| Playout → audible | `audio_first_audible - audio_first_playout` | transport/client buffer (stack) |
 
 Report `p50`, `p95`, and `p99` with sample count for Turn Gap and every span. Callsmith uses deterministic nearest-rank percentiles: sort ascending and select `ceil(p × n) - 1`. Do not report p99 from fewer than 100 live samples as a stable SLO; label it directional.
 

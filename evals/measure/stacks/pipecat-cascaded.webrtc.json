@@ -3,6 +3,7 @@
   "region": "us",
   "cohort": "warm",
   "corpus": "../utterances/manifest.json",
+  "instrumentation_profile": "cascaded_full",
   "required_env": ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "DEEPGRAM_API_KEY", "OPENAI_API_KEY", "CARTESIA_API_KEY"],
   "max_spend_usd": 7,
   "adapter": ["node", "evals/measure/adapters/pipecat-cascaded.mjs"],
@@ -13,5 +14,5 @@
     "pipecat": { "metric": "pre_tts_queue_ms", "trace_metric": "pre_tts_queue_ms" },
     "livekit": { "metric": "delivery_playout_ms", "trace_metric": "delivery_playout_ms" }
   },
-  "notes": "Pilot 3 (cascaded/WebRTC): LiveKit transport -> Pipecat -> Deepgram STT -> OpenAI LLM (gpt-4o-mini class) -> Cartesia TTS. Moved off PSTN in the budget program: pilots 1 vs 3 now isolate architecture (S2S vs cascaded) with transport held constant — cleaner attribution, no telephony bill. Expected spend near $0: Deepgram signup credits (~$200) cover STT, Cartesia free tier covers TTS, OpenAI mini-class model is pennies for ~120 turns. Per-leg metrics make the S2S-vs-cascaded decision matrix real. p99 labeled directional until topped up. Adapter contract: evals/measure/adapters/README.md."
+  "notes": "Pilot 3 (cascaded/WebRTC): LiveKit transport -> Pipecat -> Deepgram STT -> OpenAI LLM (gpt-4o-mini class) -> Cartesia TTS. Profile cascaded_full: each leg is separately observable (Deepgram speech_final/is_final, OpenAI first SSE chunk, Cartesia first chunk, Pipecat frames + LiveKit metrics), so per-provider pack attribution is legitimate here. Moved off PSTN in the budget program: pilots 1 vs 3 isolate architecture (S2S vs cascaded) with transport held constant — cleaner attribution, no telephony bill. Expected spend near $0: Deepgram signup credits (~$200) cover STT, Cartesia free tier covers TTS, OpenAI mini-class model is pennies for ~120 turns. p99 labeled directional until topped up. Provenance is produced by the adapter at run time into provenance.json. Adapter contract: evals/measure/adapters/README.md."
 }

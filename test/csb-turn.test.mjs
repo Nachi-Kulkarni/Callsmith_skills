@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { REQUIRED_EVENTS, validateTurnTrace } from "../evals/csb/latency/validate.mjs";
 import { deriveTurnMetrics, nearestRank, scoreTurnTraces, summarizeTrace } from "../evals/csb/latency/score.mjs";
+import { METRIC_BOUNDARIES, PROFILE_METRICS, metricBoundariesAvailable } from "../evals/csb/latency/metrics.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = path.join(root, "evals", "csb", "latency", "fixtures");
@@ -56,7 +57,61 @@ test("nearest-rank percentiles and component spans are deterministic", () => {
     "pre_tts_queue_ms", "text_aggregation_ms", "transcript_commit_ms",
     "tts_first_chunk_ms", "turn_gap_ms",
   ]);
-  assert.deepEqual(Object.keys(summary.metrics.turn_gap_ms).sort(), ["p50", "p95", "p99"]);
+  // Each metric carries coverage (n_applicable/n_observed) plus percentiles.
+  assert.deepEqual(Object.keys(summary.metrics.turn_gap_ms).sort(), ["n_applicable", "n_observed", "p50", "p95", "p99"]);
+});
+
+test("the metric-boundary registry is internally consistent", () => {
+  // Every metric's two boundaries exist, and every profile's metrics exist in the registry.
+  for (const [metric, boundaries] of Object.entries(METRIC_BOUNDARIES)) {
+    assert.equal(boundaries.length, 2, `${metric} must have exactly two boundaries`);
+  }
+  for (const [profile, metrics] of Object.entries(PROFILE_METRICS)) {
+    for (const metric of metrics) {
+      assert.ok(METRIC_BOUNDARIES[metric], `${profile} advertises unknown metric ${metric}`);
+    }
+  }
+});
+
+test("an s2s_transport trace validates with only observable boundaries and omits unobservable metrics", () => {
+  const trace = read("s2s-valid.json");
+  assert.equal(trace.schema_version, 2);
+  assert.equal(trace.environment.instrumentation_profile, "s2s_transport");
+  const validation = validateTurnTrace(trace);
+  assert.equal(validation.ok, true, validation.errors.join("\n"));
+  const summary = summarizeTrace(trace);
+  // The four S2S profile metrics, none fabricated.
+  assert.deepEqual(Object.keys(summary.metrics).sort(), [
+    "playout_to_audible_ms", "provider_to_playout_ms",
+    "speech_end_to_provider_output_ms", "turn_gap_ms",
+  ]);
+  // No cascaded-only leg is ever emitted for an S2S trace.
+  assert.equal(summary.metrics.llm_ttft_ms, undefined);
+  assert.equal(summary.metrics.pre_llm_queue_ms, undefined);
+  for (const metric of Object.keys(summary.metrics)) {
+    assert.equal(summary.metrics[metric].n_applicable, summary.metrics[metric].n_observed);
+  }
+});
+
+test("an s2s turn missing a promised observable boundary fails validation", () => {
+  const trace = read("s2s-valid.json");
+  delete trace.turns[0].provider_first_output_ms;
+  const result = validateTurnTrace(trace);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("provider_first_output_ms must be a non-negative number")));
+});
+
+test("a v2 trace cannot be compared against a v1 trace (mismatched contract)", () => {
+  const baseline = read("slow-valid.json"); // v1 cascaded
+  const candidate = read("s2s-valid.json"); // v2 s2s
+  const result = scoreTurnTraces(baseline, candidate);
+  assert.equal(result.valid, false);
+});
+
+test("boundary availability gates metric computation per turn", () => {
+  const turn = { speech_end_ms: 1000, audio_first_audible_ms: 1500 };
+  assert.equal(metricBoundariesAvailable("turn_gap_ms", turn), true);
+  assert.equal(metricBoundariesAvailable("llm_ttft_ms", turn), false);
 });
 
 test("fast valid fixture improves p95 and passes all quality gates", () => {

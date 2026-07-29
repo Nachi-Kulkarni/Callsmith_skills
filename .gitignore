@@ -37,5 +37,6 @@ voice-loadtest-harness.zip
 # Local dev tooling (personal agent environment, not Callsmith product)
 .agents/
 .clinerules/
+.zcode/
 AGENTS.md
 skills-lock.json
