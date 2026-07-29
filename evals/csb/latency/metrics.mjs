@@ -31,7 +31,7 @@ export const METRIC_BOUNDARIES = {
 
 // Which derived metrics each instrumentation profile is permitted to publish.
 // S2S spans cross multiple providers (caller -> transport -> Gemini -> transport),
-// so they are stack-level until boundaries isolate a single provider.
+// so they are stack level until boundaries isolate a single provider.
 export const PROFILE_METRICS = {
   cascaded_full: [
     "turn_gap_ms",
@@ -55,6 +55,61 @@ export const PROFILE_METRICS = {
 
 export const INSTRUMENTATION_PROFILES = Object.keys(PROFILE_METRICS);
 
+// EXPLICIT required-boundary set per profile — NOT derived from metric endpoints.
+// Required raw boundaries and publishable metrics are related but not identical:
+// cascaded_full requires audio_first_playout_ms on every turn even though no
+// published cascaded metric subtracts it (it is a boundary, consumed indirectly).
+// Deriving from metric endpoints silently dropped it. This table is the contract.
+export const PROFILE_REQUIRED_BOUNDARIES = {
+  cascaded_full: [
+    "speech_end_ms",
+    "eou_detected_ms",
+    "transcript_final_ms",
+    "llm_request_ms",
+    "llm_first_token_ms",
+    "text_committed_ms",
+    "tts_request_ms",
+    "tts_first_chunk_ms",
+    "audio_first_playout_ms",
+    "audio_first_audible_ms",
+  ],
+  s2s_transport: [
+    "speech_end_ms",
+    "provider_first_output_ms",
+    "audio_first_playout_ms",
+    "audio_first_audible_ms",
+  ],
+  end_to_end: ["speech_end_ms", "audio_first_audible_ms"],
+};
+
+// Which architecture may declare which profile. An s2s profile on a cascaded
+// architecture (or vice versa) is a contract mismatch and must fail closed.
+export const ARCH_PROFILE_COMPAT = {
+  realtime_s2s: ["s2s_transport", "end_to_end"],
+  cascaded: ["cascaded_full", "end_to_end"],
+  hybrid: ["cascaded_full", "s2s_transport", "end_to_end"],
+};
+
+// Every boundary timestamp the schema knows about, for presence/range checks on
+// optional fields (e.g. playback_completed_ms is optional but if present must be
+// a finite non-negative number).
+export const KNOWN_BOUNDARIES = [
+  ...new Set([
+    "speech_end_ms",
+    "eou_detected_ms",
+    "transcript_final_ms",
+    "llm_request_ms",
+    "llm_first_token_ms",
+    "text_committed_ms",
+    "tts_request_ms",
+    "tts_first_chunk_ms",
+    "provider_first_output_ms",
+    "audio_first_playout_ms",
+    "audio_first_audible_ms",
+    "playback_completed_ms",
+  ]),
+];
+
 // Both boundaries of a metric present and finite non-negative on this turn.
 // ponytail: boundary presence is a numeric check, not a provenance check.
 // Whether an equal timestamp came from one real callback or dishonest copying
@@ -63,14 +118,4 @@ export function metricBoundariesAvailable(metric, turn) {
   const boundaries = METRIC_BOUNDARIES[metric];
   if (!boundaries) return false;
   return boundaries.every((key) => Number.isFinite(turn[key]) && turn[key] >= 0);
-}
-
-// The set of boundary timestamp names a profile promises, in canonical order.
-export function profileBoundaryNames(profile) {
-  const metrics = PROFILE_METRICS[profile] || [];
-  const names = new Set();
-  for (const metric of metrics) {
-    for (const boundary of METRIC_BOUNDARIES[metric] || []) names.add(boundary);
-  }
-  return [...names];
 }

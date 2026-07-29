@@ -38,6 +38,10 @@ export function summarizeTrace(trace) {
   for (const name of applicableMetricNames(trace)) {
     const observed = perTurn.map((m) => m[name]).filter((v) => v !== undefined);
     if (observed.length === 0) continue; // unobservable under this profile: omit, do not publish
+    // n_applicable === n_observed holds for any valid trace under a strict profile
+    // (a turn missing a required boundary fails validation upstream). The two
+    // counts are emitted as defense-in-depth so a publication layer can still
+    // detect a slip; they do NOT endorse partial-valid turns.
     metrics[name] = {
       n_applicable: perTurn.length,
       n_observed: observed.length,

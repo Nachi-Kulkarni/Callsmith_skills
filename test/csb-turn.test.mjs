@@ -114,6 +114,63 @@ test("boundary availability gates metric computation per turn", () => {
   assert.equal(metricBoundariesAvailable("llm_ttft_ms", turn), false);
 });
 
+// Regression: cascaded_full MUST require audio_first_playout_ms even though no
+// published cascaded metric subtracts it. (Bug: deriving required boundaries
+// from metric endpoints silently dropped it.)
+function cascadedV2Turn(overrides = {}) {
+  return {
+    turn_id: "c1", speech_end_ms: 1000, speech_end_source: "detector",
+    eou_detected_ms: 1100, transcript_final_ms: 1150, llm_request_ms: 1160,
+    llm_first_token_ms: 1300, text_committed_ms: 1350, tts_request_ms: 1360,
+    tts_first_chunk_ms: 1400, audio_first_playout_ms: 1430, audio_first_audible_ms: 1450,
+    quality: { premature_cutoff: false, false_interruption: false, response_correct: true, audio_underruns: 0 },
+    ...overrides,
+  };
+}
+function cascadedV2Trace(turns) {
+  return {
+    schema_version: 2, track: "live", run_id: "rc",
+    environment: { architecture: "cascaded", instrumentation_profile: "cascaded_full", surface: "webrtc_app", transport: "webrtc", region: "us", runtime: "x", network_profile: "n", audio_format: "a", providers: { stt: "d" } },
+    clock: { type: "monotonic", unit: "ms", origin_id: "c" },
+    turns,
+  };
+}
+
+test("cascaded_full rejects a turn missing audio_first_playout_ms", () => {
+  const turn = cascadedV2Turn();
+  delete turn.audio_first_playout_ms;
+  const result = validateTurnTrace(cascadedV2Trace([turn]));
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("audio_first_playout_ms must be a non-negative number")));
+});
+
+test("an architecture/profile mismatch is rejected", () => {
+  const trace = cascadedV2Trace([cascadedV2Turn()]);
+  trace.environment.instrumentation_profile = "s2s_transport"; // cascaded arch + s2s profile
+  const result = validateTurnTrace(trace);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("not compatible")));
+});
+
+test("a negative optional timestamp is rejected even though the field is not required", () => {
+  const turn = cascadedV2Turn({ playback_completed_ms: -1 });
+  const result = validateTurnTrace(cascadedV2Trace([turn]));
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("playback_completed_ms must be a non-negative number when present")));
+});
+
+test("a per-turn path override no longer bypasses profile requirements", () => {
+  // Hybrid per-turn paths are removed; path has no effect. A cascaded_full turn
+  // claiming path=realtime_s2s still must satisfy the cascaded contract.
+  const turn = cascadedV2Turn({ path: "realtime_s2s" });
+  delete turn.eou_detected_ms;
+  delete turn.transcript_final_ms;
+  delete turn.llm_request_ms;
+  const result = validateTurnTrace(cascadedV2Trace([turn]));
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("eou_detected_ms must be a non-negative number")));
+});
+
 test("fast valid fixture improves p95 and passes all quality gates", () => {
   const result = scoreTurnTraces(read("slow-valid.json"), read("fast-valid.json"));
   assert.equal(result.valid, true);

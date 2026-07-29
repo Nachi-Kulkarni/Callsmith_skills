@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { summarizeTrace } from '../csb/latency/score.mjs';
-import { PROFILE_METRICS, INSTRUMENTATION_PROFILES } from '../csb/latency/metrics.mjs';
+import { PROFILE_METRICS, INSTRUMENTATION_PROFILES, ARCH_PROFILE_COMPAT } from '../csb/latency/metrics.mjs';
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -35,20 +35,52 @@ function verifyCorpus(file) {
   return sha256File(file);
 }
 
-// For a v2 trace the instrumentation profile lives on trace.environment; v1 has
-// none and is treated as cascaded_full (the historical set).
-function runProfile(trace, config) {
-  if (trace?.schema_version === 2) return trace.environment?.instrumentation_profile || null;
-  if (config.instrumentation_profile) return config.instrumentation_profile;
-  return 'cascaded_full';
+// Fail closed if the config advertises a metric the run's profile cannot observe.
+// Must run BEFORE the adapter is spawned (no provider spend until validated).
+function preflightMetrics(config, profile) {
+  if (!INSTRUMENTATION_PROFILES.includes(profile)) fail(`unknown instrumentation_profile: ${profile}`);
+  const allowed = PROFILE_METRICS[profile];
+  const assert = (label, traceMetric) => {
+    if (!allowed.includes(traceMetric)) {
+      fail(`${label} advertises trace_metric "${traceMetric}" which is not observable under profile "${profile}" (allowed: ${allowed.join(', ')})`);
+    }
+  };
+  for (const name of config.stack_metrics || []) {
+    if (typeof name === 'string') assert(`stack_metrics "${name}"`, name);
+  }
+  for (const [pack, spec] of Object.entries(config.pack_metrics || {})) {
+    assert(`pack_metrics.${pack}`, spec.trace_metric);
+  }
 }
 
-function assertMetricPermitted(specName, traceMetric, profile) {
-  const allowed = PROFILE_METRICS[profile] || [];
-  if (!INSTRUMENTATION_PROFILES.includes(profile)) fail(`unknown instrumentation_profile: ${profile}`);
-  if (!allowed.includes(traceMetric)) {
-    fail(`${specName} advertises trace_metric "${traceMetric}" which is not observable under profile "${profile}" (allowed: ${allowed.join(', ')})`);
+// A v2 trace declares its own profile; require it to match what the config pinned.
+function assertTraceProfile(trace, configProfile) {
+  if (trace.schema_version === 2) {
+    const traceProfile = trace.environment?.instrumentation_profile;
+    if (traceProfile !== configProfile) {
+      fail(`trace instrumentation_profile "${traceProfile}" does not match config "${configProfile}"`);
+    }
+    const arch = trace.environment?.architecture;
+    if (arch && ARCH_PROFILE_COMPAT[arch] && !ARCH_PROFILE_COMPAT[arch].includes(traceProfile)) {
+      fail(`trace architecture "${arch}" is not compatible with profile "${traceProfile}"`);
+    }
   }
+}
+
+// Live provenance pins. Every field below is required and cross-checked; a run
+// missing any is rejected. Built at run time by the adapter, never typed into a
+// tracked config template. The adapter hash is computed by the runner.
+const PROVENANCE_FIELDS = [
+  'target_commit', 'runtime_version', 'sdk_versions', 'model_ids',
+  'machine_class', 'region', 'audio_format', 'network_profile',
+];
+function validateProvenance(provenance, adapterSha256) {
+  if (!provenance || typeof provenance !== 'object') fail('provenance.json is required for a live run');
+  for (const field of PROVENANCE_FIELDS) {
+    const value = provenance[field];
+    if (value === undefined || value === null || value === '') fail(`provenance.${field} is required`);
+  }
+  if (!adapterSha256) fail('adapter source could not be hashed; a resolvable adapter path is required');
 }
 
 function main(argv = process.argv.slice(2)) {
@@ -67,19 +99,24 @@ function main(argv = process.argv.slice(2)) {
   const missing = (config.required_env || []).filter((key) => !process.env[key]);
   if (missing.length) fail(`missing required environment keys: ${missing.join(', ')}`);
 
-  // max_spend_usd is an APPROVAL CEILING, not an enforced provider bill cap.
-  // An explicit --approve-spend-usd authorizes spend at or below the config ceiling;
+  // The config profile is the contract for this run.
+  const configProfile = config.instrumentation_profile || 'cascaded_full';
+
+  // Spend authorization: the approval must COVER the configured maximum (an
+  // approval below the ceiling leaves the adapter with no enforceable lower cap).
+  // max_spend_usd is an approval ceiling, not an enforced provider bill cap;
   // provider billing remains externally measured.
-  const ceiling = Number(config.max_spend_usd || 0);
+  const ceiling = Number(config.max_spend_usd);
   if (options.live) {
-    if (!Number.isFinite(options.approveSpendUsd)) {
-      fail('--live requires --approve-spend-usd N (explicit authorization at or below config.max_spend_usd)');
+    if (!Number.isFinite(ceiling) || ceiling < 0) fail('config.max_spend_usd must be a non-negative number for a live run');
+    if (!Number.isFinite(options.approveSpendUsd) || options.approveSpendUsd < ceiling) {
+      fail(`--live requires --approve-spend-usd N covering config.max_spend_usd ${ceiling} (got ${options.approveSpendUsd}); provider billing is externally measured`);
     }
-    if (options.approveSpendUsd > ceiling) {
-      fail(`--approve-spend-usd ${options.approveSpendUsd} exceeds config.max_spend_usd ${ceiling}; lower the approval or raise the config ceiling`);
-    }
-    console.error(`live measurement: approved $${options.approveSpendUsd} of ceiling $${ceiling.toFixed(2)} (provider billing measured externally)`);
   }
+
+  // Preflight: validate config profile and every advertised metric BEFORE any
+  // spend or directory creation. A misconfigured config must never reach the adapter.
+  preflightMetrics(config, configProfile);
 
   fs.mkdirSync(options.out, { recursive: false });
   const rawTrace = path.join(options.out, 'raw-trace.json');
@@ -91,59 +128,51 @@ function main(argv = process.argv.slice(2)) {
     fs.copyFileSync(options.trace, rawTrace);
   } else {
     if (!options.live || !Array.isArray(config.adapter) || !config.adapter.length) fail('provider execution requires --live and config.adapter argv');
+    // Resolve and hash the adapter BEFORE spawning. A missing adapter file fails closed here.
+    const adapterPath = config.adapter[1] && config.adapter[1].endsWith('.mjs') ? path.resolve(config.adapter[1]) : null;
+    if (!adapterPath || !fs.existsSync(adapterPath)) fail(`adapter source not found: ${config.adapter.slice(1).join(' ')}`);
+    adapterSha256 = sha256File(adapterPath);
     const run = spawnSync(config.adapter[0], [...config.adapter.slice(1), '--corpus', corpus, '--trace', rawTrace], { stdio: 'inherit', env: process.env });
     if (run.status !== 0) fail(`adapter failed (${run.status ?? run.error?.message})`);
-    // Provenance is produced by the adapter into the out dir at run time, not
-    // typed into the config. The runner computes the adapter hash itself.
-    const adapterPath = config.adapter[1] && config.adapter[1].endsWith('.mjs') ? path.resolve(config.adapter[1]) : null;
-    adapterSha256 = adapterPath && fs.existsSync(adapterPath) ? sha256File(adapterPath) : null;
     const provenanceFile = path.join(options.out, 'provenance.json');
     const spendFile = path.join(options.out, 'spend.json');
-    if (!fs.existsSync(provenanceFile)) fail('live run produced no provenance.json; target commit, runtime/SDK, and model pins are required');
+    if (!fs.existsSync(provenanceFile)) fail('live run produced no provenance.json');
     provenance = read(provenanceFile);
     spend = fs.existsSync(spendFile) ? read(spendFile) : null;
-    if (!provenance.target_commit || !provenance.machine_class) fail('provenance.json requires target_commit and machine_class');
+    validateProvenance(provenance, adapterSha256);
   }
 
   const trace = read(rawTrace);
+  // The produced trace must declare the same profile the config pinned.
+  assertTraceProfile(trace, configProfile);
   const summary = summarizeTrace(trace);
   const configSha256 = sha256File(configFile);
-  const profile = runProfile(trace, config);
 
-  // Verify every advertised metric (stack or pack) is observable under the
-  // run's profile BEFORE emitting evidence. This is the fail-closed path for an
-  // S2S config that advertises a cascaded-only metric (e.g. pre_llm_queue_ms).
+  // A quality veto makes the run diagnostic: never publish usable evidence.
+  const vetoed = Object.values(summary.quality).some(Boolean);
   const stackMetrics = config.stack_metrics || [];
   const packMetrics = config.pack_metrics || {};
-  for (const name of stackMetrics) {
-    if (typeof name === 'string') assertMetricPermitted(`stack_metrics "${name}"`, name, profile);
-  }
-  for (const [pack, spec] of Object.entries(packMetrics)) {
-    assertMetricPermitted(`pack_metrics.${pack}`, spec.trace_metric, profile);
-  }
 
-  // Stack metrics: emit whatever the trace observed under the profile. A stack
-  // span crosses multiple providers, so it is never copied into a provider pack.
   const stackEvidence = stackMetrics
     .filter((name) => summary.metrics[name])
+    .filter(() => !vetoed) // suppress publishable evidence on a vetoed run
     .map((name) => ({
       metric: name,
       source: 'callsmith_measurement',
       region: config.region,
-      profile,
+      profile: configProfile,
       sample_size: summary.samples,
       percentiles_ms: { p50: summary.metrics[name].p50, p95: summary.metrics[name].p95, p99: summary.metrics[name].p99 },
       n_applicable: summary.metrics[name].n_applicable,
       n_observed: summary.metrics[name].n_observed,
-      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${profile}; nearest-rank percentiles; raw trace retained.`,
+      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
     }));
 
-  // Pack evidence: per-provider attribution requires that EVERY applicable turn
-  // observed the metric's boundaries (n_applicable === n_observed). Anything less
-  // is cherry-picking and may not be published.
+  // Per-provider attribution requires n_applicable === n_observed (defense-in-depth
+  // against a partial trace slipping past the strict profile validator).
   const packEvidence = Object.fromEntries(Object.entries(packMetrics).map(([pack, spec]) => {
     const m = summary.metrics[spec.trace_metric];
-    if (!m) fail(`unknown trace metric for ${pack}: ${spec.trace_metric} (not observed under profile ${profile})`);
+    if (!m) fail(`unknown trace metric for ${pack}: ${spec.trace_metric} (not observed under profile ${configProfile})`);
     if (m.n_applicable !== m.n_observed) {
       fail(`${pack} trace_metric "${spec.trace_metric}" not publishable: observed ${m.n_observed} of ${m.n_applicable} applicable turns (cherry-pick guard)`);
     }
@@ -151,19 +180,20 @@ function main(argv = process.argv.slice(2)) {
       metric: spec.metric,
       source: 'callsmith_measurement',
       region: config.region,
-      profile,
+      profile: configProfile,
       sample_size: m.n_observed,
       percentiles_ms: { p50: m.p50, p95: m.p95, p99: m.p99 },
-      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${profile}; nearest-rank percentiles; raw trace retained.`,
+      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
     }];
-  }));
+  }).filter(() => !vetoed));
 
   const receipt = {
     schema_version: trace.schema_version || 1,
     stack: config.stack,
     region: config.region,
     cohort: config.cohort,
-    instrumentation_profile: profile,
+    instrumentation_profile: configProfile,
+    publishable: !vetoed,
     corpus_sha256: corpusSha256,
     config_sha256: configSha256,
     sample_size: summary.samples,
@@ -171,14 +201,14 @@ function main(argv = process.argv.slice(2)) {
     quality: summary.quality,
     metrics: summary.metrics,
     stack_evidence: stackEvidence,
-    pack_evidence: packEvidence,
+    pack_evidence: vetoed ? {} : packEvidence,
     provenance: provenance || undefined,
     spend: spend || undefined,
     adapter_sha256: adapterSha256 || undefined,
   };
   fs.writeFileSync(path.join(options.out, 'measurement.json'), `${JSON.stringify(receipt, null, 2)}\n`);
   console.log(JSON.stringify(receipt, null, 2));
-  return Object.values(summary.quality).some(Boolean) ? 1 : 0;
+  return vetoed ? 1 : 0;
 }
 
 try { process.exitCode = main(); } catch (error) { console.error(error.message); process.exitCode = 2; }

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://callsmith.dev/schemas/turn-trace.v2.json",
   "title": "Callsmith Turn Trace (v2)",
-  "description": "Profile-aware trace. The required per-turn timestamp set depends on environment.instrumentation_profile: cascaded_full requires the ten cascaded legs; s2s_transport requires only the boundaries an opaque speech-to-speech provider plus transport expose (speech_end, provider_first_output, audio_first_playout, audio_first_audible); end_to_end requires only speech_end and audio_first_audible. Boundaries the provider does not expose must not be synthesized. The runtime validator (evals/csb/latency/validate.mjs) remains the authority; these if/then conditionals mirror it for static tooling.",
+  "description": "Profile-aware trace. The required per-turn timestamp set depends on environment.instrumentation_profile: cascaded_full requires the ten cascaded legs; s2s_transport requires only the boundaries an opaque speech-to-speech provider plus transport expose (speech_end, provider_first_output, audio_first_playout, audio_first_audible); end_to_end requires only speech_end and audio_first_audible. Boundaries the provider does not expose must not be synthesized. A profile applies uniformly to the whole trace (hybrid per-turn paths are not supported). The runtime validator (evals/csb/latency/validate.mjs) remains the authority; these if/then conditionals mirror it for static tooling.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "track", "run_id", "environment", "clock", "turns"],
@@ -72,7 +72,6 @@
         "barge_in_detected_ms": { "$ref": "#/$defs/timestamp" },
         "cancellation_sent_ms": { "$ref": "#/$defs/timestamp" },
         "cancellation_ack_ms": { "$ref": "#/$defs/timestamp" },
-        "path": { "enum": ["realtime_s2s", "cascaded"], "description": "Optional per-turn path for hybrid traces. Validation is per-turn against this path's profile chain when present." },
         "quality": {
           "type": "object",
           "additionalProperties": false,

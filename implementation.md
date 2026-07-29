@@ -115,57 +115,48 @@ Exit:
 ### Gate 1 — prove operational timestamps are observable
 
 Purpose: prevent adapters from inventing per-leg metrics that the real stack does
-not expose.
+not expose. Verified against official docs: Gemini Live (pilots 1 & 2) is an
+opaque speech-to-speech stream exposing only first output (first `modelTurn`),
+interruption, turn-complete, and transcription streams — there is **no**
+LLM-request/first-token, text-commit, or separate TTS-request/first-chunk event.
+The cascaded stack (pilot 3) exposes all legs. The contract encodes this.
 
-Before building a full adapter, make a one-turn instrumentation table for every
-metric in:
+Split into 1A (contract plumbing) and 1B (live proof). **Gate 1 is partially
+complete until 1B validates a real turn.**
 
-- `evals/measure/stacks/livekit-gemini-live.webrtc.json`;
-- `evals/measure/stacks/twilio-livekit-gemini-live.pstn.json`;
-- `evals/measure/stacks/pipecat-cascaded.webrtc.json`.
+#### Gate 1A — encode the observability contract — DONE (committed)
 
-For each metric, record:
+Status: contract plumbing shipped; enforceable; no live number published.
 
-| Required field | Observable event | Process/clock | Source API or application mark | Fallback |
-|---|---|---|---|---|
-| `speech_end_ms` | last labeled caller frame | adapter clock | corpus playback schedule | none |
-| `audio_first_audible_ms` | first voiced response frame | adapter clock | received media | none |
-| provider/internal spans | exact matching boundary | target or adapter | pinned API/application mark | omit pack attribution |
+- [x] Profile-aware schema v2 ([`reference/turn-trace.v2.schema.json`](./reference/turn-trace.v2.schema.json)); v1 untouched. Profiles `cascaded_full`, `s2s_transport`, `end_to_end`.
+- [x] Shared metric-boundary registry ([`evals/csb/latency/metrics.mjs`](./evals/csb/latency/metrics.mjs)) with an explicit `PROFILE_REQUIRED_BOUNDARIES` table (not derived from metric endpoints — deriving dropped `audio_first_playout_ms`) and an architecture/profile compatibility table.
+- [x] `provider_first_output_ms` boundary (first provider response), distinct from `audio_first_playout_ms` (submitted to playout) and `audio_first_audible_ms`.
+- [x] Validator accepts v1+v2; required set from the profile; ordering across present boundaries only; rejects arch/profile mismatches and negative optional timestamps; hybrid per-turn `path` removed (deferred feature).
+- [x] Per-metric `n_applicable`/`n_observed` (defense-in-depth; equality holds for valid traces under a strict profile).
+- [x] `run.mjs` preflights config profile + every advertised metric BEFORE the adapter is spawned (no provider spend on a bad config); spend authorization requires the approval to cover `max_spend_usd`; full provenance + `adapter_sha256` computed before execution; config/trace profile match enforced; a quality-vetoed run marks `publishable: false` and suppresses evidence.
+- [x] S2S pilots moved to `stack_metrics` with empty `pack_metrics`; cascaded keeps genuine per-leg pack metrics.
+- [x] Twilio `mark` documented as playback-completed, not onset.
 
-Implementation:
+#### Gate 1B — one real S2S turn proves observability — BLOCKER
 
-- [ ] Choose the target implementation before writing an adapter: reuse a
-  source-pinned existing deployment when possible; otherwise add the smallest
-  eval-only reference target under `evals/measure/targets/<stack>/`.
-- [ ] Keep reference targets outside the Callsmith runtime API. They exist only
-  to make the measurement reproducible.
-- [ ] Add structured target provenance to each live stack config: target source
-  commit, runtime/SDK versions, model IDs, machine class, region, audio format,
-  and network profile.
-- [ ] Make `evals/measure/run.mjs` reject a live run when those pins are absent.
-- [ ] Record the adapter source hash and target commit in `measurement.json`.
-- [ ] Treat `max_spend_usd` as an approval ceiling, not an enforced provider
-  bill cap. Require an explicit live-run approval at or below that value and
-  record actual provider usage when the APIs expose it.
-- [ ] Run one live turn through the first stack before implementing corpus
-  scheduling.
-- [ ] Confirm every advertised `pack_metrics.*.trace_metric` has a defensible
-  event source.
-- [ ] Remove any pack-specific mapping that cannot be observed. Preserve
-  end-to-end `turn_gap_ms`; do not infer a provider leg from the total.
-- [ ] Publish p50/p95 for the planned cohort. Keep p99 directional unless a
-  separately predeclared cohort supports it.
-- [ ] Extend `test/measure-run.test.mjs` for missing live provenance and
-  unsupported trace-metric failures.
+Requires credentials + pinned target. Until this validates, **no S2S number or
+pack evidence may be published, and Gate 3's cohort is blocked.**
 
-Exit:
+- [ ] Choose the target: reuse a source-pinned LiveKit+Gemini deployment, or add the smallest eval-only reference target under `evals/measure/targets/livekit-gemini-live/`.
+- [ ] Implement a minimal one-turn probe adapter reusing the existing `--live` path (no separate probe mode).
+- [ ] Demonstrate `provider_first_output_ms` (Gemini first `modelTurn`), `audio_first_playout_ms`, and `audio_first_audible_ms` are observable on the same monotonic clock; caller-boundary audio capture supplies playout/audible.
+- [ ] Retain the real trace; confirm it passes the v2 `s2s_transport` validator.
+- [ ] Remove any boundary the probe disproves.
+- [ ] Leave the Twilio PSTN pilot until the WebRTC probe works — PSTN additionally needs a genuine loopback/audible boundary.
+
+Exit (Gate 1 complete):
 
 - one real turn passes the trace validator;
 - all retained timestamps share a documented monotonic clock or declared
   synchronization bound;
 - no metric is attributed to a provider by subtraction or assumption.
 
-If this gate fails, stop. Publish only end-to-end metrics that are directly
+If Gate 1B fails, stop. Publish only end-to-end metrics that are directly
 observable.
 
 ### Gate 2 — add the operational publication boundary

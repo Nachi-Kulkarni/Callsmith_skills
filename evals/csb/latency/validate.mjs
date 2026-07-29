@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import { INSTRUMENTATION_PROFILES, profileBoundaryNames } from "./metrics.mjs";
+import { INSTRUMENTATION_PROFILES, ARCH_PROFILE_COMPAT, PROFILE_REQUIRED_BOUNDARIES, KNOWN_BOUNDARIES } from "./metrics.mjs";
 
 // v1 required events — the ten cascaded legs. Kept for v1 traces (zero regression)
-// and as the cascaded_full profile boundary set in v2.
+// and mirrors PROFILE_REQUIRED_BOUNDARIES.cascaded_full.
 export const REQUIRED_EVENTS = [
   "speech_end_ms",
   "eou_detected_ms",
@@ -35,21 +35,19 @@ export const BOUNDARY_ORDER = [
   "provider_first_output_ms",
   "audio_first_playout_ms",
   "audio_first_audible_ms",
+  "playback_completed_ms",
 ];
 
 function nonEmpty(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-// The required boundary set for a turn under a given (profile, path).
-// v1 and cascaded_full: the ten cascaded legs.
-// v2 s2s_transport / end_to_end: only the boundaries the profile exposes.
-function requiredBoundaries(profile, path) {
-  // Hybrid per-turn path takes precedence when present.
-  if (path === "cascaded") return REQUIRED_EVENTS;
-  if (path === "realtime_s2s") return profileBoundaryNames("s2s_transport");
-  if (!profile) return REQUIRED_EVENTS; // v1 default
-  return profileBoundaryNames(profile);
+// The required boundary set for every turn under a given profile. v1 (no profile)
+// defaults to the ten cascaded legs. Hybrid per-turn paths were a deferred
+// feature and are removed — a profile applies uniformly to the whole trace.
+function requiredBoundaries(profile) {
+  if (!profile) return REQUIRED_EVENTS;
+  return PROFILE_REQUIRED_BOUNDARIES[profile] || REQUIRED_EVENTS;
 }
 
 export function validateTurnTrace(trace) {
@@ -72,6 +70,14 @@ export function validateTurnTrace(trace) {
     if (!SURFACES.has(env.surface)) errors.push("environment.surface is invalid");
     if (isV2 && !INSTRUMENTATION_PROFILES.includes(env.instrumentation_profile)) {
       errors.push("environment.instrumentation_profile must be one of: " + INSTRUMENTATION_PROFILES.join(", "));
+    }
+    // Architecture/profile compatibility: an s2s profile on a cascaded
+    // architecture (or vice versa) is a contract mismatch.
+    if (isV2 && ARCHITECTURES.has(env.architecture) && INSTRUMENTATION_PROFILES.includes(env.instrumentation_profile)) {
+      const compat = ARCH_PROFILE_COMPAT[env.architecture] || [];
+      if (!compat.includes(env.instrumentation_profile)) {
+        errors.push(`environment.instrumentation_profile "${env.instrumentation_profile}" is not compatible with architecture "${env.architecture}"`);
+      }
     }
     for (const key of ["transport", "region", "runtime", "network_profile", "audio_format"]) {
       if (!nonEmpty(env[key])) errors.push(`environment.${key} must be a non-empty string`);
@@ -115,9 +121,16 @@ export function validateTurnTrace(trace) {
 
     // Required boundary set is profile-driven (v2) or the ten cascaded legs (v1).
     const profile = isV2 ? env.instrumentation_profile : null;
-    const required = requiredBoundaries(profile, turn.path);
+    const required = requiredBoundaries(profile);
     for (const event of required) {
       if (!Number.isFinite(turn[event]) || turn[event] < 0) errors.push(`${at}.${event} must be a non-negative number`);
+    }
+    // Every PRESENT known boundary must be a finite non-negative number —
+    // optional fields are not exempt (e.g. playback_completed_ms: -1 is invalid).
+    for (const key of KNOWN_BOUNDARIES) {
+      if (turn[key] !== undefined && (!Number.isFinite(turn[key]) || turn[key] < 0)) {
+        errors.push(`${at}.${key} must be a non-negative number when present`);
+      }
     }
     if (!new Set(["labeled", "detector"]).has(turn.speech_end_source)) {
       errors.push(`${at}.speech_end_source must be labeled or detector`);

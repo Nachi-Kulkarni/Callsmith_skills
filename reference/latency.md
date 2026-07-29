@@ -26,7 +26,7 @@ speech_end → EOU detected → transcript final → LLM request → first token
            → first playout → first audible audio
 ```
 
-For a realtime speech-to-speech provider, use the provider's transcript/semantic-commit and response/audio events for the corresponding fields. Equal timestamps are valid when stages are fused; omitting stages is not. Omitting a boundary promised by the selected instrumentation profile is invalid. Boundaries the provider does not expose must not be synthesized.
+For a realtime speech-to-speech provider, use the provider's transcript/semantic-commit and response/audio events for the corresponding fields. Equal timestamps are valid when stages are fused. Omitting a boundary promised by the selected instrumentation profile is invalid; boundaries the provider does not expose must not be synthesized — a `s2s_transport` profile legitimately omits the cascaded legs an opaque stream does not emit.
 
 ### Instrumentation profiles (schema v2)
 
