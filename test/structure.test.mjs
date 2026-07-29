@@ -57,6 +57,7 @@ describe('skill / constitution structure', () => {
   it('SKILL.md routes deploy + architecture + prompts playbooks and the reference files exist', () => {
     const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
     assert.match(skill, /reference\/deploy\.md/);
+    assert.match(skill, /reference\/deploy-capacity\.md/);
     assert.match(skill, /reference\/architecture\.md/);
     assert.match(skill, /reference\/prompts\.md/);
     for (const f of ['deploy.md', 'architecture.md', 'prompts.md']) {
@@ -66,6 +67,22 @@ describe('skill / constitution structure', () => {
     assert.match(deploy, /livekit-cloud|LiveKit Cloud/);
     assert.match(deploy, /pipecat-cloud|Pipecat Cloud/);
     assert.match(deploy, /drain/i);
+    const capacity = fs.readFileSync(path.join(ROOT, 'reference', 'deploy-capacity.md'), 'utf8');
+    const workload = fs.readFileSync(path.join(ROOT, 'reference', 'deploy-workload.md'), 'utf8');
+    const evidence = fs.readFileSync(path.join(ROOT, 'reference', 'deploy-evidence.md'), 'utf8');
+    assert.match(capacity, /deploy-workload\.md/);
+    assert.match(capacity, /deploy-evidence\.md/);
+    assert.match(capacity, /identity lease/);
+    assert.match(workload, /Closed loop/);
+    assert.match(workload, /Open loop/);
+    assert.match(workload, /monotonic deadlines/);
+    assert.match(evidence, /Attribute before judging/);
+    assert.match(evidence, /hottest\s+worker/i);
+    assert.match(evidence, /lower bound/i);
+    assert.doesNotMatch(
+      `${capacity}\n${workload}\n${evidence}`,
+      /SocketCluster|ResourceLease|SessionControl|MediaTransport|CallerAgent|SutProbe/,
+    );
   });
 });
 

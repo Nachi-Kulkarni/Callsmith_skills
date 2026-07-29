@@ -18,6 +18,7 @@ Agent ritual — not a generator. callsmith does not write Dockerfiles, Terrafor
 2. Packs for the chosen orchestration + telephony + VAD + realtime/STT/TTS legs — read their structured `deployment.regions` fields and potholes, not your memory
 3. `callsmith check --answers …` — the **Operations** section (requested vs effective hosting, adjustments, responsibilities)
 4. Floors: `reference/policy.md` — regulated domains add residency duties (below)
+5. For any scalability, concurrency, calls-per-worker, pod-count, autoscaler, load, or soak claim: `reference/deploy-capacity.md`
 
 ## The first question: managed or self-host?
 
@@ -36,7 +37,7 @@ Rules of thumb:
 ## Ten deployment decisions
 
 1. **Compute model** — worker pool multiplexing (LiveKit agent worker carries many calls) vs bot-per-process (typical self-hosted Pipecat) vs custom. Where does VAD run, and on whose CPU?
-2. **Concurrency & autoscaling** — scale on *concurrent calls*, not CPU. Cap calls per worker before Silero/ONNX thread contention appears as endpointing jitter.
+2. **Concurrency & autoscaling** — scale on *concurrent calls*, not CPU. Cap calls per worker before Silero/ONNX thread contention appears as endpointing jitter. Do not choose the cap from a drain test or fleet sum; require the capacity proof gate below.
 3. **Drain** — SIGTERM → stop dispatch → finish in-flight calls → exit. Platform-managed (cloud) or user-implemented (self-host) — never "restart and drop callers." Killing a process mid-call is the #1 first-production incident.
 4. **Cold start & warm pools** — one shared Silero ONNX session per worker (never per call/frame), pre-warmed at startup; warm STT/TTS/LLM connections; measure cold and warm cohorts separately.
 5. **Region physics** — compare media edge, worker, model, recording, and transcript locations. Unknown is advisory without a stated floor and blocking when an approved organizational requirement names a region.
@@ -45,6 +46,16 @@ Rules of thumb:
 8. **Load balancer / WebSocket reality** — idle timeouts above max call duration, sticky sessions, one state machine for WS close **and** hangup (already canon).
 9. **Observability in production** — turn traces per `reference/latency.md`; alert on p95 turn gap, `audio_underruns`, `false_interruption`; a cost/min dashboard.
 10. **Cost ceiling & break-even** — $/min from packs + infra cost; write the number where self-host beats cloud, or admit you don't know yet and defer.
+
+## Capacity proof gate
+
+Allow a hosting decision without a measured ceiling. Before stating calls per worker, required
+workers, or an autoscaler threshold, follow `reference/deploy-capacity.md`.
+
+Load `reference/deploy-workload.md` only when constructing traffic or adapters. Load
+`reference/deploy-evidence.md` only when defining metrics, attributing a run, or sizing from results.
+
+Treat `evals/load/` as the graceful-drain gate only. Do not convert its pass into a capacity claim.
 
 ## Floors tie-in (residency)
 
@@ -70,6 +81,7 @@ When an approved organizational contract states a residency region, the receipt 
 **Target:** livekit-cloud / pipecat-cloud / self-host (vm | fly | k8s) — one sentence why
 **Hosting model:** requested → effective (from `callsmith check` Operations)
 **Region:** worker / telephony POP / model endpoint / transcript storage
+**Capacity evidence:** not measured / lower bound ≥N / attributed ceiling N per target — `run.json` path + confidence
 
 ### Ten decisions
 | # | Decision | Choice | Pack / source |

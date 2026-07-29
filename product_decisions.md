@@ -208,6 +208,7 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | Plugins | Packs as extensibility; future agent-runtime plugins optional |
 | Workflows | Agent multi-step: dig-deeper → contract → implement → harden → eval |
 | Playbooks (`reference/*`) | Optional modes: audit, critique, architecture, latency, ttft, prompts (runtime conversation), harden, deploy |
+| Deploy capacity references (`reference/deploy-*.md`) | General voice-load workflow and the mandatory validity/attribution contract before sizing claims |
 
 ---
 
@@ -232,6 +233,7 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | C15 | The optional receipt deployment block is additive; managed target/drain claims and regulated residency paths fail closed against structured pack regions | **DECIDED** |
 | C16 | CSB-Load sends real SIGTERM under concurrency and passes only with zero drops/leaks/stale replay plus bounded p95 turn-gap degradation | **DECIDED** |
 | C17 | `prompts` edits the production runtime prompt; safety, audio, and tool enforcement remain code-owned | **DECIDED** |
+| C18 | CSB-Load remains a drain gate; `/callsmith deploy` owns scalability and requires paced-audio validity, open/closed arrival models, attribution-before-verdict, per-target ceiling, and versioned `run.json` before sizing claims | **DECIDED** |
 
 ---
 
@@ -258,3 +260,4 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | 2026-07-20 | Playbooks `deploy` + `architecture`; optional pack `deployment` blocks (8 packs) + deep potholes (Silero reuse/echo/truncate/session-limit/transfer); menu deploy targets; `check` prints Operations + env keys; scenario `deploy-managed-cloud-pilot` grows suite to 11; publication gate ≥10. |
 | 2026-07-21 | Frozen measurement corpus/harness, structured region matrices, optional deployment receipt enforcement, and CSB-Load drain gate. Provider measurements remain unpublished until live raw traces clear review. |
 | 2026-07-22 | Added `/callsmith prompts` as the runtime-prompt writing and review playbook. |
+| 2026-07-28 | Synthesized the transferable voice load-test rules into three `/callsmith deploy` references; deployment sizing now routes through paced-audio validity, arrival models, attribution, and per-target evidence rather than copied stack recipes or the drain gate alone. |

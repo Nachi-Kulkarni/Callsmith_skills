@@ -30,4 +30,12 @@ benchmark/evals/
 
 # Local scratch / generated agent workspaces
 voice-agent/
+voice-loadtest-harness/
+voice-loadtest-harness.zip
 **/run-*/.bin/
+
+# Local dev tooling (personal agent environment, not Callsmith product)
+.agents/
+.clinerules/
+AGENTS.md
+skills-lock.json

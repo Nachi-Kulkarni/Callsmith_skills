@@ -17,6 +17,9 @@ describe('release integrity', () => {
       'reference/critique.md',
       'reference/ttft.md',
       'reference/harden.md',
+      'reference/deploy-capacity.md',
+      'reference/deploy-workload.md',
+      'reference/deploy-evidence.md',
       'examples/clinic-triage/callsmith.recipe.md',
       'examples/clinic-triage/voice.answers.json',
     ]) {

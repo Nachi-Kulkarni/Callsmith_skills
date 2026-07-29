@@ -1,6 +1,6 @@
 ---
 name: callsmith
-description: Design production voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, architect, or harden a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, barge-in, or media streams. You are the compiler: dig deeper, apply hard floors, load provider packs for physics, write a short handoff contract, then implement. callsmith validates packs/physics — it does not generate the app.
+description: Design production voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, architect, harden, deploy, scale, or capacity-test a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, barge-in, media streams, concurrency, calls per pod, or autoscaling. You are the compiler: dig deeper, apply hard floors, load provider packs for physics, write a short handoff contract, then implement. callsmith validates packs/physics — it does not generate the app.
 argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|check|packs] [target]"
 allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
@@ -45,7 +45,7 @@ Exactly eight modes. Load **only** the matching file when invoked:
 | `ttft` | `reference/ttft.md` | LLM-leg only; use after latency points at TTFT |
 | `prompts` | `reference/prompts.md` | Write or review the production runtime prompt |
 | `harden` | `reference/harden.md` | Pre-pilot resilience / safety / state machine |
-| `deploy` | `reference/deploy.md` | Cloud vs self-host; drain, regions, warm pools, concurrency |
+| `deploy` | `reference/deploy.md`; it routes to `reference/deploy-capacity.md` for capacity/scalability claims | Cloud vs self-host; drain, regions, warm pools, concurrency |
 
 No argument → default compile loop below.
 `check` / `packs` → verification CLI only (not playbooks).
@@ -62,7 +62,7 @@ These are agent modes, not generators.
 7. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
 8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
 9. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
-10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency as needed. Use ttft only to isolate the LLM leg. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers.
+10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency as needed. Use ttft only to isolate the LLM leg. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers. Follow the capacity branch routed by `reference/deploy.md` before designing a load harness or stating a concurrency ceiling, calls-per-pod number, pod count, or autoscaler threshold.
 
 Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
 Not menu coverage 1.0.
@@ -106,6 +106,7 @@ Optional: keep `voice.answers.json` for `callsmith check` — values must use **
 | Implement | Current version-specific docs + pack potholes for chosen stack |
 | Deploy | `reference/deploy.md` + pack `deployment` fields + `check` Operations |
 | Measure / drain | `evals/measure/README.md` + `evals/load/README.md` |
+| Capacity / scale | `reference/deploy.md` → `reference/deploy-capacity.md`; load workload or evidence detail only when needed |
 
 ```bash
 callsmith packs
@@ -166,6 +167,7 @@ That difference lives in packs — not in model marketing docs.
 - Skip transcript/consent on regulated flows
 - Self-host for a no-ops pilot, or claim managed convenience on a custom bridge
 - Deploy without drain (killing workers mid-call) or with VAD reloaded per call/frame
+- Treat a passing drain gate, clean latency trace, closed-loop-only run, or saturated load box as a capacity number
 - S2S-vs-cascaded by vibes when the brief is regulated + tool-heavy (cascaded) or ultra-low-latency (S2S)
 
 ## Asking style

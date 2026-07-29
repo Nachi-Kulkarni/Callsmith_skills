@@ -84,7 +84,7 @@ implementation; it does not claim production call quality, uptime, or real-user 
 
 | Layer | Role |
 |---|---|
-| **Skill** (`SKILL.md` + playbooks) | How the agent compiles: dig deeper, apply floors, write a handoff contract, implement |
+| **Skill + playbooks** (`SKILL.md` + `reference/`) | How the agent compiles; `/callsmith deploy` adds a concise capacity workflow that prevents false ceilings |
 | **Provider packs** (21) | Stdlib of audio formats, interruption, potholes, env keys |
 | **Floors** | Rewrite (not only flag) consent / retention / handoff / tools by domain |
 | **Evals** | Binary design-quality bar |
@@ -299,7 +299,7 @@ Add a provider by dropping a validated JSON pack into `providers/`. **Unknown pr
 | `/callsmith ttft` | Diagnose the LLM first-token submetric only |
 | `/callsmith prompts` | Write or review the production runtime prompt |
 | `/callsmith harden` | Production-readiness pass |
-| `/callsmith deploy` | Cloud vs self-host: drain, regions, warm pools, concurrency, break-even |
+| `/callsmith deploy` | Cloud vs self-host, drain, regions, warm pools, concurrency, break-even, load-test architecture, and capacity proof |
 
 ### Verification CLI
 
@@ -339,6 +339,7 @@ Generation commands (`init`, `forge`, `scaffold`, `simulate`, `intake`, …) are
 | [`reference/prompts.md`](./reference/prompts.md) | Production runtime-prompt writing and review |
 | [`reference/architecture.md`](./reference/architecture.md) | S2S vs cascaded vs hybrid decision matrix |
 | [`reference/deploy.md`](./reference/deploy.md) | Cloud vs self-host deployment physics: drain, regions, warm pools, concurrency |
+| [`reference/deploy-capacity.md`](./reference/deploy-capacity.md) | `/callsmith deploy` capacity workflow; routes to workload or evidence detail only when needed |
 | [`reference/workflow.md`](./reference/workflow.md) | Committed artifacts, CI gate, and thin runtime adapters |
 
 ## License

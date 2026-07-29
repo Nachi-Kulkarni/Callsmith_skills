@@ -81,6 +81,7 @@ describe('manual installer', () => {
       assert.ok(fs.existsSync(wrapper), 'CALLSMITH_BIN wrapper missing');
       assert.notEqual(fs.statSync(wrapper).mode & 0o111, 0, 'wrapper is not executable');
       assert.ok(fs.existsSync(path.join(outcome.install, 'reference', 'latency.md')));
+      assert.ok(fs.existsSync(path.join(outcome.install, 'reference', 'deploy-capacity.md')));
       assert.ok(fs.existsSync(path.join(outcome.install, 'examples', 'clinic-triage', 'callsmith.recipe.md')));
       assert.ok(fs.existsSync(path.join(outcome.install, 'user-notes.txt')), 'unmanaged user file was removed');
       assert.equal(fs.existsSync(path.join(outcome.install, 'src', 'lib', 'scaffold.mjs')), false);
