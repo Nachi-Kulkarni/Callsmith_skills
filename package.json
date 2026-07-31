@@ -24,7 +24,7 @@
   },
   "scripts": {
     "callsmith": "node bin/callsmith.mjs",
-    "test": "node --test \"test/**/*.test.mjs\"",
+    "test": "node --test",
     "test:csb": "node --test test/csb-oracles.test.mjs test/csb-runner.test.mjs",
     "bench:csb": "node evals/csb/harness/run-arms.mjs",
     "bench:csb:dry": "node evals/csb/harness/run-arms.mjs --dry-run",

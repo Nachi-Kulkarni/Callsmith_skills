@@ -122,6 +122,7 @@ describe('release integrity', () => {
 
   it('package scripts only advertise shipped product surfaces', () => {
     const pkg = JSON.parse(read('package.json'));
+    assert.equal(pkg.scripts.test, 'node --test');
     assert.equal(pkg.scripts['eval:opencode'], undefined);
     assert.equal(pkg.scripts['release:check'], undefined);
     assert.ok(pkg.files.includes('reference'));
