@@ -1,6 +1,6 @@
 # Callsmith implementation plan
 
-Status: proposed
+Status: in progress — Gates 0, 1A, and 1A.1 closed; Gate 1B requires live credentials and a pinned target
 Date: 2026-07-29
 Target release: `v1.8.0-agent-compiler` ("Measured")
 
@@ -35,9 +35,12 @@ The release is done when:
 
 ## Current baseline
 
-Verified locally on 2026-07-29:
+Verified locally on 2026-07-31:
 
-- `npm test`: **140/140 passing**;
+- `npm test`: **163/163 passing**;
+- Gate 1A.1 is closed at `caacbef` (`fix(measure): complete Gate 1A.1 evidence contract`);
+- verification baseline: Node `v22.23.1`, Codex CLI `0.144.1`, actor binary SHA-256
+  `134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477`;
 - provider packs, contracts, measurement replay, drain behavior, installer rollback,
   release integrity, actor isolation, and publication review are already tested;
 - weekly CI, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and
@@ -46,9 +49,11 @@ Verified locally on 2026-07-29:
 - the live measurement runner, licensed corpus, three stack configs, and trace
   schema already exist;
 - the missing live adapter files named by the stack configs do not exist;
-- no release-level two-family product claim exists;
+- the Luna/xhigh 11-scenario run is retained as a diagnostic: 32/33 valid pairs,
+  one unchanged answers artifact, no selective retry, and no release-level claim;
+- no eligible two-family product claim exists;
 - no provider-backed latency number exists;
-- the working tree already contains user-owned changes. Preserve them.
+- Gate 0's committed baseline was clean; later work must preserve unrelated user-owned changes.
 
 The repository is not missing more product machinery. It is missing the final
 provider-backed and independently reviewable evidence.
@@ -92,9 +97,9 @@ provider-backed and independently reviewable evidence.
 
 Purpose: preserve current useful work and establish a known-green starting point.
 
-- [ ] Review and finish the existing user-owned changes.
-- [ ] Run `git diff --check`.
-- [ ] Run the complete local gate:
+- [x] Review and finish the existing user-owned changes.
+- [x] Run `git diff --check`.
+- [x] Run the complete local gate:
 
   ```bash
   npm test
@@ -104,8 +109,8 @@ Purpose: preserve current useful work and establish a known-green starting point
   npm pack --dry-run --json --cache /private/tmp/callsmith-npm-cache
   ```
 
-- [ ] Commit the reviewed baseline.
-- [ ] Record the commit, Node version, actor binary version, and actor binary hash.
+- [x] Commit the reviewed Gate 1A.1 baseline at `caacbef`.
+- [x] Record the commit, Node version, actor binary version, and actor binary hash.
 
 Exit:
 
@@ -303,6 +308,11 @@ publication boundary.
 
 Purpose: test the final measured product state and turn the strong Grok
 diagnostic into an eligible product claim.
+
+Status on 2026-07-31: the Luna/xhigh full-suite run produced 32 valid pairs and
+one invalid pair. Its retained artifacts are documented as diagnostic evidence;
+the raw run remains unchanged, no arm will be selectively replaced, and Gate 5
+still has zero publication-eligible family runs.
 
 Freeze:
 

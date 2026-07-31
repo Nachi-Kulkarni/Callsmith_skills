@@ -22,13 +22,19 @@ callsmith encodes provider reality as **packs**, product taste as **floors**, an
 In a repeated live CallsmithBench diagnostic, Grok-4.5 received the same voice-agent briefs, budget,
 and output schema with and without Callsmith.
 
-| Valid paired result | BASE | WITH |
+| Valid paired result | Without Callsmith | With Callsmith |
 |---|---:|---:|
-| Complete task success | 10.3% (3/29) | 100% (29/29) |
-| Floor gate | 62.1% | 100% |
-| Physics gate | 10.3% | 100% |
-| Contract gate | 10.3% | 100% |
-| Reality gate | 48.3% | 100% |
+| Individual checks passed | 32.8% (38/116) | 100% (116/116) |
+| Ready for handoff (all four checks) | 10.3% (3/29) | 100% (29/29) |
+| Safe consent, retention, and handoff | 62.1% | 100% |
+| Compatible providers and audio path | 10.3% | 100% |
+| Complete handoff file | 10.3% | 100% |
+| No hard contradictions | 48.3% | 100% |
+
+Each design can earn four individual checks. “Ready for handoff” is deliberately stricter: missing
+any one check makes that row a miss. A low handoff total does **not** mean the model could not build a
+voice agent. Many unassisted drafts were plausible and passed some checks; they were not yet complete
+enough to hand to an implementation team without filling in safety, audio, or contract details.
 
 That is a **+89.7 percentage-point diagnostic lift** (95% paired-bootstrap interval: +75.9 to
 +100.0 points). It is not yet Callsmith's release claim: one of 30 scheduled WITH arms failed to
@@ -36,18 +42,21 @@ write its answers artifact, and the two-family replication is still outstanding.
 
 The useful part is visible in the receipts:
 
-- **Clinic:** BASE kept an invalid 90-day retention value, a weak handoff, an unknown TTS provider,
-  and a malformed contract. WITH rewrote the floors, selected known packs, and produced a contract
-  that passed all four gates.
-- **Exotel:** BASE described the bridge but failed the custom-transform physics and structured
-  contract checks. WITH made the bridge ownership and transforms reviewable and passed all gates.
-- **WhatsApp:** BASE treated an asynchronous medical voice-note workflow inconsistently. WITH
+- **Clinic:** The unassisted artifact kept an invalid 90-day retention value, a weak handoff, an
+  unknown TTS provider, and a malformed contract. The assisted artifact corrected the safety choices,
+  selected known providers, and produced a handoff file that passed all four checks.
+- **Exotel:** The unassisted artifact described the bridge but missed the custom audio conversion and
+  structured-handoff checks. The assisted artifact made ownership and conversions reviewable.
+- **WhatsApp:** The unassisted artifact treated an asynchronous medical voice-note workflow
+  inconsistently. The assisted artifact
   removed the PSTN stack, disabled live barge-in, and bound escalation and retention into the receipt.
 
-Three pairs showed no lift because BASE already passed. WITH also took 58.1 seconds at the median,
-versus 54.0 seconds for BASE. The invalid arm stays in the record; it will not be selectively replaced.
+Three pairs showed no lift because the unassisted artifact already passed. The assisted runs also took
+58.1 seconds at the median, versus 54.0 seconds without Callsmith. The invalid arm stays in the record;
+it will not be selectively replaced.
 
 See the [diagnostic report](./evidence/diagnostics/grok-core10-20260712.md),
+[later Luna/xhigh full-suite diagnostic](./evidence/diagnostics/luna-xhigh-full-suite-20260731.md),
 [publication standard](./evidence/README.md), and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
 
 Operational evidence is a separate track. Callsmith now ships a hashed 20-clip licensed corpus,
@@ -57,19 +66,22 @@ credentials, spend approval, retained raw traces, sanitization, and review.
 
 #### What CallsmithBench actually does
 
-CallsmithBench gives the same coding model the same realistic voice-agent brief twice. BASE receives
-the repository, output schema, and normal model knowledge. WITH receives those exact inputs plus
-Callsmith's skill, provider packs, floors, and validators. Both arms must write final artifacts—not
-just explain what they would build.
+CallsmithBench gives the same coding model the same realistic voice-agent brief twice. The first run,
+called BASE, works normally without Callsmith. The second, called WITH, gets Callsmith's guidance,
+provider facts, and checks. Both runs must finish the actual design files—not merely describe what
+they would do.
 
-Independent deterministic scorers then read `voice.answers.json` and the structured handoff contract:
+The benchmark asks a narrow question: “Are these files complete enough for a careful engineering
+handoff?” It does not ask whether the model can produce any useful code or design at all.
 
-| Gate | What it checks |
+Automated checks then read `voice.answers.json` and the structured handoff file:
+
+| Check | What it means |
 |---|---|
-| **G_FLOOR** | Consent, retention, and human handoff meet the scenario's minimum floor |
-| **G_PHYS** | Surfaces, providers, audio formats, transforms, and interruption ownership are compatible |
-| **G_CON** | The machine-readable contract is complete and agrees with the final answers |
-| **G_REAL** | Hard traps are avoided: invented providers, PSTN assumptions on WhatsApp, unsafe ticket-only escalation, and deleted generators |
+| **Safe choices** | Consent, data retention, and human handoff meet the minimum |
+| **Working audio path** | The selected providers and audio formats can work together |
+| **Complete handoff** | The structured handoff file is complete and agrees with the written design |
+| **No hard contradictions** | No invented providers, channel mistakes, unsafe escalation, or removed commands |
 
 The scenarios include medical clinics, Exotel custom bridges, WhatsApp voice notes, unknown providers,
 and orchestration paths where native media handling changes the required transforms. This is

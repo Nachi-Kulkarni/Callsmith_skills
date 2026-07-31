@@ -59,10 +59,14 @@ export function scorePhysicsGate(answers, oracle, deps = {}) {
   let expanded;
   let resolveReport = null;
   let impossibilities = [];
+  let blocking = [];
   try {
     expanded = expandAnswers(answers, menu, { strict: false });
     impossibilities = detectImpossibilities(expanded, providers);
-    if (!impossibilities.length) {
+    blocking = impossibilities.filter((i) =>
+      ['unknown_provider', 'no_audio_path', 'direction_mismatch', 'native_capability_conflict'].includes(i.code),
+    );
+    if (!blocking.length) {
       resolveReport = resolve(expanded, providers);
     }
   } catch (e) {
@@ -79,12 +83,8 @@ export function scorePhysicsGate(answers, oracle, deps = {}) {
       : `unknown providers: ${unknown.map((u) => u.message).join('; ')}`,
   );
 
-  const hard = impossibilities.filter((i) => i.code !== 'missing_leg');
   if (physics.require_possible !== false) {
     // missing_leg may be ok if optional paths; hard impossibilities fail
-    const blocking = impossibilities.filter((i) =>
-      ['unknown_provider', 'no_audio_path', 'direction_mismatch', 'native_capability_conflict'].includes(i.code),
-    );
     run(
       'no_hard_impossibility',
       blocking.length === 0,

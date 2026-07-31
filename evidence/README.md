@@ -4,10 +4,13 @@ This directory is the public proof surface for Callsmith.
 
 ## Current status
 
-No release-level product-lift number is published yet. A post-isolation Grok-4.5 core10 diagnostic
-showed +0.897 lift across 29 valid pairs, but one of 30 scheduled WITH arms failed to update its
-answers artifact. The run therefore remains non-publishable, and a selective retry cannot repair the
-estimand. Read the [diagnostic report](./diagnostics/grok-core10-20260712.md) and
+No release-level product-lift number is published yet. The latest Luna/xhigh full-suite diagnostic
+found 128/128 individual checks passed with Callsmith and 26/128 without it. The assisted artifacts
+met all four strict handoff checks in 32/32 valid pairs; the unassisted artifacts did not meet all four
+together. One of 33 scheduled pairs was invalid, so the run remains non-publishable and will not be
+repaired with a selective retry. Read the
+[plain-language diagnostic](./diagnostics/luna-xhigh-full-suite-20260731.md), the
+[earlier Grok diagnostic](./diagnostics/grok-core10-20260712.md), and
 [Honest Numbers](./HONEST-NUMBERS.md).
 
 Earlier runs that predate the complete actor-isolation boundary remain

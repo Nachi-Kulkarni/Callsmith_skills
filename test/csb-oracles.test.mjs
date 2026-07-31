@@ -165,6 +165,18 @@ describe('exotel-custom-transform-trap', () => {
     assert.equal(r.gateScore, 4, JSON.stringify(r.gates));
   });
 
+  it('keeps advisory region findings separate from audio transforms', () => {
+    const answers = {
+      ...readFixtureJson(scenario.dir, 'honest-heavy.answers.json'),
+      region: 'in',
+      deployment: 'cloud_vm',
+    };
+    const recipe = readFixture(scenario.dir, 'honest-heavy.recipe.md');
+    const r = scoreArm({ scenario, answers, recipe, arm: 'WITH' });
+    assert.equal(r.gates.G_PHYS, true, r.details.G_PHYS.errors.join('; '));
+    assert.equal(r.details.G_PHYS.transformCount, 4);
+  });
+
   it('livekit rewrite would fail heavy band (different honesty path)', () => {
     const answers = {
       ...readFixtureJson(scenario.dir, 'honest-heavy.answers.json'),
