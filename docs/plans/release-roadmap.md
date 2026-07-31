@@ -408,7 +408,7 @@ README changes:
   `MAINTENANCE.md`;
 - [x] show a dated install-support matrix with `verified`, `manifest-only`, and
   `community-reported` states;
-- [ ] add the CI badge only after the remote workflow passes on the exact
+- [x] add the CI badge only after the remote workflow passes on the exact
   release branch;
 - [x] add uninstall/rollback guidance;
 - [x] derive or test the displayed provider-pack count so it cannot silently rot;

@@ -5,6 +5,7 @@ It supplies provider-specific audio facts, sensible safety defaults, and a small
 the agent does not guess its way through telephony, streaming, barge-in, retention, or handoff.
 
 [![Install with skills.sh](https://skills.sh/b/Nachi-Kulkarni/Callsmith_skills)](https://skills.sh/Nachi-Kulkarni/Callsmith_skills)
+[![CI](https://github.com/Nachi-Kulkarni/Callsmith_skills/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nachi-Kulkarni/Callsmith_skills/actions/workflows/ci.yml)
 
 ## Install
 
