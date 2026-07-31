@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://callsmith.dev/schemas/turn-trace.v1.json",
+  "title": "Callsmith Turn Trace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "track", "run_id", "environment", "clock", "turns"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "track": { "enum": ["controlled", "live"] },
+    "run_id": { "type": "string", "minLength": 1 },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architecture", "surface", "transport", "region", "runtime", "providers", "network_profile", "audio_format"],
+      "properties": {
+        "architecture": { "enum": ["realtime_s2s", "cascaded", "hybrid"] },
+        "surface": { "enum": ["inbound_pstn", "outbound_pstn", "web_voice", "webrtc_app", "whatsapp_voice"] },
+        "transport": { "type": "string", "minLength": 1 },
+        "region": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "providers": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "network_profile": { "type": "string", "minLength": 1 },
+        "audio_format": { "type": "string", "minLength": 1 },
+        "commit_sha": { "type": "string", "minLength": 1 }
+      }
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "unit", "origin_id"],
+      "properties": {
+        "type": { "const": "monotonic" },
+        "unit": { "const": "ms" },
+        "origin_id": { "type": "string", "minLength": 1 },
+        "synchronization_error_ms": { "type": "number", "minimum": 0 }
+      }
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/turn" }
+    }
+  },
+  "$defs": {
+    "timestamp": { "type": "number", "minimum": 0 },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn_id", "speech_end_ms", "speech_end_source", "eou_detected_ms",
+        "transcript_final_ms", "llm_request_ms", "llm_first_token_ms",
+        "text_committed_ms", "tts_request_ms", "tts_first_chunk_ms",
+        "audio_first_playout_ms", "audio_first_audible_ms", "quality"
+      ],
+      "properties": {
+        "turn_id": { "type": "string", "minLength": 1 },
+        "utterance_id": { "type": "string", "minLength": 1, "description": "The corpus utterance this turn measured. Optional in the schema; the measurement runner requires it to prove corpus coverage." },
+        "speech_end_ms": { "$ref": "#/$defs/timestamp" },
+        "speech_end_source": { "enum": ["labeled", "detector"] },
+        "eou_detected_ms": { "$ref": "#/$defs/timestamp" },
+        "transcript_final_ms": { "$ref": "#/$defs/timestamp" },
+        "llm_request_ms": { "$ref": "#/$defs/timestamp" },
+        "llm_first_token_ms": { "$ref": "#/$defs/timestamp" },
+        "text_committed_ms": { "$ref": "#/$defs/timestamp" },
+        "tts_request_ms": { "$ref": "#/$defs/timestamp" },
+        "tts_first_chunk_ms": { "$ref": "#/$defs/timestamp" },
+        "audio_first_playout_ms": { "$ref": "#/$defs/timestamp" },
+        "audio_first_audible_ms": { "$ref": "#/$defs/timestamp" },
+        "barge_in_detected_ms": { "$ref": "#/$defs/timestamp" },
+        "cancellation_sent_ms": { "$ref": "#/$defs/timestamp" },
+        "cancellation_ack_ms": { "$ref": "#/$defs/timestamp" },
+        "quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["premature_cutoff", "false_interruption", "response_correct", "audio_underruns"],
+          "properties": {
+            "premature_cutoff": { "type": "boolean" },
+            "false_interruption": { "type": "boolean" },
+            "response_correct": { "type": "boolean" },
+            "audio_underruns": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

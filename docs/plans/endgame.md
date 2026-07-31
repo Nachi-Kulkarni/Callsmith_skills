@@ -4,6 +4,11 @@ Status: plan, written 2026-07-24. Everything below the adapter boundary is alrea
 machine-proven in CI. This is the fastest honest path from here to "released and
 not looked at for a long time."
 
+> Superseded in part on 2026-07-31: the shareable `v1.8.0-agent-compiler` release no longer waits for
+> live-provider spend. The live measurement work remains a separate evidence milestone in
+> [`release-roadmap.md`](./release-roadmap.md). Raw traces stay private; only sanitized timing bundles
+> may enter public evidence.
+
 ## The day the project is done
 
 Roughly two weeks after keys are in hand. `v1.8.0-agent-compiler` is tagged, the
@@ -16,9 +21,9 @@ What exists that day:
   (pilot 3). Each entry: p50/p95/p99, region `us`, `sample_size >= 100`, warm
   cohort, and a methodology string naming the corpus hash, config hash, and run
   date. `verification.verified_at` bumped; fresh 90-day expiry runway.
-- **`evidence/measurements/` holds one receipt directory per pilot stack**: the
-  raw `turn-trace.json`, the emitted `measurement.json`, and the sanitized
-  publication excerpt. Every published number links back to its receipt.
+- **`evidence/measurements/` holds one sanitized receipt directory per pilot stack**: the
+  allowlisted timing trace, emitted `measurement.json`, methodology, redaction receipt, and checksum
+  manifest. Unsanitized traces remain private. Every published number links back to its receipt.
 - **The README's S2S-vs-cascaded section is a real table**: same frozen 20-clip
   corpus, same region, three stacks, per-leg and end-to-end turn-gap
   percentiles. Whatever the numbers are — the table's existence is the moat.

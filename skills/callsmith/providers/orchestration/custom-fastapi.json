@@ -1,0 +1,85 @@
+{
+  "id": "custom-fastapi",
+  "kind": "orchestration",
+  "label": "Custom FastAPI bridge",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://fastapi.tiangolo.com/"
+    ]
+  },
+  "transport": "websocket",
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Self-hosted infrastructure only"
+  },
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Your bridge code receives raw telephony audio. You must decode and resample before sending to the model."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Your bridge code must resample and encode model output back to telephony format."
+  },
+  "lifecycle": [
+    "websocket_connect", "audio_frame_in", "audio_frame_out", "websocket_disconnect"
+  ],
+  "potholes": [
+    { "id": "you_own_the_bridge", "severity": "blocker", "note": "With a custom FastAPI bridge, you are fully responsible for decoding, resampling, and encoding audio. No layer normalizes it for you." },
+    { "id": "you_own_aec_echo", "severity": "blocker", "note": "No echo cancellation exists unless you add it. Your own TTS leaking back into the inbound path (carrier echo, speakerphone) false-triggers VAD and the agent interrupts itself in a loop. Gate VAD during agent speech or integrate an AEC." },
+    { "id": "drain_and_single_process", "severity": "blocker", "note": "A single uvicorn process with no drain is not production. Implement SIGTERM drain (finish calls, then exit), scale on concurrent calls, and set LB/proxy idle timeouts above max call duration or long calls die silently." }
+  ],
+  "env_keys": [],
+  "doc_urls": ["https://fastapi.tiangolo.com/"],
+  "latency_estimates": { "pipeline_overhead_ms": 10 },
+  "latency_evidence": [
+    {
+      "metric": "pipeline_overhead_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 10,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "manual_flush",
+    "description": "With a custom FastAPI bridge, you must manually implement interruption: detect user speech via VAD, cancel in-flight LLM/TTS requests, flush the outbound audio queue, and stop writing to the WebSocket.",
+    "code_hint": "On VAD speech_start: (1) cancel LLM stream, (2) stop TTS, (3) outbound_queue.flush(), (4) stop sending to ws. No automatic handling — all manual."
+  },
+  "context7": { "library_id": "/encode/starlette", "topics": ["websockets", "fastapi"] },
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Self-host is the only path: there is no managed runtime for a custom bridge. You own process supervision, SIGTERM drain, concurrency scaling, warm pools (VAD session, provider connections), LB idle timeouts above max call duration, and frame-level diagnostics.",
+    "concurrency_model": "custom",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["any"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "pinned",
+      "residency_controls": "unknown",
+      "verified_at": "2026-07-21",
+      "sources": ["https://fastapi.tiangolo.com/advanced/websockets/"]
+    },
+    "drain_behavior": "user_implemented"
+  }
+}

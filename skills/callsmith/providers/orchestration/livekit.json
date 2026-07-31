@@ -1,0 +1,135 @@
+{
+  "id": "livekit",
+  "kind": "orchestration",
+  "label": "LiveKit (Agents framework + SIP trunk)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://docs.livekit.io/agents/",
+      "https://docs.livekit.io/agents/pipelines/voice-pipeline/"
+    ]
+  },
+  "transport": "webrtc",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "The Agent framework delivers normalized 16 kHz PCM frames to your worker regardless of the underlying transport."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Agent audio output is published as PCM and re-encoded to Opus for the WebRTC room; for PSTN it is re-encoded to μ-law by the SIP trunk."
+  },
+  "lifecycle": [
+    "participant_joined",
+    "track_subscribed",
+    "audio_frame",
+    "agent_speaking",
+    "interruption",
+    "participant_left"
+  ],
+  "potholes": [
+    {
+      "id": "sip_trunk_absorbs_mulaw",
+      "severity": "note",
+      "note": "When using LiveKit's SIP trunk / dialin, LiveKit performs the μ-law↔PCM and 8k↔16k conversion server-side, so your agent sees 16 kHz PCM. If you instead bridge a raw telephony websocket yourself, you own that conversion."
+    },
+    {
+      "id": "interruption_via_track",
+      "severity": "warning",
+      "note": "LiveKit interruption is detected from the input track; you must clear/republish the outbound stream segment to actually stop playback to the caller."
+    },
+    {
+      "id": "drain_on_deploy",
+      "severity": "warning",
+      "note": "Deploys must drain: stop agent dispatch, let in-flight calls finish, then exit. Killing a worker mid-call drops callers. LiveKit Cloud manages drain for hosted agents; self-host must implement it."
+    },
+    {
+      "id": "warm_pool_cold_start",
+      "severity": "warning",
+      "note": "First-call latency hides plugin/model loading (VAD model load, STT/TTS connection setup). Pre-warm at worker startup and keep provider connections alive; measure cold and warm calls as separate cohorts."
+    }
+  ],
+  "env_keys": [
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET"
+  ],
+  "doc_urls": [
+    "https://docs.livekit.io/agents/",
+    "https://docs.livekit.io/agents/pipelines/voice-pipeline/"
+  ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.005,
+    "per_minute_usd": 0.005,
+    "notes": "LiveKit Cloud per-participant. Self-hosted is free."
+  },
+  "context7": {
+    "library_id": "/livekit/agents",
+    "topics": [
+      "voice-pipeline",
+      "sip-trunk",
+      "interruption"
+    ]
+  },
+  "latency_estimates": {
+    "pipeline_overhead_ms": 20
+  },
+  "latency_evidence": [
+    {
+      "metric": "pipeline_overhead_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 20,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "session_turn_handling",
+    "description": "AgentSession with TurnHandlingOptions(turn_detection=MultilingualModel()) handles interruption automatically. When user speech is detected during agent output, the session cancels in-flight TTS and LLM output.",
+    "code_hint": "session = AgentSession(vad=silero.VAD.load(), turn_handling=TurnHandlingOptions(turn_detection=MultilingualModel())) — interruption is automatic."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [
+    "audio_normalization"
+  ],
+  "deployment": {
+    "hosted_option": {
+      "name": "livekit-cloud",
+      "managed_runtime": true,
+      "region_pinning": true,
+      "pricing_url": "https://livekit.io/pricing",
+      "note": "LiveKit Cloud runs managed agent workers (lk agent create / register) with platform-managed scaling and drain, hosted SIP trunking, and region pinning. Best default for pilots; per-participant pricing."
+    },
+    "self_host_notes": "Self-hosted LiveKit server is free; you own SFU/media nodes, agent worker pools, TURN, and the SIP bridge. A worker multiplexes many calls per process — cap concurrent calls per worker before VAD/turn-detector CPU contention degrades endpointing, and implement SIGTERM drain (stop dispatch, finish calls, exit).",
+    "concurrency_model": "worker_pool",
+    "regions": {
+      "media_edges": ["unknown"],
+      "worker_regions": ["unknown"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "pinned",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-21",
+      "sources": ["https://docs.livekit.io/home/cloud/regions/"]
+    },
+    "drain_behavior": "platform_managed"
+  }
+}

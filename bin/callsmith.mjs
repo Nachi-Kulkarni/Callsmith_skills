@@ -18,8 +18,8 @@ import { validatePacks } from '../src/lib/validate.mjs';
 import { verifyPacks } from '../src/lib/verify-packs.mjs';
 import { validateContract, validateContractAnswers } from '../src/lib/contract.mjs';
 
-const VERSION = '1.7.0-agent-compiler';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 const [cmd, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);

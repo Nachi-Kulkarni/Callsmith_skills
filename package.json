@@ -1,6 +1,6 @@
 {
   "name": "@callsmith/cli",
-  "version": "1.7.0-agent-compiler",
+  "version": "1.8.0-agent-compiler",
   "description": "Teach coding agents to design production voice agents; validate provider packs, physics, floors, and eval bar. The agent compiles — callsmith verifies.",
   "type": "module",
   "bin": {
@@ -34,7 +34,7 @@
     "bench:turn": "node evals/csb/latency/score.mjs",
     "bench:turn:score": "node evals/csb/latency/score.mjs",
     "bench:measure": "node evals/measure/run.mjs",
-    "bench:load": "node evals/load/run.mjs",
+    "bench:measure:publish": "node evals/measure/run.mjs --publish",
     "doctor": "node bin/callsmith.mjs doctor",
     "pack:validate": "node bin/callsmith.mjs pack validate"
   },
@@ -87,7 +87,6 @@
     "evals/csb/latency",
     "evals/csb/scenarios",
     "evals/measure",
-    "evals/load",
     "evidence",
     "SKILL.md",
     "CHANGELOG.md",

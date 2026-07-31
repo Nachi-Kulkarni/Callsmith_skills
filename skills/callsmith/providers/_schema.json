@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Callsmith Provider Pack",
+  "description": "Each provider declares its real audio/transport/lifecycle contract plus known potholes. The resolver reconciles these across the selected stack to produce the compatibility matrix and audio bridge contract. This file documents the shape every providers/*/<id>.json must follow.",
+  "type": "object",
+  "required": ["id", "kind", "label", "transport", "ingest", "egress", "directions", "native_capabilities", "verification"],
+  "properties": {
+    "id": { "type": "string", "description": "Stable identifier, matches menu option id. Lowercase-kebab." },
+    "kind": { "type": "string", "enum": ["telephony", "orchestration", "realtime", "stt", "tts", "llm", "vad"] },
+    "label": { "type": "string" },
+    "transport": { "type": "string", "enum": ["websocket", "sip", "webrtc", "http", "grpc", "sdk", "inline"] },
+    "directions": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["inbound", "outbound"] },
+      "minItems": 1,
+      "description": "Which call directions this provider supports. Used for surface/direction impossibility detection (telephony only). Inert for kind: vad — VADs have no call-direction semantics; declare [\"inbound\",\"outbound\"] as a safe superset."
+    },
+    "native_capabilities": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
+      "description": "Native capabilities that short-circuit the resolver (e.g. audio_normalization absorbs the decode/resample bridge)."
+    },
+    "native_capability_conflicts": {
+      "type": "array",
+      "description": "Reserved guard. Optional explicit conflicts between this pack's native capabilities and capabilities claimed by other selected packs. No installed pack currently declares a conflict; this field exists so a future SIP-direct carrier (or similar incompatibility) can refuse an incompatible stack at forge time. The shape is exercised by test/impossibility.test.mjs.",
+      "items": {
+        "type": "object",
+        "required": ["capability", "conflicts_with"],
+        "properties": {
+          "capability": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
+          "conflicts_with": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["audio_normalization", "native_sip", "emit_mulaw_8000"] },
+            "minItems": 1
+          },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "ingest": {
+      "type": "object",
+      "description": "The audio format this component needs to RECEIVE on its input side (what the bridge must hand it).",
+      "required": ["format", "sample_rate", "channels"],
+      "properties": {
+        "format": { "type": "string", "examples": ["pcm", "mulaw", "opus", "text", "pcm-events"] },
+        "sample_rate": { "type": "integer", "examples": [0, 8000, 16000, 24000] },
+        "channels": { "type": "integer", "examples": [0, 1] },
+        "bit_depth": { "type": "integer", "examples": [8, 16] },
+        "note": { "type": "string" }
+      }
+    },
+    "egress": {
+      "type": "object",
+      "description": "The audio format this component PRODUCES on its output side (what the bridge receives from it).",
+      "required": ["format", "sample_rate", "channels"],
+      "properties": {
+        "format": { "type": "string", "examples": ["pcm", "mulaw", "opus", "text", "pcm-events"] },
+        "sample_rate": { "type": "integer", "examples": [0, 8000, 16000, 24000] },
+        "channels": { "type": "integer", "examples": [0, 1] },
+        "bit_depth": { "type": "integer", "examples": [8, 16] },
+        "note": { "type": "string" }
+      }
+    },
+    "model": { "type": "string", "description": "Current verified model ID. Pinned by staleness guard tests." },
+    "verification": {
+      "type": "object",
+      "description": "Provenance for the factual claims in this pack. Refresh before expires_at; a URL merely being syntactically valid is not evidence that a claim is current.",
+      "required": ["grade", "verified_at", "expires_at", "sources"],
+      "properties": {
+        "grade": {
+          "type": "string",
+          "enum": ["official_docs", "official_repository", "callsmith_measurement", "community"],
+          "description": "Strength of the evidence used for this pack."
+        },
+        "verified_at": { "type": "string", "description": "UTC calendar date (YYYY-MM-DD) on which the sources were checked." },
+        "expires_at": { "type": "string", "description": "UTC calendar date (YYYY-MM-DD) after which verification fails until the pack is refreshed." },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Primary evidence URLs supporting the pack's current factual claims."
+        }
+      }
+    },
+    "streaming": { "type": "boolean", "description": "Whether this provider supports streaming output." },
+    "tool_calling": { "type": "boolean", "description": "Whether this provider supports function/tool calling." },
+    "context_window": { "type": "integer", "description": "Maximum context window in tokens (LLM only)." },
+    "latency_estimates": {
+      "type": "object",
+      "description": "Planning-only latency inputs in milliseconds, retained for compatibility with the resolver. These are not measurements and MUST have matching latency_evidence entries.",
+      "properties": {
+        "media_rtt_ms": { "type": "integer", "description": "Telephony media stream round-trip time." },
+        "ttf_transcript_ms": { "type": "integer", "description": "STT: time to first transcript." },
+        "ttft_ms": { "type": "integer", "description": "LLM: time to first token." },
+        "ttfa_ms": { "type": "integer", "description": "TTS: time to first audio chunk." },
+        "response_start_ms": { "type": "integer", "description": "Realtime model: time to first audio response." },
+        "processing_ms": { "type": "integer", "description": "VAD/pipeline: processing latency." },
+        "pipeline_overhead_ms": { "type": "integer", "description": "Orchestration: frame pipeline overhead." }
+      }
+    },
+    "latency_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Evidence for each latency metric. Planning estimates explicitly carry a zero sample and unavailable percentiles; measured or vendor-reported distributions carry sample size, region, and p50/p95/p99.",
+      "items": {
+        "type": "object",
+        "required": ["metric", "source", "region", "sample_size", "percentiles_ms", "methodology"],
+        "properties": {
+          "metric": { "type": "string", "enum": ["media_rtt_ms", "ttf_transcript_ms", "ttft_ms", "ttfa_ms", "response_start_ms", "processing_ms", "pipeline_overhead_ms"] },
+          "source": { "type": "string", "enum": ["planning_estimate", "vendor_claim", "callsmith_measurement"] },
+          "region": { "type": "string", "description": "Measurement region, or 'not_measured' for a planning estimate." },
+          "sample_size": { "type": "integer", "description": "Number of observed turns; zero only for planning estimates." },
+          "planning_value_ms": { "type": "integer", "description": "Architecture-budget input; required for planning_estimate and never represented as an observed percentile." },
+          "percentiles_ms": {
+            "type": "object",
+            "required": ["p50", "p95", "p99"],
+            "properties": {
+              "p50": { "type": ["number", "null"] },
+              "p95": { "type": ["number", "null"] },
+              "p99": { "type": ["number", "null"] }
+            }
+          },
+          "methodology": { "type": "string" },
+          "source_url": { "type": "string", "description": "Primary source for vendor_claim evidence." }
+        }
+      }
+    },
+    "interruption": {
+      "type": "object",
+      "description": "How this provider participates in barge-in / interruption handling.",
+      "properties": {
+        "mechanism": { "type": "string", "description": "The interruption mechanism this provider uses." },
+        "description": { "type": "string", "description": "What happens when the user interrupts." },
+        "code_hint": { "type": "string", "description": "Framework-specific code pattern for interruption." }
+      }
+    },
+    "lifecycle": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Session/call lifecycle events this provider emits or expects."
+    },
+    "potholes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "note"],
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "type": "string", "enum": ["blocker", "warning", "note"] },
+          "note": { "type": "string" },
+          "mitigated_by": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["audio_normalization", "emit_mulaw_8000", "native_sip"] },
+            "description": "Native capabilities that, when present in any selected pack, downgrade this pothole to 'mitigated'. Used to separate 'still required in user code' from 'resolved by a native layer'."
+          }
+        }
+      }
+    },
+    "env_keys": { "type": "array", "items": { "type": "string" }, "description": "Required environment variables." },
+    "doc_urls": { "type": "array", "items": { "type": "string" } },
+    "cost_estimates": {
+      "type": "object",
+      "description": "Architecture-planning cost inputs, never a quote or billing source. per_minute_usd is normalized for comparison; verify current account/region pricing before an SLO or purchase decision.",
+      "properties": {
+        "billing": { "type": "string", "enum": ["per_minute", "per_1k_chars", "per_hour", "free"], "description": "How the provider bills." },
+        "rate_usd": { "type": "number", "description": "Raw rate in the billing unit." },
+        "per_minute_usd": { "type": "number", "description": "Normalized cost per minute (USD). Pre-computed from billing + rate using conversational assumptions." },
+        "notes": { "type": "string" }
+      }
+    },
+    "context7": {
+      "type": ["object", "null"],
+      "properties": {
+        "library_id": { "type": ["string", "null"] },
+        "topics": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "description": "Optional deployment physics for the deploy playbook and `check` operations output: where and how this provider runs in production. Volatile facts inherit the pack-level verification dates and are refreshed with the pack. Absent means unknown — never inferred.",
+      "properties": {
+        "hosted_option": {
+          "type": ["object", "null"],
+          "required": ["name", "managed_runtime", "region_pinning"],
+          "properties": {
+            "name": { "type": "string" },
+            "managed_runtime": { "type": "boolean", "description": "True when the hosted option also runs your agent/bot compute, not just media transport or API serving." },
+            "region_pinning": { "type": "boolean" },
+            "pricing_url": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        },
+        "self_host_notes": { "type": "string" },
+        "concurrency_model": { "type": "string", "enum": ["worker_pool", "process_per_call", "managed", "inline", "custom"], "description": "How one deployment unit carries calls: worker_pool multiplexes, process_per_call isolates one call per process, managed is provider-side, inline runs inside your process." },
+        "regions": {
+          "type": "object",
+          "required": ["media_edges", "worker_regions", "model_regions", "recording_regions", "transcript_regions", "routing", "residency_controls", "verified_at", "sources"],
+          "properties": {
+            "media_edges": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "worker_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "model_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "recording_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "transcript_regions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "routing": { "type": "string", "enum": ["pinned", "configurable", "automatic", "unknown"] },
+            "residency_controls": { "type": "string", "enum": ["documented", "partial", "unknown"] },
+            "verified_at": { "type": "string" },
+            "sources": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+          }
+        },
+        "drain_behavior": { "type": "string", "enum": ["platform_managed", "user_implemented", "n/a"], "description": "Who owns graceful shutdown of in-flight calls on deploy/restart for the hosted path; self-host drain duties belong in self_host_notes." }
+      }
+    }
+  }
+}

@@ -104,6 +104,7 @@ export function prepareArmWorkspace(arm, scenario, runDir) {
     for (const name of ['bin', 'src', 'data', 'providers', 'reference']) {
       cpSync(join(REPO_ROOT, name), join(runtimeDir, name), { recursive: true });
     }
+    cpSync(join(REPO_ROOT, 'package.json'), join(runtimeDir, 'package.json'));
     cpSync(join(REPO_ROOT, 'SKILL.md'), join(runtimeDir, 'SKILL.md'));
     const binDir = join(runDir, '.bin');
     mkdirSync(binDir, { recursive: true });

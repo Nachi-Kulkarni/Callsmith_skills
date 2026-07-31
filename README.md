@@ -1,250 +1,53 @@
-# callsmith
+# Callsmith
 
-**Teaches coding agents to design production voice agents — and verifies facts the agent must not invent.**
+Callsmith helps coding agents design voice systems that are safe to hand to an implementation team.
+It supplies provider-specific audio facts, sensible safety defaults, and a small verification CLI so
+the agent does not guess its way through telephony, streaming, barge-in, retention, or handoff.
 
-> The agent compiles. callsmith validates the physics, floors, and eval bar.
-
-**Constitution:** [`product_decisions.md`](./product_decisions.md) — sole product law.
-
-Not a scaffold factory. Not a hosted voice runtime. Not “another build-a-bot prompt.”
-A skill + provider-pack standard library + floor policy + eval bar.
-
-## Why callsmith?
-
-Every voice-agent tutorial starts with the model. Skip the audio bridge and you get the same failures: μ-law decode crashes, barge-in that doesn't fire, echo loops, resampling artifacts, WebSocket frames that split mid-syllable.
-
-The hard part is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM 16/24 kHz), turn/interruption lifecycle, barge-in, echo ownership, and per-provider streaming quirks — plus regulated floors (consent, retention, handoff).
-
-callsmith encodes provider reality as **packs**, product taste as **floors**, and design quality as **evals**. The coding agent owns dialogue, stack choice, and implementation.
-
-### Same brief. Same model. Different artifact.
-
-In a repeated live CallsmithBench diagnostic, Grok-4.5 received the same voice-agent briefs, budget,
-and output schema with and without Callsmith.
-
-| Valid paired result | Without Callsmith | With Callsmith |
-|---|---:|---:|
-| Individual checks passed | 32.8% (38/116) | 100% (116/116) |
-| Ready for handoff (all four checks) | 10.3% (3/29) | 100% (29/29) |
-| Safe consent, retention, and handoff | 62.1% | 100% |
-| Compatible providers and audio path | 10.3% | 100% |
-| Complete handoff file | 10.3% | 100% |
-| No hard contradictions | 48.3% | 100% |
-
-Each design can earn four individual checks. “Ready for handoff” is deliberately stricter: missing
-any one check makes that row a miss. A low handoff total does **not** mean the model could not build a
-voice agent. Many unassisted drafts were plausible and passed some checks; they were not yet complete
-enough to hand to an implementation team without filling in safety, audio, or contract details.
-
-That is a **+89.7 percentage-point diagnostic lift** (95% paired-bootstrap interval: +75.9 to
-+100.0 points). It is not yet Callsmith's release claim: one of 30 scheduled WITH arms failed to
-write its answers artifact, and the two-family replication is still outstanding.
-
-The useful part is visible in the receipts:
-
-- **Clinic:** The unassisted artifact kept an invalid 90-day retention value, a weak handoff, an
-  unknown TTS provider, and a malformed contract. The assisted artifact corrected the safety choices,
-  selected known providers, and produced a handoff file that passed all four checks.
-- **Exotel:** The unassisted artifact described the bridge but missed the custom audio conversion and
-  structured-handoff checks. The assisted artifact made ownership and conversions reviewable.
-- **WhatsApp:** The unassisted artifact treated an asynchronous medical voice-note workflow
-  inconsistently. The assisted artifact
-  removed the PSTN stack, disabled live barge-in, and bound escalation and retention into the receipt.
-
-Three pairs showed no lift because the unassisted artifact already passed. The assisted runs also took
-58.1 seconds at the median, versus 54.0 seconds without Callsmith. The invalid arm stays in the record;
-it will not be selectively replaced.
-
-See the [diagnostic report](./evidence/diagnostics/grok-core10-20260712.md),
-[later Luna/xhigh full-suite diagnostic](./evidence/diagnostics/luna-xhigh-full-suite-20260731.md),
-[publication standard](./evidence/README.md), and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
-
-Operational evidence is a separate track. Callsmith now ships a hashed 20-clip licensed corpus,
-provider-adapter measurement boundary, structured region/residency checks, and a real SIGTERM drain
-gate. No provider latency number is published yet: the three live pilots still require provider
-credentials, spend approval, retained raw traces, sanitization, and review.
-
-#### What CallsmithBench actually does
-
-CallsmithBench gives the same coding model the same realistic voice-agent brief twice. The first run,
-called BASE, works normally without Callsmith. The second, called WITH, gets Callsmith's guidance,
-provider facts, and checks. Both runs must finish the actual design files—not merely describe what
-they would do.
-
-The benchmark asks a narrow question: “Are these files complete enough for a careful engineering
-handoff?” It does not ask whether the model can produce any useful code or design at all.
-
-Automated checks then read `voice.answers.json` and the structured handoff file:
-
-| Check | What it means |
-|---|---|
-| **Safe choices** | Consent, data retention, and human handoff meet the minimum |
-| **Working audio path** | The selected providers and audio formats can work together |
-| **Complete handoff** | The structured handoff file is complete and agrees with the written design |
-| **No hard contradictions** | No invented providers, channel mistakes, unsafe escalation, or removed commands |
-
-The scenarios include medical clinics, Exotel custom bridges, WhatsApp voice notes, unknown providers,
-and orchestration paths where native media handling changes the required transforms. This is
-**real-agent, real-repository, final-artifact evidence**. It measures design correctness before
-implementation; it does not claim production call quality, uptime, or real-user task completion.
-
-### Product wedge
-
-> **pack physics inspect + floor receipts + contract validate + eval gate**
-
-### callsmith is
-
-| Layer | Role |
-|---|---|
-| **Skill + playbooks** (`SKILL.md` + `reference/`) | How the agent compiles; `/callsmith deploy` adds a concise capacity workflow that prevents false ceilings |
-| **Provider packs** (21) | Stdlib of audio formats, interruption, potholes, env keys |
-| **Floors** | Rewrite (not only flag) consent / retention / handoff / tools by domain |
-| **Evals** | Binary design-quality bar |
-| **Thin verification** | Pack validate / physics check / doctor |
-
-### callsmith is not
-
-- Framework scaffold generator
-- 22-group MCQ coverage law
-- Fake-call simulator as production proof
-- Dynamic “unknown provider” synthesis
-- Byte-identical lockfiles as identity
+[![Install with skills.sh](https://skills.sh/b/Nachi-Kulkarni/Callsmith_skills)](https://skills.sh/Nachi-Kulkarni/Callsmith_skills)
 
 ## Install
 
-### One repository link — complete plugin
-
-Paste this repository into your client's marketplace/plugin installer:
-
-```text
-https://github.com/Nachi-Kulkarni/Callsmith_skills
-```
-
-That installation includes the Callsmith skill, provider packs, policy and contract references,
-verification CLI source, examples, evidence documentation, and Context7 MCP configuration.
-
-**Codex app:** open **Plugins → Add marketplace**, paste the repository link, install **Callsmith**,
-then start a new task.
-
-**Codex CLI:**
+One command installs the lean Callsmith skill in Codex, Claude Code, Cursor, OpenCode, and other
+agents supported by the skills installer:
 
 ```bash
-codex plugin marketplace add Nachi-Kulkarni/Callsmith_skills
-codex plugin add callsmith@callsmith-marketplace
+npx skills add https://github.com/Nachi-Kulkarni/Callsmith_skills/tree/main/skills/callsmith
 ```
 
-**Claude Code:**
+Start a new agent session, then ask for `/callsmith` or simply describe the voice agent you want.
+The skill-only download is about 270 KB and contains no benchmark runners, tests, credentials, or
+local project files.
 
-```text
-/plugin marketplace add Nachi-Kulkarni/Callsmith_skills
-/plugin install callsmith@callsmith-marketplace
+## What it gives your agent
+
+- **Provider facts:** 21 checked packs covering audio formats, streaming behavior, interruption,
+  deployment constraints, environment keys, and known potholes.
+- **Safety floors:** clear minimum choices for recording consent, transcript retention, human
+  handoff, and tool failure.
+- **A handoff contract:** one reviewable file that records the stack, audio path, ownership, safety
+  choices, and a quantified latency or cost tradeoff.
+- **Checks:** optional commands that catch unknown providers, impossible audio paths, incomplete
+  contracts, and contradictions between prose and machine-readable decisions.
+
+Callsmith does not generate a framework scaffold or host calls. The coding agent still chooses the
+architecture and writes the application using LiveKit, Pipecat, or the target project's own stack.
+
+```mermaid
+flowchart LR
+    A["Your voice-agent brief"] --> B["Coding agent + Callsmith"]
+    P["Provider packs"] --> B
+    F["Safety floors"] --> B
+    B --> C["Design + implementation"]
+    B --> D["Handoff contract"]
+    D --> E["Physics and policy checks"]
+    E --> C
 ```
 
-**Grok Build:**
+## Five-minute example
 
-```bash
-grok plugin install Nachi-Kulkarni/Callsmith_skills
-```
-
-**Cursor:** install from the Cursor Plugin Marketplace when listed, or add this repository as a
-custom plugin source. The native manifest lives at `.cursor-plugin/plugin.json`.
-
-**Kimi Code:**
-
-```text
-/plugins install https://github.com/Nachi-Kulkarni/Callsmith_skills
-/reload
-```
-
-Or browse the repository catalog with `/plugins marketplace` and the raw
-`.kimi-plugin/marketplace.json` URL.
-
-**Devin CLI:**
-
-```bash
-devin plugins install Nachi-Kulkarni/Callsmith_skills
-```
-
-**OpenCode:** add the Git repository package to `opencode.json`, then restart OpenCode:
-
-```json
-{
-  "plugin": [
-    "callsmith@git+https://github.com/Nachi-Kulkarni/Callsmith_skills.git"
-  ]
-}
-```
-
-The OpenCode plugin registers the Callsmith skill directory and Context7 MCP without overwriting an
-existing user-configured `context7` server.
-
-**Pi:**
-
-```bash
-pi install git:github.com/Nachi-Kulkarni/Callsmith_skills
-```
-
-**Antigravity:**
-
-```bash
-agy plugin install https://github.com/Nachi-Kulkarni/Callsmith_skills
-```
-
-All native installers use this repository as the product root. Start a new session—or run the
-client's reload command—after installation.
-
-### Skill-only install
-
-```bash
-npx skills add Nachi-Kulkarni/Callsmith_skills
-```
-
-Then invoke `/callsmith` in Claude Code, Cursor, Codex, Copilot, Gemini CLI, or OpenCode. The
-skill-only route may not install Context7 automatically; run `npx ctx7 setup` when needed.
-
-### Current provider documentation
-
-Callsmith ships dated provider packs so every decision remains reviewable, but voice SDKs and APIs
-change faster than a release. For version-specific implementation docs, install Context7 once:
-
-```bash
-npx ctx7 setup
-```
-
-Choose MCP mode when your client supports it, or CLI + Skills mode when it does not. This repository
-also includes a project-level [`.mcp.json`](./.mcp.json) using Context7's stdio package, which works
-in unattended Grok sessions without an OAuth prompt. An API key is optional but recommended by
-Context7 for higher rate limits.
-
-Callsmith still works without Context7. The agent must fall back to official provider documentation
-through whatever web-fetch/browse capability is available, record the source URL, source date when
-available, and access date, and refuse to invent an API when neither source is available. Expired
-pack evidence, changed SDK versions, and volatile facts such as model names, API shapes, regions,
-pricing, and audio behavior trigger a fresh lookup.
-See [current-documentation policy](./reference/current-docs.md).
-
-**Optional verification CLI:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Nachi-Kulkarni/Callsmith_skills/main/install-callsmith.sh | bash
-# or: npm install -g github:Nachi-Kulkarni/Callsmith_skills
-```
-
-## Quick start
-
-1. Install the skill.
-2. Tell your agent what voice agent you want.
-3. Agent digs deeper, loads provider packs, **rewrites** floor violations, writes a short **handoff contract**.
-4. Agent implements against that contract + pack facts.
-5. Optional: `callsmith pack validate` / `check` / `contract validate` / eval scenarios.
-
-Example contract: [`examples/clinic-triage/`](./examples/clinic-triage/). Its versioned machine-readable receipt is documented in [`reference/contract.md`](./reference/contract.md); prose alone cannot satisfy policy floors.
-
-Playbooks: `/callsmith audit` · `critique` · `architecture` · `latency` · `ttft` · `prompts` · `harden` · `deploy`. See `reference/`.
-
-## A five-minute first win
-
-Start with a familiar failure: a clinic phone-agent draft says “consent matters,” but its machine choices still say no consent, short retention, and ticket-only escalation. It also assumes every audio hop is compatible.
+Suppose a clinic phone-agent draft says consent matters, but its actual choices still contain no
+recording notice, seven-day retention, ticket-only escalation, and an assumed audio bridge:
 
 ```json
 {
@@ -255,7 +58,8 @@ Start with a familiar failure: a clinic phone-agent draft says “consent matter
 }
 ```
 
-Give the brief to an agent with Callsmith. It loads only the chosen provider packs, rewrites unsafe choices, checks the audio path, and produces the [clinic example](./examples/clinic-triage/) with this reviewable receipt:
+With Callsmith, the agent loads only the relevant packs, makes the audio ownership explicit, and
+rewrites the machine choices to meet the project's conservative medical defaults:
 
 ```json
 {
@@ -267,92 +71,135 @@ Give the brief to an agent with Callsmith. It loads only the chosen provider pac
 }
 ```
 
-That abbreviated view comes from the full `json callsmith-contract` block. Verify the actual artifacts:
+See the complete [clinic example](./examples/clinic-triage/) and its structured receipt. If you also
+want the verification CLI, install the repository package and run the real files:
 
 ```bash
-node bin/callsmith.mjs check --answers examples/clinic-triage/voice.answers.json
-node bin/callsmith.mjs contract validate --file examples/clinic-triage/callsmith.recipe.md --answers examples/clinic-triage/voice.answers.json --domain medical
+npm install -g github:Nachi-Kulkarni/Callsmith_skills
+callsmith check --answers examples/clinic-triage/voice.answers.json
+callsmith contract validate --file examples/clinic-triage/callsmith.recipe.md \
+  --answers examples/clinic-triage/voice.answers.json --domain medical
 ```
 
-The irreversible value is the trail: commit the answers and contract with the implementation, review receipt diffs, and run the same checks in CI. The next agent inherits decisions and evidence instead of reconstructing them from chat. See [`reference/workflow.md`](./reference/workflow.md).
+## What the current evidence says
 
-### Why packs matter
+CallsmithBench gives the same coding model the same brief twice: once normally and once with
+Callsmith. It then checks the completed design files, not promises in the model's response.
 
-**Exotel + custom FastAPI + Gemini Live** → often 4 transforms.
-**Exotel + LiveKit + Gemini Live** → often 0 transforms (SIP absorbs bridge).
+In the latest Luna/xhigh diagnostic, the 32 complete pairs produced:
 
-That difference lives in packs — not in agent imagination.
+| Handoff check | Without Callsmith | With Callsmith |
+|---|---:|---:|
+| Individual checks passed | 26/128 | 128/128 |
+| Safe consent, retention, and handoff | 14/32 | 32/32 |
+| Compatible providers and audio path | 0/32 | 32/32 |
+| Complete handoff file | 0/32 | 32/32 |
+| No hard contradictions | 12/32 | 32/32 |
 
-## Supported providers
+The low unassisted totals do not mean those drafts were useless or that voice agents cannot be built
+without Callsmith. Many were plausible. The benchmark asks a narrower question: were all four
+handoff requirements explicit and mutually consistent without another engineer repairing the
+artifact first?
 
-| Layer | Providers |
-|-------|-----------|
-| Telephony | Exotel, Twilio, Plivo, Telnyx, Vonage |
-| Orchestration | LiveKit, Pipecat, Custom FastAPI |
-| Realtime S2S | Gemini Live, OpenAI Realtime |
-| STT | Deepgram (Nova-3), AssemblyAI |
-| LLM | OpenAI, Anthropic, Google |
-| TTS | ElevenLabs, Cartesia, Sarvam |
-| VAD | Silero VAD, Deepgram Endpointing, WebRTC VAD |
+This is a single-model-family design diagnostic. It does **not** prove deployed call quality,
+latency, uptime, cost, or real-user success. No provider latency number is published yet. Read the
+[plain-language diagnostic](./evidence/diagnostics/luna-xhigh-full-suite-20260731.md),
+[evidence rules](./evidence/README.md), and [Honest Numbers](./evidence/HONEST-NUMBERS.md).
 
-Add a provider by dropping a validated JSON pack into `providers/`. **Unknown providers are not auto-synthesized.**
+## Use Callsmith when
 
-## Commands
+- a coding agent is designing or implementing a phone, browser, or voice-note workflow;
+- provider audio formats and interruption ownership need to be reviewable;
+- regulated or high-stakes flows need explicit consent, retention, and escalation decisions;
+- another engineer must inherit the work from committed artifacts instead of chat history.
 
-### Skill playbooks (primary)
+Use something else when you want a hosted voice runtime, a drag-and-drop bot builder, legal
+certification, or a framework scaffold. Callsmith's floors are conservative product defaults, not
+legal advice.
 
-| Command | What it does |
-|---------|-------------|
-| `/callsmith` | Dig deeper → floors → pack-informed contract → implement |
-| `/callsmith audit` | Readiness scorecard |
-| `/callsmith critique` | Opinionated architecture critique |
-| `/callsmith architecture` | S2S vs cascaded vs hybrid — decided with pack numbers, no ties |
-| `/callsmith latency` | Optimize user speech-end → first audible audio with a full turn trace |
-| `/callsmith ttft` | Diagnose the LLM first-token submetric only |
+## Playbooks
+
+| Command | Outcome |
+|---|---|
+| `/callsmith` | Brief → provider-backed decisions → contract → implementation |
+| `/callsmith audit` | Readiness score and concrete gaps; no edits |
+| `/callsmith critique` | An opinionated stack review with one recommendation |
+| `/callsmith architecture` | Decide S2S, cascaded, or hybrid from the constraints |
+| `/callsmith latency` | Trace user speech-end to first audible response |
+| `/callsmith ttft` | Isolate the LLM first-token leg |
 | `/callsmith prompts` | Write or review the production runtime prompt |
-| `/callsmith harden` | Production-readiness pass |
-| `/callsmith deploy` | Cloud vs self-host, drain, regions, warm pools, concurrency, break-even, load-test architecture, and capacity proof |
+| `/callsmith harden` | Check resilience, state, tools, and safety before a pilot |
+| `/callsmith deploy` | Plan ownership, regions, drain, warmup, and scaling evidence |
 
-### Verification CLI
+## Optional verification CLI
 
-| Command | What it does |
-|---------|-------------|
-| `callsmith packs` | List provider packs |
-| `callsmith pack show <id>` | Dump one pack |
-| `callsmith pack validate` | Schema-validate packs |
-| `callsmith verify-packs` | Evidence provenance/date/expiry guard (not live source-content verification) |
-| `callsmith check --answers f` | Physics report (transforms, blockers, latency, cost) |
-| `callsmith contract validate --file f --answers a` | Handoff contract G5 + structured policy/provider/latency receipt + answers consistency |
-| `callsmith doctor` | Install + pack health |
+```bash
+callsmith packs
+callsmith pack show twilio
+callsmith pack validate
+callsmith verify-packs
+callsmith check --answers voice.answers.json
+callsmith contract validate --file callsmith.recipe.md --answers voice.answers.json
+callsmith doctor
+```
 
-Generation commands (`init`, `forge`, `scaffold`, `simulate`, `intake`, …) are **removed** (exit 2).
+The CLI verifies facts and contracts. Removed generation commands such as `init`, `forge`,
+`scaffold`, and `simulate` deliberately fail instead of pretending a generated skeleton is
+production proof.
 
-## Anti-patterns
+## Install, update, remove, or roll back
 
-- Inventing audio formats or barge-in without a pack
-- Flagging consent/handoff risk without rewriting the design
-- Shipping webhook tools for booking/CRM without an OpenAPI comparison
-- Treating WebSocket close and telephony hangup as the same event
-- Assuming orchestration always normalizes telephony audio
-- Using dynamic “UNVERIFIED provider” synthesis
-- Treating scaffold green as PSTN-ready
+The universal installer is the primary path. It selects the agents installed on your machine and
+supports interactive or global installation. Node 22 is recommended for the current upstream
+installer; the optional Callsmith CLI itself supports Node 18 and newer.
 
-## Docs
+```bash
+# install globally for your detected agents
+npx skills add https://github.com/Nachi-Kulkarni/Callsmith_skills/tree/main/skills/callsmith -g
 
-| Doc | Role |
-|-----|------|
-| [`product_decisions.md`](./product_decisions.md) | **Constitution** (sole forward law) |
-| [`product.md`](./product.md) | +4 / irreversibility companion |
-| [`subtraction.md`](./subtraction.md) | Completed cut map |
-| [`SKILL.md`](./SKILL.md) | Agent compile procedure |
-| [`reference/policy.md`](./reference/policy.md) | Canonical IDs, channel rules, and conservative product floors |
-| [`reference/contract.md`](./reference/contract.md) | Structured receipt schema and explicit-risk override |
-| [`reference/latency.md`](./reference/latency.md) | Turn Gap instrumentation, attribution, budgets, and experiment loop |
-| [`reference/prompts.md`](./reference/prompts.md) | Production runtime-prompt writing and review |
-| [`reference/architecture.md`](./reference/architecture.md) | S2S vs cascaded vs hybrid decision matrix |
-| [`reference/deploy.md`](./reference/deploy.md) | Cloud vs self-host deployment physics: drain, regions, warm pools, concurrency |
-| [`reference/deploy-capacity.md`](./reference/deploy-capacity.md) | `/callsmith deploy` capacity workflow; routes to workload or evidence detail only when needed |
-| [`reference/workflow.md`](./reference/workflow.md) | Committed artifacts, CI gate, and thin runtime adapters |
+# update installed skills
+npx skills update
+
+# remove Callsmith
+npx skills remove callsmith
+
+# install an immutable release instead of main
+npx skills add https://github.com/Nachi-Kulkarni/Callsmith_skills/tree/v1.8.0-agent-compiler/skills/callsmith
+```
+
+| Path | What is verified here |
+|---|---|
+| Universal skill directory | Copied installation into Codex with Node 22; self-contained file parity tested |
+| Packed npm CLI | Fresh tarball install plus `doctor`, example `check`, and contract validation tested |
+| Native client manifests | Structure tested; retained for clients that prefer their own plugin manager |
+
+The installer and its supported-agent list are maintained by the
+[Vercel skills CLI](https://www.skills.sh/docs/cli). Native manifests remain in this repository for
+Codex, Claude Code, Cursor, OpenCode, Pi, Kimi, Devin, Grok, and Antigravity, but manifest presence
+is not presented as a successful runtime test in every client.
+
+## Provider coverage
+
+Telephony: Exotel, Twilio, Plivo, Telnyx, Vonage. Orchestration: LiveKit, Pipecat, custom FastAPI.
+Realtime: Gemini Live and OpenAI Realtime. Speech and model packs include Deepgram, AssemblyAI,
+OpenAI, Anthropic, Google, ElevenLabs, Cartesia, Sarvam, Silero, and WebRTC VAD.
+
+Unknown providers are not invented. Add a dated, sourced JSON pack under `providers/` and run
+`callsmith pack validate`.
+
+## Maintenance and security
+
+- [Product decisions](./product_decisions.md) — the product constitution
+- [Skill procedure](./SKILL.md) — the agent's compile loop
+- [Contract schema](./reference/contract.md) and [policy vocabulary](./reference/policy.md)
+- [Current-documentation policy](./reference/current-docs.md)
+- [Changelog](./CHANGELOG.md), [contributing](./CONTRIBUTING.md),
+  [security](./SECURITY.md), and [maintenance](./MAINTENANCE.md)
+- [Release process](./docs/RELEASING.md)
+
+Provider APIs change. Packs keep dated sources and expiry checks; implementation work must re-open
+official documentation for version-sensitive facts. Security reports belong in a private GitHub
+advisory, never a public issue.
 
 ## License
 

@@ -62,6 +62,7 @@ describe('CSB prepareArmWorkspace', () => {
     assert.ok(fs.existsSync(path.join(withDir, 'providers')));
     assert.ok(fs.existsSync(path.join(withDir, '.bin', 'callsmith')));
     assert.ok(fs.existsSync(path.join(withDir, '.callsmith-runtime', 'bin', 'callsmith.mjs')));
+    assert.ok(fs.existsSync(path.join(withDir, '.callsmith-runtime', 'package.json')));
     assert.equal(fs.existsSync(path.join(withDir, 'bin')), false);
     assert.equal(fs.existsSync(path.join(withDir, 'src')), false);
     assert.equal(fs.existsSync(path.join(withDir, 'data')), false);

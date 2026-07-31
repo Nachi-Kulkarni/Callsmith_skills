@@ -1,0 +1,149 @@
+{
+  "id": "openai-realtime",
+  "kind": "realtime",
+  "label": "OpenAI Realtime (gpt-realtime-2)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://platform.openai.com/docs/guides/realtime",
+      "https://platform.openai.com/docs/guides/realtime-sip",
+      "https://platform.openai.com/docs/guides/voice-agents"
+    ]
+  },
+  "model": "gpt-realtime-2",
+  "transport": "websocket",
+  "native_sip": true,
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Input audio is 24 kHz 16-bit PCM mono via input_audio_buffer.append. Also accepts G.711 μ-law 8 kHz via the pcmulaw input format, which avoids resampling but is lossy."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output audio delta is 24 kHz 16-bit PCM. Resample + encode to μ-law before sending to a PSTN leg (unless using OpenAI's native SIP transport, which carries the call directly)."
+  },
+  "lifecycle": [
+    "session.created",
+    "input_audio_buffer.append",
+    "input_audio_buffer.commit",
+    "response.output_audio.delta",
+    "input_audio_buffer.speech_started",
+    "input_audio_buffer.speech_stopped",
+    "response.done",
+    "session.closed"
+  ],
+  "native_capabilities": [
+    "native_sip"
+  ],
+  "potholes": [
+    {
+      "id": "ga_interface_event_names",
+      "severity": "warning",
+      "note": "The Realtime API is GA. Drop the legacy `OpenAI-Beta: realtime=v1` header. Use POST /v1/realtime/client_secrets for ephemeral creds, /v1/realtime/calls for WebRTC, and the new event names (response.output_audio.delta, session.audio.output). Older examples predate GA and will mislead."
+    },
+    {
+      "id": "native_sip_shortcut",
+      "severity": "note",
+      "note": "OpenAI Realtime now offers a native SIP transport for telephony voice agents. Using it lets OpenAI carry the PSTN leg, removing the μ-law bridge from your code. Only viable if OpenAI is the telephony ingress; you cannot use it with Exotel/Twilio media streams."
+    },
+    {
+      "id": "server_vad_speech_started",
+      "severity": "blocker",
+      "note": "On server VAD, speech_started signals barge-in. Stop outbound playback and clear the buffer; coordinate your audio sink with this event."
+    },
+    {
+      "id": "truncate_on_barge_in",
+      "severity": "blocker",
+      "note": "response.cancel alone leaves already-buffered audio playing. On speech_started also send conversation.item.truncate with the correct item_id and audio_end_ms from your own playback clock, or the caller hears overlapping speech. Track played-audio time per response item — guessing audio_end_ms is the #1 Realtime API bug."
+    },
+    {
+      "id": "input_24k_or_mulaw8k",
+      "severity": "warning",
+      "note": "Two valid input formats: 24 kHz PCM (best quality, needs resample from telephony) or μ-law 8 kHz (no resample, lossy). Pick one deliberately; do not mix."
+    },
+    {
+      "id": "tool_response_required",
+      "severity": "warning",
+      "note": "When the model calls a tool, conversation.audio is paused until you return the tool output. Failing to respond stalls the turn."
+    },
+    {
+      "id": "reasoning_effort_latency",
+      "severity": "note",
+      "note": "gpt-realtime-2 adds reasoning. Set reasoning.effort to low for most production voice agents; higher effort adds latency before first audio."
+    }
+  ],
+  "env_keys": [
+    "OPENAI_API_KEY"
+  ],
+  "doc_urls": [
+    "https://platform.openai.com/docs/guides/realtime",
+    "https://platform.openai.com/docs/guides/realtime-sip",
+    "https://platform.openai.com/docs/guides/voice-agents"
+  ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.06,
+    "per_minute_usd": 0.06,
+    "notes": "Audio I/O bundled rate (est. for gpt-realtime-2)"
+  },
+  "context7": {
+    "library_id": "/openai/openai-python",
+    "topics": [
+      "realtime",
+      "audio-buffer",
+      "interruption",
+      "sip"
+    ]
+  },
+  "latency_estimates": {
+    "response_start_ms": 450
+  },
+  "latency_evidence": [
+    {
+      "metric": "response_start_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 450,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "server_vad_speech_started",
+    "description": "OpenAI Realtime emits input_audio_buffer.speech_started on user speech. This signals barge-in. Stop outbound playback, clear the buffer, and send response.cancel to abort in-flight responses.",
+    "code_hint": "On 'input_audio_buffer.speech_started': (1) call response.cancel, (2) flush outbound audio, (3) resume listening. Pipecat/LiveKit handle this automatically."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "API service — nothing to self-host. Co-locate your worker with the serving region; verify data-residency options for regulated deployments. The native SIP transport can carry the PSTN leg itself (removing your bridge) but only when OpenAI is the telephony ingress.",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["unknown"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "unknown",
+      "residency_controls": "unknown",
+      "verified_at": "2026-07-21",
+      "sources": ["https://platform.openai.com/docs/guides/realtime"]
+    },
+    "drain_behavior": "n/a"
+  }
+}

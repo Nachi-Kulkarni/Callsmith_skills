@@ -1,0 +1,76 @@
+{
+  "id": "cartesia",
+  "kind": "tts",
+  "label": "Cartesia (sonic-3.5)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
+    "sources": [
+      "https://docs.cartesia.ai",
+      "https://docs.cartesia.ai/api-reference/tts/websocket"
+    ]
+  },
+  "model": "sonic-3.5",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": ["emit_mulaw_8000"],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Accepts text via the streaming WebSocket with voice + language params."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output format is configurable: pcm_s16le, pcm_f32le, pcm_mulaw, pcm_alaw at 8000/16000/22050/24000/44100/48000 Hz. Default 24kHz PCM. Can emit μ-law 8kHz directly for telephony."
+  },
+  "lifecycle": [
+    "session_start", "audio_chunk", "session_end"
+  ],
+  "potholes": [
+    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Cartesia defaults to 24 kHz PCM. For telephony, request output_format={encoding: pcm_mulaw, sample_rate: 8000} to skip your own encode stage, or resample + encode yourself.", "mitigated_by": ["audio_normalization", "emit_mulaw_8000"] },
+    { "id": "websocket_chunking", "severity": "warning", "note": "Audio arrives as variable-size PCM chunks over WebSocket. Buffer and chunk-align before resampling for the telephony leg." },
+    { "id": "context_lifecycle", "severity": "warning", "note": "Use one context_id per utterance, continue=true for partials, and continue=false to finish. Preserve spaces at chunk boundaries, do not reuse expired contexts, and use flush_id when transcript-to-audio boundaries must be observable." }
+  ],
+  "env_keys": ["CARTESIA_API_KEY"],
+  "doc_urls": ["https://docs.cartesia.ai", "https://docs.cartesia.ai/api-reference/tts/websocket"],
+  "latency_estimates": { "ttfa_ms": 150 },
+  "latency_evidence": [
+    {
+      "metric": "ttfa_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 150,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "stop_playback",
+    "description": "On interruption, close the Cartesia streaming WebSocket session. Discard buffered PCM chunks.",
+    "code_hint": "Close the WebSocket and clear output buffer. Frameworks handle this automatically via InterruptionFrame."
+  },
+  "cost_estimates": {
+    "billing": "per_1k_chars",
+    "rate_usd": 0.040,
+    "per_minute_usd": 0.032,
+    "notes": "~$0.040/1k chars derived from plan pricing (Sonic-3.5, verified Jun 2026)"
+  },
+  "context7": { "library_id": "/websites/cartesia_ai", "topics": ["streaming-tts", "sonic-3.5", "output-format"] },
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed streaming API; no model self-host path is declared in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["unknown"], "recording_regions": ["not_applicable"], "transcript_regions": ["not_applicable"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://docs.cartesia.ai/use-the-api/tts-websocket/contexts", "https://docs.cartesia.ai/use-the-api/tts-websocket/context-flushing-and-flush-i-ds"] },
+    "drain_behavior": "n/a"
+  }
+}

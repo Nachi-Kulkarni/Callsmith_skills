@@ -1,0 +1,76 @@
+{
+  "id": "plivo",
+  "kind": "telephony",
+  "label": "Plivo",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
+    "sources": [
+      "https://www.plivo.com/docs/voice/stream",
+      "https://www.plivo.com/docs/voice/use-cases/transfer-to-human-agent"
+    ]
+  },
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the media stream WebSocket."
+  },
+  "lifecycle": [
+    "call_answered", "media_stream_start", "media_frame", "dtmf", "media_stream_end", "call_hangup"
+  ],
+  "potholes": [
+    { "id": "8khz_mulaw_narrowband", "severity": "blocker", "note": "Telephony audio is narrowband μ-law 8 kHz. A decode and resample stage is mandatory before any model.", "mitigated_by": ["audio_normalization"] },
+    { "id": "xml_element_stream", "severity": "warning", "note": "Plivo uses XML elements to start streaming; the WebSocket connects only after the XML element is processed. Handle the async bridge." },
+    { "id": "human_transfer", "severity": "warning", "note": "Use Dial to bridge the caller to a DID or authenticated SIP endpoint. Stop the AI media path only after the destination answers; handle Dial completion/failure so the caller is not stranded." }
+  ],
+  "env_keys": ["PLIVO_AUTH_ID", "PLIVO_AUTH_TOKEN"],
+  "doc_urls": ["https://www.plivo.com/docs/voice/stream"],
+  "latency_estimates": { "media_rtt_ms": 80 },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 80,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "stop_media_frames",
+    "description": "Stop sending audio frames to the media stream WebSocket. Plivo does not support explicit clear/flush commands.",
+    "code_hint": "On interruption: stop writing to the WebSocket and flush your local outbound buffer."
+  },
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.008,
+    "per_minute_usd": 0.008,
+    "notes": "US domestic voice leg"
+  },
+  "context7": { "library_id": null, "topics": ["media-stream", "voice-xml"] },
+  "deployment": {
+    "hosted_option": { "name": "plivo-cloud", "managed_runtime": false, "region_pinning": false, "note": "Carrier/media service only; region and residency behavior remain unverified in this pack." },
+    "self_host_notes": "Your media worker is self-hosted. Co-location advice remains unknown until the media-edge path is measured.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["unknown"], "worker_regions": ["not_applicable"], "model_regions": ["not_applicable"], "recording_regions": ["unknown"], "transcript_regions": ["not_applicable"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://www.plivo.com/docs/voice/stream"] },
+    "drain_behavior": "n/a"
+  }
+}

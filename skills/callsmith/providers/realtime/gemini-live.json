@@ -1,0 +1,139 @@
+{
+  "id": "gemini-live",
+  "kind": "realtime",
+  "label": "Gemini Live (gemini-3.1-flash-live-preview)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://ai.google.dev/gemini-api/docs/live",
+      "https://ai.google.dev/api/multimodal-live"
+    ]
+  },
+  "model": "gemini-3.1-flash-live-preview",
+  "transport": "websocket",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Input audio must be sent as audio/pcm;rate=16000 (16 kHz 16-bit little-endian PCM mono). 8 kHz or μ-law is rejected or produces garbage."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output audio is 24 kHz 16-bit PCM mono (inline_data, audio/L16). Must be resampled to the telephony rate and encoded before sending back to a PSTN caller."
+  },
+  "lifecycle": [
+    "session_setup",
+    "send_realtime_input",
+    "server_content.model_turn",
+    "interruption_detected",
+    "turn_complete",
+    "session_closed"
+  ],
+  "potholes": [
+    {
+      "id": "input_rate_16k_only",
+      "severity": "blocker",
+      "note": "Gemini Live ingests 16 kHz PCM (audio/pcm;rate=16000). Feeding it 8 kHz μ-law telephony audio without decoding + resampling produces silent or corrupted turns.",
+      "mitigated_by": ["audio_normalization"]
+    },
+    {
+      "id": "output_rate_24k",
+      "severity": "blocker",
+      "note": "Output is 24 kHz PCM. Sending raw 24 kHz frames to an 8 kHz μ-law telephony leg without resample + encode corrupts playback.",
+      "mitigated_by": ["audio_normalization"]
+    },
+    {
+      "id": "vad_auto_response",
+      "severity": "warning",
+      "note": "send_realtime_input triggers model response automatically via server-side VAD; you do not manually commit turns in the optimized path. Coordinate turn logic with this."
+    },
+    {
+      "id": "interruption_requires_flush",
+      "severity": "blocker",
+      "note": "On barge-in, Gemini emits interruption_detected; stop playing queued output audio and flush the outbound buffer, else the caller hears overlapping speech."
+    },
+    {
+      "id": "asymmetric_sample_rates",
+      "severity": "warning",
+      "note": "Input and output sample rates differ (16k in, 24k out). Build two independent resamplers; do not reuse one for both directions.",
+      "mitigated_by": ["audio_normalization"]
+    },
+    {
+      "id": "session_duration_limit",
+      "severity": "blocker",
+      "note": "Live API sessions are time-limited (minutes-scale with audio; verify the current limit in docs before shipping). For calls longer than the limit use session resumption (session_handle) and context-window compression; a naive reconnect loses conversation state mid-call."
+    }
+  ],
+  "env_keys": [
+    "GEMINI_API_KEY"
+  ],
+  "doc_urls": [
+    "https://ai.google.dev/gemini-api/docs/live",
+    "https://ai.google.dev/api/multimodal-live"
+  ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.025,
+    "per_minute_usd": 0.025,
+    "notes": "Audio I/O bundled rate (est. for Gemini Live)"
+  },
+  "context7": {
+    "library_id": "/googleapis/python-genai",
+    "topics": [
+      "live-audio",
+      "session-lifecycle",
+      "interruption"
+    ]
+  },
+  "latency_estimates": {
+    "response_start_ms": 500
+  },
+  "latency_evidence": [
+    {
+      "metric": "response_start_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 500,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "server_vad_interrupt",
+    "description": "Gemini Live has built-in server-side VAD. On user interrupt, the server emits interruption_detected. Stop playing queued output and flush the outbound buffer immediately.",
+    "code_hint": "On 'interruption_detected' event: (1) stop audio playback, (2) flush outbound queue, (3) resume listening."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [],
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "API service — nothing to self-host. Co-locate your worker with the model serving region and verify data-residency options for regulated deployments; long calls need session resumption design (see session_duration_limit pothole).",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["unknown"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "unknown",
+      "residency_controls": "unknown",
+      "verified_at": "2026-07-21",
+      "sources": ["https://ai.google.dev/gemini-api/docs/live"]
+    },
+    "drain_behavior": "n/a"
+  }
+}

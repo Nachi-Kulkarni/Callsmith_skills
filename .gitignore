@@ -24,7 +24,6 @@ nohup.out
 evals/csb/runs/
 evals/csb/*.pid
 evals/measure/runs/
-evals/load/runs/
 benchmark/evals/
 /todos/
 

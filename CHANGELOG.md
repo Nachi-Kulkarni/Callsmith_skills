@@ -4,8 +4,24 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [1.8.0-agent-compiler] — 2026-07-31
+
+- Added a lean, self-contained `skills/callsmith/` distribution for one-command installation through
+  the universal skills CLI. It contains the skill, provider packs, references, and example without
+  shipping the repository's benchmarks or tests.
+- Added a fail-closed operational evidence publisher to the existing measurement runner. It
+  recomputes receipts from raw traces, validates hashes and provenance, sanitizes the public timing
+  data, and emits methodology, redaction, and checksum receipts. Raw runs remain private and ignored.
+- Rewrote the README around a beginner-readable first win, one installation command, honest support
+  levels, an architecture flow, uninstall and immutable rollback instructions, and the current
+  diagnostic's limited scope.
+- Removed the redundant mutable shell installer and the standalone synthetic capacity harness.
+  Real deployments retain the target-neutral `/callsmith deploy` evidence contract.
+- Added release integrity coverage for the self-contained skill and retained the packed-artifact
+  install journey (`doctor`, example physics check, and contract validation).
+
 - Added `/callsmith prompts` for focused production runtime-prompt writing and review.
-- Added the frozen licensed measurement corpus, live-adapter preflight/receipt runner, and CSB-Load SIGTERM drain gate — both runners machine-proven in CI (zero-spend trace replay; reference worker passes, dropped-call worker fails) — plus three locked pilot stack configs (`evals/measure/stacks/`) and the adapter contract. Live pack numbers still await provider credentials and spend approval.
+- Added the frozen licensed measurement corpus, live-adapter preflight/receipt runner, three locked pilot stack configs (`evals/measure/stacks/`), and the adapter contract. The standalone synthetic load harness was removed; real targets use the `/callsmith deploy` evidence contract. Live pack numbers still await provider credentials and spend approval.
 - Replaced flat deployment regions with structured media/worker/model/recording/transcript matrices and added advisory vs regulated fail-closed region checks. Verified region data landed only where primary docs support it (Twilio media edges, Telnyx anchor sites, Pipecat Cloud regions incl. Mumbai, ElevenLabs isolated EU/India environments); unverifiable packs stay `unknown` rather than claim coverage.
 - Extended contract receipts with optional deployment target, region, and drain ownership; refreshed pack transfer, stream-lifecycle, prompt-cache, and TTS segmentation guidance from official sources.
 - Added the weekly scheduled CI evidence gate — the repo pages its owner when pack evidence expires or drifts — and `MAINTENANCE.md`, the wake-up contract for the feature-complete posture.

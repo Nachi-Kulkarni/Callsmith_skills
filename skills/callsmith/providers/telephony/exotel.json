@@ -1,0 +1,146 @@
+{
+  "id": "exotel",
+  "kind": "telephony",
+  "label": "Exotel",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://developer.exotel.com/api/",
+      "https://support.exotel.com/support/solutions/folders/82318"
+    ]
+  },
+  "transport": "websocket",
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio sent back to the PSTN caller must be G.711 μ-law 8 kHz. This is what the bridge must hand Exotel."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Inbound caller audio arrives as G.711 μ-law 8 kHz mono over the media-stream WebSocket. Narrowband."
+  },
+  "lifecycle": [
+    "call_initiated",
+    "call_answered",
+    "media_stream_connected",
+    "media_frame",
+    "dtmf",
+    "media_stream_closed",
+    "call_hangup"
+  ],
+  "potholes": [
+    {
+      "id": "8khz_mulaw_narrowband",
+      "severity": "blocker",
+      "note": "Telephony audio is narrowband μ-law 8 kHz. No realtime model or STT consumes this directly. A decode (μ-law→PCM) and resample (8k→16k/24k) stage is mandatory before any model.",
+      "mitigated_by": ["audio_normalization"]
+    },
+    {
+      "id": "websocket_close_without_hangup",
+      "severity": "warning",
+      "note": "The media-stream WebSocket can close before the hangup webhook fires. Treat WebSocket close AND explicit hangup as terminal; do not wait for one to confirm the other."
+    },
+    {
+      "id": "partial_frame_chunking",
+      "severity": "warning",
+      "note": "WebSocket frames may split or coalesce audio arbitrarily. Reassemble by byte budget, not by message boundary, before resampling.",
+      "mitigated_by": ["audio_normalization"]
+    },
+    {
+      "id": "dtmf_passthrough",
+      "severity": "note",
+      "note": "DTMF arrives as events, not in-band audio. Route it as a discrete signal; do not try to detect it from the audio stream."
+    },
+    {
+      "id": "agent_self_interruption_echo",
+      "severity": "blocker",
+      "note": "No echo canceller exists in your bridge and Exotel offers no mark/clear — buffered outbound audio plays out, and carrier/speakerphone echo of the agent's own TTS into the inbound leg false-triggers VAD: the bot interrupts itself in a loop. Gate VAD while the agent speaks, or use orchestration-level AEC when available."
+    },
+    {
+      "id": "transfer_via_connect_flow",
+      "severity": "note",
+      "note": "human_handoff=transfer on Exotel uses a Connect/transfer flow: a second leg to the human number. Blind transfer drops the agent leg; warm transfer needs a bridge/conference flow. Record the failure fallback (callback) in the contract — a no-answer transfer with no fallback strands the caller."
+    }
+  ],
+  "env_keys": [
+    "EXOTEL_API_KEY",
+    "EXOTEL_ACCOUNT_SID",
+    "EXOTEL_SUBDOMAIN"
+  ],
+  "doc_urls": [
+    "https://developer.exotel.com/api/",
+    "https://support.exotel.com/support/solutions/folders/82318"
+  ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.010,
+    "per_minute_usd": 0.010,
+    "notes": "India domestic (~₹0.80/min)"
+  },
+  "context7": {
+    "library_id": null,
+    "topics": [
+      "media-stream",
+      "call-flow",
+      "webhooks"
+    ]
+  },
+  "latency_estimates": {
+    "media_rtt_ms": 80
+  },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 80,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "stop_media_frames",
+    "description": "Stop sending audio frames to the media stream WebSocket. Buffered audio at the provider may play out — unavoidable unless you close and re-open the stream.",
+    "code_hint": "On interruption: stop writing to the WebSocket. Exotel does not support mark/clear like Twilio."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [],
+  "deployment": {
+    "hosted_option": {
+      "name": "exotel-cloud",
+      "managed_runtime": false,
+      "region_pinning": true,
+      "pricing_url": "https://exotel.com/pricing/",
+      "note": "Exotel runs the India carrier/media edge, not your agent. India-local media POPs make it the residency-friendly default for Indian regulated deployments — co-locate your worker in India."
+    },
+    "self_host_notes": "Your bridge/worker hosts wherever the orchestration pack says; keep it in India near the Exotel media POP or pay 150-300 ms of avoidable RTT on every audio frame.",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["in"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["not_applicable"],
+      "routing": "pinned",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-21",
+      "sources": ["https://developer.exotel.com/api/"]
+    },
+    "drain_behavior": "n/a"
+  }
+}

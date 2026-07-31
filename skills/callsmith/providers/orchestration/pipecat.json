@@ -1,0 +1,131 @@
+{
+  "id": "pipecat",
+  "kind": "orchestration",
+  "label": "Pipecat (frame-based pipeline)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://docs.pipecat.ai/",
+      "https://docs.pipecat.ai/server/transports/"
+    ]
+  },
+  "transport": "websocket",
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Pipecat pipelines move 16 kHz PCM mono frames through services by default. Audio is normalized at the transport ingress."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "TTS/realtime outputs are resampled to the pipeline rate before reaching the transport."
+  },
+  "lifecycle": [
+    "frame_in",
+    "transcript",
+    "ttS_start",
+    "tts_end",
+    "interruption",
+    "session_end"
+  ],
+  "potholes": [
+    {
+      "id": "transport_decodes_mulaw",
+      "severity": "note",
+      "note": "Pipecat transports (e.g. FastAPI websocket, Exotel, Twilio) decode μ-law to PCM at the edge. Verify the chosen transport handles your telephony codec; raw websocket transports may need a custom decoder."
+    },
+    {
+      "id": "endpointing_service",
+      "severity": "warning",
+      "note": "Turn endpointing uses a VAD/endpointing service separate from STT. Mis-tuning it causes false barge-in or long pauses."
+    },
+    {
+      "id": "drain_and_bot_per_call",
+      "severity": "warning",
+      "note": "Self-hosted Pipecat typically runs a bot process per call. Killing the runner mid-call drops the caller: implement SIGTERM drain (stop spawning, finish calls, exit) and autoscale on concurrent calls, not CPU."
+    },
+    {
+      "id": "pstn_echo_no_aec",
+      "severity": "warning",
+      "note": "WebSocket telephony transports (Twilio/Exotel serializers) run no echo cancellation. Carrier or speakerphone echo of the bot's own TTS can false-trigger barge-in; enable an audio filter/AEC or gate VAD while the bot speaks."
+    }
+  ],
+  "env_keys": [],
+  "doc_urls": [
+    "https://docs.pipecat.ai/",
+    "https://docs.pipecat.ai/server/transports/"
+  ],
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Open source, self-hosted"
+  },
+  "context7": {
+    "library_id": "/pipecat-ai/pipecat",
+    "topics": [
+      "pipeline",
+      "transports",
+      "interruption"
+    ]
+  },
+  "latency_estimates": {
+    "pipeline_overhead_ms": 30
+  },
+  "latency_evidence": [
+    {
+      "metric": "pipeline_overhead_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 30,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "interruption_frame",
+    "description": "Pipecat 1.0+ uses user_turn_strategies in LLMUserAggregatorParams. When the VAD detects user speech, an InterruptionFrame propagates through the pipeline, discarding pending output frames. The transport serializer handles provider-specific clearing.",
+    "code_hint": "LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()) — interruption is automatic. TwilioFrameSerializer sends clear automatically."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [
+    "audio_normalization"
+  ],
+  "deployment": {
+    "hosted_option": {
+      "name": "pipecat-cloud",
+      "managed_runtime": true,
+      "region_pinning": true,
+      "pricing_url": "https://www.daily.co/pricing/pipecat-cloud/",
+      "note": "Pipecat Cloud (by Daily) runs hosted bot runners with managed scaling. Pilot-friendly; verify current region coverage and per-minute pricing before committing a regulated deployment."
+    },
+    "self_host_notes": "Open source; self-host as a bot runner on VMs or Fly machines, typically one bot process per call. You own process supervision, drain on SIGTERM, warm pools for VAD/provider connections, and frame-level tracing.",
+    "concurrency_model": "process_per_call",
+    "regions": {
+      "media_edges": ["not_applicable"],
+      "worker_regions": ["us", "eu", "in"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["unknown"],
+      "routing": "configurable",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-24",
+      "sources": ["https://docs.pipecat.ai/deployment/pipecat-cloud/introduction", "https://docs.pipecat.ai/api-reference/cli/cloud/regions"]
+    },
+    "drain_behavior": "platform_managed"
+  }
+}

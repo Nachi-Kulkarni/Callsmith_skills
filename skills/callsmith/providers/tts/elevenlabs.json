@@ -1,0 +1,123 @@
+{
+  "id": "elevenlabs",
+  "kind": "tts",
+  "label": "ElevenLabs (Flash v2.5)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
+    "sources": [
+      "https://elevenlabs.io/docs/overview/models",
+      "https://elevenlabs.io/docs/api-reference/reducing-latency",
+      "https://elevenlabs.io/docs/api-reference/text-to-speech/v-1-text-to-speech-voice-id-stream-input"
+    ]
+  },
+  "model": "eleven_flash_v2_5",
+  "transport": "websocket",
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Consumes text chunks; no audio input."
+  },
+  "egress": {
+    "format": "selectable",
+    "sample_rate": 0,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output format is chosen via output_format = codec_sampleRate_bitrate. Options include mp3_22050_32, mp3_44100_128, pcm_16000, pcm_44100, and ulaw_8000_8 (μ-law 8 kHz, native for Twilio/telephony)."
+  },
+  "native_capabilities": [
+    "emit_mulaw_8000"
+  ],
+  "lifecycle": [
+    "open",
+    "text_chunk",
+    "audio_chunk",
+    "flush",
+    "close"
+  ],
+  "potholes": [
+    {
+      "id": "ulaw_direct_for_telephony",
+      "severity": "note",
+      "note": "ElevenLabs can emit ulaw_8000_8 directly. For a Twilio/Exotel μ-law leg, request this format to SKIP the resample + μ-law encode stage entirely. Falls back to PCM/MP3 + your own encode if unavailable."
+    },
+    {
+      "id": "mp3_decode_required",
+      "severity": "warning",
+      "note": "If you select an MP3 format, streaming MP3 needs a stateful decoder (not per-chunk) before resampling. Prefer pcm_16000 or ulaw_8000_8 to avoid decoding entirely."
+    },
+    {
+      "id": "first_audio_latency",
+      "severity": "warning",
+      "note": "First-byte latency dominates perceived responsiveness. Use Flash v2.5 for realtime TTS, keep a persistent WebSocket, stream LLM text promptly, and consider auto_mode plus deployment-region proximity. Avoid legacy latency-tuning query parameters."
+    },
+    {
+      "id": "flash_text_normalization",
+      "severity": "warning",
+      "note": "Flash v2.5 disables text normalization by default to preserve latency, so normalize phone numbers, dates, and currencies before TTS (or use the Enterprise normalization option)."
+    },
+    {
+      "id": "stream_lifecycle",
+      "severity": "warning",
+      "note": "Keep one WebSocket for streaming LLM text. auto_mode avoids manual chunk schedules; without it, insufficient text stalls generation. Voice choice, speaker boost, style, and higher-fidelity formats can add latency."
+    }
+  ],
+  "env_keys": [
+    "ELEVENLABS_API_KEY"
+  ],
+  "doc_urls": [
+    "https://elevenlabs.io/docs/overview/models",
+    "https://elevenlabs.io/docs/api-reference/reducing-latency",
+    "https://elevenlabs.io/docs/api-reference/text-to-speech/v-1-text-to-speech-voice-id-stream-input"
+  ],
+  "cost_estimates": {
+    "billing": "per_1k_chars",
+    "rate_usd": 0.30,
+    "per_minute_usd": 0.24,
+    "notes": "Architecture-planning allowance only; verify current Flash v2.5 account pricing before a production cost SLO"
+  },
+  "context7": {
+    "library_id": "/elevenlabs/elevenlabs-python",
+    "topics": [
+      "streaming-tts",
+      "latency",
+      "output-format"
+    ]
+  },
+  "latency_estimates": {
+    "ttfa_ms": 250
+  },
+  "latency_evidence": [
+    {
+      "metric": "ttfa_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 250,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "stop_playback",
+    "description": "On interruption, stop consuming the streaming TTS WebSocket. Discard any buffered audio chunks. Cancel the text input stream.",
+    "code_hint": "Close the ElevenLabs streaming WebSocket and clear your TTS output buffer. Pipecat handles this via InterruptionFrame; LiveKit via session cancellation."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed streaming API; no model self-host path is declared in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["us", "eu", "in"], "recording_regions": ["not_applicable"], "transcript_regions": ["not_applicable"], "routing": "configurable", "residency_controls": "documented", "verified_at": "2026-07-24", "sources": ["https://elevenlabs.io/docs/api-reference/reducing-latency", "https://elevenlabs.io/docs/api-reference/voices/settings/get", "https://elevenlabs.io/docs/overview/administration/data-residency"] },
+    "drain_behavior": "n/a"
+  }
+}

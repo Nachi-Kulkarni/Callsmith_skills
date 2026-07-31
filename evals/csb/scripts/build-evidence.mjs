@@ -693,7 +693,7 @@ function writeSanitized(source, target, roots, sourceRoot) {
   }
 }
 
-function writeManifest(root) {
+export function writeManifest(root) {
   const files = walk(root)
     .filter((file) => basename(file) !== 'MANIFEST.sha256')
     .sort();
@@ -754,7 +754,7 @@ function assertNoSymlinkedParents(root, file) {
   }
 }
 
-function assertNoSecrets(root) {
+export function assertNoSecrets(root) {
   const leaks = [
     /\/(?:Users|home)\/[^/\s"']+/,
     /\bBearer\s+(?!\[REDACTED\])\S+/i,

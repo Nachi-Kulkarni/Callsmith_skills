@@ -1,0 +1,75 @@
+{
+  "id": "sarvam",
+  "kind": "tts",
+  "label": "Sarvam",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
+    "sources": [
+      "https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"
+    ]
+  },
+  "model": "bulbul:v3",
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Accepts text (with language/speaker params) via WebSocket streaming or REST API."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Output codec configurable: wav, mp3, aac. Sample rate configurable 8000-48000 Hz (default 24000). Optimized for Indian languages."
+  },
+  "lifecycle": [
+    "configure", "convert", "audio_chunk", "flush", "session_closed"
+  ],
+  "potholes": [
+    { "id": "streaming_latency", "severity": "warning", "note": "Sarvam TTS is optimized for Indian languages but may have higher latency than Cartesia/ElevenLabs for English. Use the WebSocket streaming API (not REST) for real-time." },
+    { "id": "sample_rate_mismatch", "severity": "blocker", "note": "Sarvam defaults to 24000 Hz output. Telephony leg needs 8000 Hz μ-law — set speech_sample_rate=8000 or resample + encode yourself.", "mitigated_by": ["audio_normalization"] },
+    { "id": "indian_telephony", "severity": "warning", "note": "Bulbul v3 supports code-mixed Indian speech and direct mulaw/alaw output. Pin language, speaker, pronunciation dictionary, and numeral preprocessing; measure each language because codec support does not prove pronunciation quality." }
+  ],
+  "env_keys": ["SARVAM_API_KEY"],
+  "doc_urls": ["https://docs.sarvam.ai/api-reference-docs/getting-started/quickstart"],
+  "latency_estimates": { "ttfa_ms": 200 },
+  "latency_evidence": [
+    {
+      "metric": "ttfa_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 200,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "stop_playback",
+    "description": "On interruption, stop the TTS streaming session. Discard buffered audio.",
+    "code_hint": "Close the WebSocket and clear output buffer."
+  },
+  "cost_estimates": {
+    "billing": "per_1k_chars",
+    "rate_usd": 0.006,
+    "per_minute_usd": 0.005,
+    "notes": "₹0.50/1k chars at ~800 chars/min (~$0.006/1k)"
+  },
+  "context7": { "library_id": "/llmstxt/sarvam_ai_llms_txt", "topics": ["tts", "bulbul", "indian-languages"] },
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed API; region and data-handling controls remain unverified in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["unknown"], "recording_regions": ["not_applicable"], "transcript_regions": ["not_applicable"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://docs.sarvam.ai/api/getting-started/building-for-india", "https://docs.sarvam.ai/api/api-guides-tutorials/text-to-speech/streaming-api/web-socket"] },
+    "drain_behavior": "n/a"
+  }
+}

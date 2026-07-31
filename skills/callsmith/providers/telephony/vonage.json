@@ -1,0 +1,77 @@
+{
+  "id": "vonage",
+  "kind": "telephony",
+  "label": "Vonage",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
+    "sources": [
+      "https://developer.vonage.com/en/voice/voice-api/concepts/websockets",
+      "https://developer.vonage.com/en/voice/voice-api/ncco-reference"
+    ]
+  },
+  "transport": "websocket",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Audio sent to Vonage for playback must be raw L16 PCM. Rate is set via NCCO content-type (audio/l16;rate=8000|16000|24000). 16 kHz is recommended for speech recognition."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Inbound caller audio arrives as raw L16 PCM (16-bit signed LE). Rate matches the NCCO content-type. Packets are ~20ms slices."
+  },
+  "lifecycle": [
+    "call_answered", "websocket_connected", "binary_audio_in", "binary_audio_out", "dtmf", "websocket_cleared", "websocket_disconnected", "call_hangup"
+  ],
+  "potholes": [
+    { "id": "pcm_not_mulaw", "severity": "warning", "note": "Vonage streams raw L16 PCM, not μ-law. This is closer to model-native format — usually only a resample is needed, not a full μ-law decode/encode bridge." },
+    { "id": "ncco_websocket", "severity": "warning", "note": "The media stream connects via an NCCO connect action with a WebSocket endpoint; ensure the answer URL returns the correct NCCO with content-type before streaming." },
+    { "id": "buffer_clear", "severity": "warning", "note": "Vonage buffers outbound audio (3072 packets ≈ 60s). Send {\"action\":\"clear\"} to flush for barge-in." },
+    { "id": "human_transfer", "severity": "warning", "note": "Use NCCO connect for a new human endpoint or transfer to move legs between conversations. Transfer is terminal for the source conversation; consume transfer and destination events before closing the bot WebSocket." }
+  ],
+  "env_keys": ["VONAGE_API_KEY", "VONAGE_API_SECRET", "VONAGE_APPLICATION_ID"],
+  "doc_urls": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"],
+  "latency_estimates": { "media_rtt_ms": 70 },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 70,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "clear_action",
+    "description": "Send {\"action\":\"clear\"} JSON message to the WebSocket to flush all buffered outbound audio. Vonage supports this natively.",
+    "code_hint": "ws.send(json.dumps({\"action\":\"clear\"})) flushes the outbound buffer immediately on interruption."
+  },
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.009,
+    "per_minute_usd": 0.009,
+    "notes": "US domestic voice leg"
+  },
+  "context7": { "library_id": "/websites/developer_vonage_en_api", "topics": ["voice-api", "websockets", "ncco"] },
+  "deployment": {
+    "hosted_option": { "name": "vonage-cloud", "managed_runtime": false, "region_pinning": false, "note": "Carrier/media service only; region and residency behavior remain unverified in this pack." },
+    "self_host_notes": "Your media worker is self-hosted. Co-location advice remains unknown until the media-edge path is measured.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["unknown"], "worker_regions": ["not_applicable"], "model_regions": ["not_applicable"], "recording_regions": ["unknown"], "transcript_regions": ["not_applicable"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://developer.vonage.com/en/voice/voice-api/concepts/websockets"] },
+    "drain_behavior": "n/a"
+  }
+}

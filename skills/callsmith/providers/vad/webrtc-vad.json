@@ -1,0 +1,88 @@
+{
+  "id": "webrtc-vad",
+  "kind": "vad",
+  "label": "WebRTC VAD",
+  "verification": {
+    "grade": "official_repository",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://github.com/wiseman/py-webrtcvad"
+    ]
+  },
+  "transport": "inline",
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Lightweight frame-based VAD using the WebRTC voice activity detector. Fastest but least accurate."
+  },
+  "egress": {
+    "format": "pcm",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "note": "Passes PCM through unchanged."
+  },
+  "latency_estimates": {
+    "processing_ms": 10
+  },
+  "latency_evidence": [
+    {
+      "metric": "processing_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 10,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "frame_energy",
+    "description": "WebRTC VAD classifies each audio frame as speech or non-speech using GMM (Gaussian Mixture Model). On consecutive speech frames during agent output, triggers interruption.",
+    "code_hint": "Install py-webrtcvad. Configure aggressiveness 0-3 (3 = most aggressive). Pipecat: WebRTCVADAnalyzer. LiveKit: use a custom VAD adapter."
+  },
+  "lifecycle": [
+    "frame_speech",
+    "frame_silence",
+    "speech_segment"
+  ],
+  "potholes": [
+    {
+      "id": "low_accuracy",
+      "severity": "warning",
+      "note": "WebRTC VAD has lower accuracy than Silero, especially in noisy environments. May cause false interruptions or miss quiet speech."
+    },
+    {
+      "id": "no_model_download",
+      "severity": "note",
+      "note": "Pure C library with no model to download. Lowest cold-start latency — ideal for serverless deployments."
+    }
+  ],
+  "env_keys": [],
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Open source, runs in-process"
+  },
+  "doc_urls": [
+    "https://github.com/wiseman/py-webrtcvad"
+  ],
+  "context7": null,
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Runs in-process in the worker; state must be isolated per call even when the binary/model is shared.",
+    "concurrency_model": "inline",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["any"], "model_regions": ["not_applicable"], "recording_regions": ["not_applicable"], "transcript_regions": ["not_applicable"], "routing": "pinned", "residency_controls": "documented", "verified_at": "2026-07-21", "sources": ["https://github.com/wiseman/py-webrtcvad"] },
+    "drain_behavior": "n/a"
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "id": "openai",
+  "kind": "llm",
+  "label": "OpenAI (GPT-5.5)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-21",
+    "expires_at": "2026-10-19",
+    "sources": [
+      "https://platform.openai.com/docs/api-reference/chat/streaming",
+      "https://platform.openai.com/docs/guides/function-calling",
+      "https://platform.openai.com/docs/models",
+      "https://platform.openai.com/docs/pricing"
+    ]
+  },
+  "transport": "http",
+  "model": "gpt-5.5",
+  "streaming": true,
+  "tool_calling": true,
+  "context_window": 1000000,
+  "directions": ["inbound", "outbound"],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Receives transcribed text from STT. Streaming chat completions API."
+  },
+  "egress": {
+    "format": "text",
+    "sample_rate": 0,
+    "channels": 0,
+    "note": "Streams text tokens to TTS. Use stream=True for low-latency first-token."
+  },
+  "latency_estimates": {
+    "ttft_ms": 400
+  },
+  "latency_evidence": [
+    {
+      "metric": "ttft_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 400,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "stream_cancel",
+    "description": "On interruption, cancel the in-flight streaming completion. Discard buffered tokens that haven't reached TTS yet.",
+    "code_hint": "Pipecat: LLMContextAggregator handles this automatically via InterruptionFrame. LiveKit: session handles cancellation. Custom: call response.close() on the stream."
+  },
+  "lifecycle": [
+    "llm_start",
+    "token_streaming",
+    "tool_call",
+    "llm_end"
+  ],
+  "potholes": [
+    {
+      "id": "context_window_overflow",
+      "severity": "warning",
+      "note": "GPT-5.5 has a 1M-token context window in this pack. Long calls should still use sliding-window context management plus optional summarization for predictable latency and memory."
+    },
+    {
+      "id": "tool_call_latency",
+      "severity": "warning",
+      "note": "Tool calls pause audio output until the tool returns. Set a timeout (e.g. 5s) and respond with 'let me check that' if the tool is slow."
+    },
+    {
+      "id": "prompt_prefix_and_tts_segmentation",
+      "severity": "note",
+      "note": "Keep stable instructions and tools at the prompt prefix and monitor cached_tokens. Stream complete sentence or clause boundaries to TTS; token-by-token synthesis hurts prosody while waiting for the full response hurts turn gap."
+    }
+  ],
+  "env_keys": [
+    "OPENAI_API_KEY"
+  ],
+  "doc_urls": [
+    "https://platform.openai.com/docs/api-reference/chat/streaming",
+    "https://platform.openai.com/docs/guides/function-calling"
+  ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.002,
+    "per_minute_usd": 0.002,
+    "notes": "Architecture-planning allowance derived from an assumed 250 tokens/min; verify the pinned model and current account pricing before use."
+  },
+  "context7": {
+    "library_id": "/openai/openai-python",
+    "topics": ["chat-completions", "streaming", "function-calling"]
+  },
+  "deployment": {
+    "hosted_option": null,
+    "self_host_notes": "Managed API; no model self-host path is declared in this pack.",
+    "concurrency_model": "managed",
+    "regions": { "media_edges": ["not_applicable"], "worker_regions": ["not_applicable"], "model_regions": ["unknown"], "recording_regions": ["not_applicable"], "transcript_regions": ["unknown"], "routing": "unknown", "residency_controls": "unknown", "verified_at": "2026-07-21", "sources": ["https://platform.openai.com/docs/api-reference/chat/streaming", "https://developers.openai.com/api/docs/guides/prompt-caching"] },
+    "drain_behavior": "n/a"
+  }
+}

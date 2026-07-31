@@ -8,6 +8,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
+const filesUnder = (directory) => fs.readdirSync(path.join(ROOT, directory), { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile())
+  .map((entry) => path.join(entry.parentPath.slice(path.join(ROOT, directory).length + 1), entry.name))
+  .sort();
 
 describe('release integrity', () => {
   it('ships every file referenced by the primary skill', () => {
@@ -25,6 +29,29 @@ describe('release integrity', () => {
     ]) {
       assert.ok(fs.existsSync(path.join(ROOT, file)), `${file} missing`);
     }
+  });
+
+  it('ships one lean, self-contained universal skill', () => {
+    assert.equal(read('skills/callsmith/SKILL.md'), read('SKILL.md'));
+    assert.equal(read('skills/callsmith/product_decisions.md'), read('product_decisions.md'));
+    for (const directory of ['providers', 'reference', 'examples']) {
+      const rootFiles = filesUnder(directory);
+      assert.deepEqual(filesUnder(`skills/callsmith/${directory}`), rootFiles);
+      for (const file of rootFiles) {
+        assert.equal(read(`skills/callsmith/${directory}/${file}`), read(`${directory}/${file}`));
+      }
+    }
+    assert.deepEqual(
+      filesUnder('skills/callsmith').filter((file) => file.endsWith('.mjs')),
+      [],
+      'skill-only install must not include benchmark or CLI scripts',
+    );
+  });
+
+  it('keeps the public provider-pack count derived from the shipped library', () => {
+    const count = filesUnder('providers').filter((file) => file.endsWith('.json') && file !== '_schema.json').length;
+    assert.match(read('README.md'), new RegExp(`${count} checked packs`));
+    assert.match(read('SKILL.md'), new RegExp(`Provider packs \\(${count}\\)`));
   });
 
   it('ships a root-native marketplace plugin with Context7', () => {
@@ -93,14 +120,6 @@ describe('release integrity', () => {
     assert.match(read('reference/workflow.md'), /must not duplicate floors, provider facts, contract schemas/i);
   });
 
-  it('manual installer copies the complete skill product', () => {
-    const installer = read('install-callsmith.sh');
-    for (const required of ['reference', 'examples', 'product_decisions.md']) {
-      assert.match(installer, new RegExp(`\\n\\s+${required.replace('.', '\\.')}\\n`));
-    }
-    assert.doesNotMatch(installer, /cp\s+[^\n]*2>\/dev\/null/);
-  });
-
   it('package scripts only advertise shipped product surfaces', () => {
     const pkg = JSON.parse(read('package.json'));
     assert.equal(pkg.scripts['eval:opencode'], undefined);
@@ -119,7 +138,7 @@ describe('release integrity', () => {
   });
 
   it('checkout entrypoints are executable', () => {
-    for (const file of ['bin/callsmith.mjs', 'install-callsmith.sh']) {
+    for (const file of ['bin/callsmith.mjs']) {
       const mode = fs.statSync(path.join(ROOT, file)).mode;
       assert.notEqual(mode & 0o111, 0, `${file} is not executable`);
     }

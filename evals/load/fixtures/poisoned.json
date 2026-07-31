@@ -1,8 +1,0 @@
-{
-  "worker": ["node", "evals/load/fixtures/poisoned-worker.mjs"],
-  "concurrency": 8,
-  "signal_after_turns": 1,
-  "max_p95_degradation_pct": 25,
-  "timeout_ms": 15000,
-  "notes": "CI proof config, run from repo root: the poisoned worker drops all in-flight calls on SIGTERM, so the gate must FAIL it with dropped calls."
-}

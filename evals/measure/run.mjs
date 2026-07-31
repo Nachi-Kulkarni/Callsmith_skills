@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { summarizeTrace } from '../csb/latency/score.mjs';
 import { PROFILE_METRICS, INSTRUMENTATION_PROFILES, ARCH_PROFILE_COMPAT } from '../csb/latency/metrics.mjs';
+import { assertNoSecrets, sanitizeJsonValue, writeManifest } from '../csb/scripts/build-evidence.mjs';
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -16,8 +17,9 @@ function args(argv) {
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (key === '--live') out.live = true;
+    else if (key === '--publish') out.publish = true;
     else if (key === '--approve-spend-usd') out.approveSpendUsd = Number(argv[++i]);
-    else if (['--config', '--trace', '--out'].includes(key)) out[key.slice(2)] = argv[++i];
+    else if (['--config', '--trace', '--source', '--out'].includes(key)) out[key.slice(2)] = argv[++i];
     else if (key === '--help') out.help = true;
     else fail(`unknown argument: ${key}`);
   }
@@ -159,12 +161,215 @@ function assertCoverage(schedule, trace) {
   }
 }
 
+function buildMeasurementReceipt({ config, configSha256, corpusSha256, trace, schedule, provenance, spend, adapterSha256 }) {
+  const profile = config.instrumentation_profile || 'cascaded_full';
+  const summary = summarizeTrace(trace);
+  const vetoed = Object.values(summary.quality).some(Boolean);
+  const stackEvidence = (config.stack_metrics || [])
+    .filter((name) => summary.metrics[name])
+    .filter(() => !vetoed)
+    .map((name) => ({
+      metric: name,
+      source: 'callsmith_measurement',
+      region: config.region,
+      profile,
+      sample_size: summary.samples,
+      percentiles_ms: { p50: summary.metrics[name].p50, p95: summary.metrics[name].p95, p99: summary.metrics[name].p99 },
+      n_applicable: summary.metrics[name].n_applicable,
+      n_observed: summary.metrics[name].n_observed,
+      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${profile}; nearest-rank percentiles; raw trace retained.`,
+    }));
+
+  const packEvidence = Object.fromEntries(Object.entries(config.pack_metrics || {}).map(([pack, spec]) => {
+    const metric = summary.metrics[spec.trace_metric];
+    if (!metric) fail(`unknown trace metric for ${pack}: ${spec.trace_metric} (not observed under profile ${profile})`);
+    if (metric.n_applicable !== metric.n_observed) {
+      fail(`${pack} trace_metric "${spec.trace_metric}" not publishable: observed ${metric.n_observed} of ${metric.n_applicable} applicable turns (cherry-pick guard)`);
+    }
+    return [pack, {
+      metric: spec.metric,
+      source: 'callsmith_measurement',
+      region: config.region,
+      profile,
+      sample_size: metric.n_observed,
+      percentiles_ms: { p50: metric.p50, p95: metric.p95, p99: metric.p99 },
+      methodology: `Callsmith controlled corpus ${corpusSha256}; config ${configSha256}; ${config.cohort} cohort; profile ${profile}; nearest-rank percentiles; raw trace retained.`,
+    }];
+  }).filter(() => !vetoed));
+
+  return {
+    schema_version: trace.schema_version || 1,
+    stack: config.stack,
+    region: config.region,
+    cohort: config.cohort,
+    instrumentation_profile: profile,
+    publishable: !vetoed,
+    corpus_sha256: corpusSha256,
+    config_sha256: configSha256,
+    scheduled_turns: schedule.count,
+    sample_size: summary.samples,
+    p99_status: summary.samples >= 100 ? 'measured' : 'directional',
+    quality: summary.quality,
+    metrics: summary.metrics,
+    stack_evidence: stackEvidence,
+    pack_evidence: vetoed ? {} : packEvidence,
+    provenance: provenance || undefined,
+    spend: spend || undefined,
+    adapter_sha256: adapterSha256 || undefined,
+  };
+}
+
+const TRACE_KEYS = ['schema_version', 'track', 'run_id', 'environment', 'clock', 'turns'];
+const ENV_KEYS = ['architecture', 'instrumentation_profile', 'surface', 'transport', 'region', 'runtime', 'providers', 'network_profile', 'audio_format', 'commit_sha'];
+const CLOCK_KEYS = ['type', 'unit', 'origin_id', 'synchronization_error_ms'];
+const TURN_KEYS = [
+  'turn_id', 'utterance_id', 'speech_end_ms', 'speech_end_source', 'eou_detected_ms',
+  'transcript_final_ms', 'llm_request_ms', 'llm_first_token_ms', 'text_committed_ms',
+  'tts_request_ms', 'tts_first_chunk_ms', 'provider_first_output_ms', 'audio_first_playout_ms',
+  'audio_first_audible_ms', 'playback_completed_ms', 'barge_in_detected_ms',
+  'cancellation_sent_ms', 'cancellation_ack_ms', 'quality',
+];
+const QUALITY_KEYS = ['premature_cutoff', 'false_interruption', 'response_correct', 'audio_underruns'];
+
+function assertKnownKeys(value, allowed, label) {
+  for (const key of Object.keys(value || {})) {
+    if (!allowed.includes(key)) fail(`${label} contains unexpected field "${key}"`);
+  }
+}
+
+function assertPublishableTraceShape(trace) {
+  if (trace.schema_version !== 2) fail('operational publication requires a schema-v2 trace');
+  assertKnownKeys(trace, TRACE_KEYS, 'trace');
+  assertKnownKeys(trace.environment, ENV_KEYS, 'trace.environment');
+  assertKnownKeys(trace.clock, CLOCK_KEYS, 'trace.clock');
+  trace.turns.forEach((turn, index) => {
+    assertKnownKeys(turn, TURN_KEYS, `trace.turns[${index}]`);
+    assertKnownKeys(turn.quality, QUALITY_KEYS, `trace.turns[${index}].quality`);
+  });
+}
+
+function assertRegularFile(file, root, label) {
+  const resolved = path.resolve(file);
+  if (!resolved.startsWith(`${root}${path.sep}`) || !fs.existsSync(resolved)) fail(`${label} is missing`);
+  const stat = fs.lstatSync(resolved);
+  if (stat.isSymbolicLink() || !stat.isFile()) fail(`${label} must be a regular file`);
+}
+
+function publishMeasurement(options) {
+  if (!options.config || !options.source || !options.out) fail('--publish requires --config, --source, and --out');
+  if (options.live || options.trace || options.approveSpendUsd !== undefined) {
+    fail('--publish cannot be combined with live, replay, or spend-execution options');
+  }
+  const sourceRoot = path.resolve(options.source);
+  const outRoot = path.resolve(options.out);
+  if (!fs.existsSync(sourceRoot) || !fs.lstatSync(sourceRoot).isDirectory() || fs.lstatSync(sourceRoot).isSymbolicLink()) {
+    fail('measurement source must be a real directory');
+  }
+  if (fs.existsSync(outRoot)) fail('output directory must not exist');
+  if (outRoot === sourceRoot || outRoot.startsWith(`${sourceRoot}${path.sep}`)) fail('publication output must be outside the raw run directory');
+
+  const allowed = new Set(['raw-trace.json', 'measurement.json', 'provenance.json', 'spend.json']);
+  for (const entry of fs.readdirSync(sourceRoot, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.isSymbolicLink() || !allowed.has(entry.name)) fail(`unknown measurement source artifact: ${entry.name}`);
+  }
+  const traceFile = path.join(sourceRoot, 'raw-trace.json');
+  const measurementFile = path.join(sourceRoot, 'measurement.json');
+  assertRegularFile(traceFile, sourceRoot, 'raw-trace.json');
+  assertRegularFile(measurementFile, sourceRoot, 'measurement.json');
+
+  const configFile = path.resolve(options.config);
+  const config = read(configFile);
+  const trace = read(traceFile);
+  const sourceMeasurement = read(measurementFile);
+  const profile = config.instrumentation_profile || 'cascaded_full';
+  const corpusFile = path.resolve(path.dirname(configFile), config.corpus || 'utterances/manifest.json');
+  const corpus = verifyCorpus(corpusFile);
+  const schedule = resolveSchedule(config, corpus);
+  preflightMetrics(config, profile);
+  assertTraceProfile(trace, profile);
+  assertCoverage(schedule, trace);
+  assertPublishableTraceShape(trace);
+
+  const provenanceFile = path.join(sourceRoot, 'provenance.json');
+  const spendFile = path.join(sourceRoot, 'spend.json');
+  const provenance = fs.existsSync(provenanceFile) ? read(provenanceFile) : null;
+  const spend = fs.existsSync(spendFile) ? read(spendFile) : null;
+  if (provenance) {
+    assertRegularFile(provenanceFile, sourceRoot, 'provenance.json');
+    validateProvenanceStructure(provenance);
+    validateProvenanceConsistency(provenance, config, trace);
+  }
+  if (Boolean(sourceMeasurement.provenance) !== Boolean(provenance)) fail('measurement provenance does not match the retained source');
+  if (Boolean(sourceMeasurement.spend) !== Boolean(spend)) fail('measurement spend does not match the retained source');
+
+  let adapterSha256 = null;
+  if (sourceMeasurement.adapter_sha256) {
+    const adapterPath = config.adapter?.[1] && config.adapter[1].endsWith('.mjs') ? path.resolve(config.adapter[1]) : null;
+    if (!adapterPath || !fs.existsSync(adapterPath)) fail('pinned adapter source is unavailable');
+    adapterSha256 = sha256File(adapterPath);
+  }
+  const recomputed = buildMeasurementReceipt({
+    config,
+    configSha256: sha256File(configFile),
+    corpusSha256: corpus.sha256,
+    trace,
+    schedule,
+    provenance,
+    spend,
+    adapterSha256,
+  });
+  const expected = `${JSON.stringify(recomputed, null, 2)}\n`;
+  if (fs.readFileSync(measurementFile, 'utf8') !== expected) fail('measurement receipt does not match recomputed trace metrics and provenance');
+  if (!recomputed.publishable) fail('quality-vetoed measurements cannot be published');
+
+  const roots = [sourceRoot, path.dirname(sourceRoot)];
+  const publishedConfig = sanitizeJsonValue(config, roots);
+  const publishedTrace = sanitizeJsonValue(trace, roots);
+  // Replay is useful for proving the publication machinery, but it is not provider
+  // evidence. Keep that distinction in the artifact people will actually read.
+  const evidenceScope = provenance ? 'provider_operational' : 'replay_fixture';
+  const publicReceipt = {
+    ...recomputed,
+    evidence_scope: evidenceScope,
+    publishable: recomputed.publishable && Boolean(provenance),
+    stack_evidence: provenance ? recomputed.stack_evidence : [],
+    pack_evidence: provenance ? recomputed.pack_evidence : {},
+  };
+  const publishedMeasurement = sanitizeJsonValue(publicReceipt, roots);
+  fs.mkdirSync(outRoot, { recursive: false });
+  fs.writeFileSync(path.join(outRoot, 'config.json'), `${JSON.stringify(publishedConfig, null, 2)}\n`);
+  fs.writeFileSync(path.join(outRoot, 'timing-trace.json'), `${JSON.stringify(publishedTrace, null, 2)}\n`);
+  fs.writeFileSync(path.join(outRoot, 'measurement.json'), `${JSON.stringify(publishedMeasurement, null, 2)}\n`);
+  fs.writeFileSync(path.join(outRoot, 'METHODOLOGY.md'), [
+    '# Measurement methodology', '',
+    `Stack: \`${config.stack}\``, `Region: \`${config.region}\``, `Cohort: \`${config.cohort}\``,
+    `Instrumentation profile: \`${profile}\``, `Valid turns: ${recomputed.sample_size}`,
+    `Evidence scope: \`${evidenceScope}\``, '',
+    'Metrics were recomputed from the retained schema-v2 timing trace using nearest-rank percentiles.',
+    'The publisher verified the frozen config, corpus, schedule, adapter when present, provenance, quality gates, and original receipt.',
+    ...(provenance ? [] : ['This bundle is a replay-fixture proof of the publisher and is not provider-backed evidence.']),
+    'The public trace contains timing and quality events only; raw provider output, audio, transcripts, credentials, and local paths are excluded.', '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(outRoot, 'REDACTION.md'), [
+    '# Redaction receipt', '',
+    '- The unsanitized source run remains private and was not copied.',
+    '- Common credentials, email addresses, trace identifiers, and local paths were redacted.',
+    '- Unexpected source artifacts and unexpected trace fields fail publication.',
+    '- Every public artifact is covered by `MANIFEST.sha256`.', '',
+  ].join('\n'));
+  assertNoSecrets(outRoot);
+  writeManifest(outRoot);
+  console.log(`Wrote sanitized measurement evidence: ${outRoot}`);
+  return 0;
+}
+
 function main(argv = process.argv.slice(2)) {
   const options = args(argv);
   if (options.help) {
-    console.log('Usage: run.mjs --config config.json --out fresh-dir (--trace trace.json | --live --approve-spend-usd N)');
+    console.log('Usage:\n  run.mjs --config config.json --out fresh-dir (--trace trace.json | --live --approve-spend-usd N)\n  run.mjs --publish --source raw-run --config config.json --out public-evidence');
     return 0;
   }
+  if (options.publish) return publishMeasurement(options);
   if (!options.config || !options.out) fail('--config and --out are required');
   // Execution modes are mutually exclusive: --trace replays a recorded trace;
   // --live runs the adapter. Both at once let --trace win and skip provenance,
@@ -233,71 +438,20 @@ function main(argv = process.argv.slice(2)) {
   assertCoverage(schedule, trace);
   // For a live run, provenance must describe the same stack the trace measured.
   if (provenance) validateProvenanceConsistency(provenance, config, trace);
-  const summary = summarizeTrace(trace);
   const configSha256 = sha256File(configFile);
-
-  // A quality veto makes the run diagnostic: never publish usable evidence.
-  const vetoed = Object.values(summary.quality).some(Boolean);
-  const stackMetrics = config.stack_metrics || [];
-  const packMetrics = config.pack_metrics || {};
-
-  const stackEvidence = stackMetrics
-    .filter((name) => summary.metrics[name])
-    .filter(() => !vetoed) // suppress publishable evidence on a vetoed run
-    .map((name) => ({
-      metric: name,
-      source: 'callsmith_measurement',
-      region: config.region,
-      profile: configProfile,
-      sample_size: summary.samples,
-      percentiles_ms: { p50: summary.metrics[name].p50, p95: summary.metrics[name].p95, p99: summary.metrics[name].p99 },
-      n_applicable: summary.metrics[name].n_applicable,
-      n_observed: summary.metrics[name].n_observed,
-      methodology: `Callsmith controlled corpus ${corpus.sha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
-    }));
-
-  // Per-provider attribution requires n_applicable === n_observed (defense-in-depth
-  // against a partial trace slipping past the strict profile validator).
-  const packEvidence = Object.fromEntries(Object.entries(packMetrics).map(([pack, spec]) => {
-    const m = summary.metrics[spec.trace_metric];
-    if (!m) fail(`unknown trace metric for ${pack}: ${spec.trace_metric} (not observed under profile ${configProfile})`);
-    if (m.n_applicable !== m.n_observed) {
-      fail(`${pack} trace_metric "${spec.trace_metric}" not publishable: observed ${m.n_observed} of ${m.n_applicable} applicable turns (cherry-pick guard)`);
-    }
-    return [pack, {
-      metric: spec.metric,
-      source: 'callsmith_measurement',
-      region: config.region,
-      profile: configProfile,
-      sample_size: m.n_observed,
-      percentiles_ms: { p50: m.p50, p95: m.p95, p99: m.p99 },
-      methodology: `Callsmith controlled corpus ${corpus.sha256}; config ${configSha256}; ${config.cohort} cohort; profile ${configProfile}; nearest-rank percentiles; raw trace retained.`,
-    }];
-  }).filter(() => !vetoed));
-
-  const receipt = {
-    schema_version: trace.schema_version || 1,
-    stack: config.stack,
-    region: config.region,
-    cohort: config.cohort,
-    instrumentation_profile: configProfile,
-    publishable: !vetoed,
-    corpus_sha256: corpus.sha256,
-    config_sha256: configSha256,
-    scheduled_turns: schedule.count,
-    sample_size: summary.samples,
-    p99_status: summary.samples >= 100 ? 'measured' : 'directional',
-    quality: summary.quality,
-    metrics: summary.metrics,
-    stack_evidence: stackEvidence,
-    pack_evidence: vetoed ? {} : packEvidence,
-    provenance: provenance || undefined,
-    spend: spend || undefined,
-    adapter_sha256: adapterSha256 || undefined,
-  };
+  const receipt = buildMeasurementReceipt({
+    config,
+    configSha256,
+    corpusSha256: corpus.sha256,
+    trace,
+    schedule,
+    provenance,
+    spend,
+    adapterSha256,
+  });
   fs.writeFileSync(path.join(options.out, 'measurement.json'), `${JSON.stringify(receipt, null, 2)}\n`);
   console.log(JSON.stringify(receipt, null, 2));
-  return vetoed ? 1 : 0;
+  return receipt.publishable ? 0 : 1;
 }
 
 try { process.exitCode = main(); } catch (error) { console.error(error.message); process.exitCode = 2; }

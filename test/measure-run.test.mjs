@@ -70,6 +70,86 @@ describe('measurement runner (replay)', () => {
     );
   });
 
+  it('publishes a deterministic sanitized measurement bundle', () => {
+    const dir = tmp();
+    const source = path.join(dir, 'run');
+    assert.equal(run(['--config', CONFIG, '--out', source, '--trace', TRACE]).status, 0);
+    const first = path.join(dir, 'public-a');
+    const second = path.join(dir, 'public-b');
+    for (const out of [first, second]) {
+      const r = run(['--publish', '--source', source, '--config', CONFIG, '--out', out]);
+      assert.equal(r.status, 0, r.stderr);
+      assert.deepEqual(fs.readdirSync(out).sort(), [
+        'MANIFEST.sha256', 'METHODOLOGY.md', 'REDACTION.md',
+        'config.json', 'measurement.json', 'timing-trace.json',
+      ]);
+      const published = JSON.parse(fs.readFileSync(path.join(out, 'measurement.json'), 'utf8'));
+      assert.equal(published.evidence_scope, 'replay_fixture');
+      assert.equal(published.publishable, false);
+      assert.deepEqual(published.stack_evidence, []);
+      assert.deepEqual(published.pack_evidence, {});
+    }
+    assert.equal(fs.readFileSync(path.join(first, 'MANIFEST.sha256'), 'utf8'), fs.readFileSync(path.join(second, 'MANIFEST.sha256'), 'utf8'));
+    assert.equal(fs.existsSync(path.join(first, 'raw-trace.json')), false);
+  });
+
+  it('refuses tampered traces and mismatched measurement receipts', () => {
+    for (const kind of ['trace', 'receipt']) {
+      const dir = tmp();
+      const source = path.join(dir, 'run');
+      assert.equal(run(['--config', CONFIG, '--out', source, '--trace', TRACE]).status, 0);
+      if (kind === 'trace') {
+        const trace = JSON.parse(fs.readFileSync(path.join(source, 'raw-trace.json'), 'utf8'));
+        trace.turns[0].audio_first_audible_ms += 100;
+        fs.writeFileSync(path.join(source, 'raw-trace.json'), JSON.stringify(trace));
+      } else {
+        const receipt = JSON.parse(fs.readFileSync(path.join(source, 'measurement.json'), 'utf8'));
+        receipt.metrics.turn_gap_ms.p50 += 1;
+        fs.writeFileSync(path.join(source, 'measurement.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+      }
+      const r = run(['--publish', '--source', source, '--config', CONFIG, '--out', path.join(dir, 'public')]);
+      assert.equal(r.status, 2);
+      assert.match(r.stderr, /does not match recomputed/);
+    }
+  });
+
+  it('redacts local paths and emails from published measurement inputs', () => {
+    const dir = tmp();
+    const config = {
+      ...JSON.parse(fs.readFileSync(CONFIG, 'utf8')),
+      corpus: MANIFEST,
+      notes: `review ${dir}/private with owner@example.com`,
+    };
+    const configFile = path.join(dir, 'config.json');
+    fs.writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
+    const source = path.join(dir, 'run');
+    assert.equal(run(['--config', configFile, '--out', source, '--trace', TRACE]).status, 0);
+    const out = path.join(dir, 'public');
+    const r = run(['--publish', '--source', source, '--config', configFile, '--out', out]);
+    assert.equal(r.status, 0, r.stderr);
+    const published = fs.readdirSync(out).map((name) => fs.readFileSync(path.join(out, name), 'utf8')).join('\n');
+    assert.doesNotMatch(published, new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(published, /owner@example\.com/);
+    assert.match(published, /\[REDACTED_EMAIL\]/);
+  });
+
+  it('fails closed on unknown source files and existing publication directories', () => {
+    const dir = tmp();
+    const source = path.join(dir, 'run');
+    assert.equal(run(['--config', CONFIG, '--out', source, '--trace', TRACE]).status, 0);
+    fs.writeFileSync(path.join(source, 'provider-output.txt'), 'not allowlisted');
+    const unknown = run(['--publish', '--source', source, '--config', CONFIG, '--out', path.join(dir, 'public')]);
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.stderr, /unknown measurement source artifact/);
+
+    fs.rmSync(path.join(source, 'provider-output.txt'));
+    const existing = path.join(dir, 'existing');
+    fs.mkdirSync(existing);
+    const overwrite = run(['--publish', '--source', source, '--config', CONFIG, '--out', existing]);
+    assert.equal(overwrite.status, 2);
+    assert.match(overwrite.stderr, /output directory must not exist/);
+  });
+
   it('fails closed on quality vetoes', () => {
     const trace = JSON.parse(fs.readFileSync(TRACE, 'utf8'));
     trace.turns[0].quality.audio_underruns = 2;

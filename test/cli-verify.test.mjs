@@ -19,6 +19,7 @@ describe('verification CLI', () => {
   it('doctor ok', () => {
     const r = run('doctor');
     assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, new RegExp(`v${JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'))).version}`));
     assert.match(r.stdout, /status: OK/);
   });
 

@@ -1,6 +1,6 @@
 ---
 name: callsmith
-description: Design production voice AI agents (telephony + realtime/cascaded speech). Use when the user wants to build, architect, harden, deploy, scale, or capacity-test a voice agent, voice bot, IVR, or phone agent — or mentions Exotel, Twilio, Plivo, Telnyx, Vonage, LiveKit, Pipecat, Gemini Live, OpenAI Realtime, Deepgram, AssemblyAI, ElevenLabs, Cartesia, Sarvam, Silero VAD, STT, TTS, barge-in, media streams, concurrency, calls per pod, or autoscaling. You are the compiler: dig deeper, apply hard floors, load provider packs for physics, write a short handoff contract, then implement. callsmith validates packs/physics — it does not generate the app.
+description: "Design production voice AI agents across telephony and realtime or cascaded speech. Use for architecture, implementation, hardening, deployment, scaling, provider selection, audio physics, safety floors, and voice-agent evaluation."
 argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|check|packs] [target]"
 allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
@@ -30,7 +30,7 @@ else
 fi
 ```
 
-Primary install for users: `npx skills add Nachi-Kulkarni/Callsmith_skills` then invoke `/callsmith`.
+Primary install for users: `npx skills add https://github.com/Nachi-Kulkarni/Callsmith_skills/tree/main/skills/callsmith` then invoke `/callsmith`.
 
 ## Command routing (playbooks)
 
@@ -105,7 +105,6 @@ Optional: keep `voice.answers.json` for `callsmith check` — values must use **
 | Quality | `reference/audit.md`, `reference/prompts.md`, `reference/latency.md`, etc. |
 | Implement | Current version-specific docs + pack potholes for chosen stack |
 | Deploy | `reference/deploy.md` + pack `deployment` fields + `check` Operations |
-| Measure / drain | `evals/measure/README.md` + `evals/load/README.md` |
 | Capacity / scale | `reference/deploy.md` → `reference/deploy-capacity.md`; load workload or evidence detail only when needed |
 
 ```bash
@@ -115,8 +114,6 @@ callsmith pack validate
 callsmith check --answers voice.answers.json   # optional answers file
 callsmith contract validate --file callsmith.recipe.md --answers voice.answers.json --domain medical
 callsmith doctor
-npm run bench:measure -- --config stack.json --out fresh-dir --live
-npm run bench:load -- --config load.json --out fresh-dir
 ```
 
 ## Verification CLI (facts only)
@@ -167,7 +164,7 @@ That difference lives in packs — not in model marketing docs.
 - Skip transcript/consent on regulated flows
 - Self-host for a no-ops pilot, or claim managed convenience on a custom bridge
 - Deploy without drain (killing workers mid-call) or with VAD reloaded per call/frame
-- Treat a passing drain gate, clean latency trace, closed-loop-only run, or saturated load box as a capacity number
+- Treat a clean latency trace, closed-loop-only run, or saturated load box as a capacity number
 - S2S-vs-cascaded by vibes when the brief is regulated + tool-heavy (cascaded) or ultra-low-latency (S2S)
 
 ## Asking style

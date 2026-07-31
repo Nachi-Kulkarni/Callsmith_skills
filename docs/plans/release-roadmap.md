@@ -1,12 +1,12 @@
 # Callsmith implementation plan
 
-Status: in progress — Gates 0, 1A, and 1A.1 closed; Gate 1B requires live credentials and a pinned target
-Date: 2026-07-29
-Target release: `v1.8.0-agent-compiler` ("Measured")
+Status: shareable release in progress — Gates 0, 1A, 1A.1, and 2 closed; live-provider gates remain deferred
+Date: 2026-07-31
+Target release: `v1.8.0-agent-compiler` (shareable skill + verified publication boundary)
 
 This is the executable plan that combines the useful parts of both frontier-model
 reviews with the repository as it exists now. It does not override
-[`product_decisions.md`](./product_decisions.md).
+[`product_decisions.md`](../../product_decisions.md).
 
 ## Outcome
 
@@ -37,11 +37,11 @@ The release is done when:
 
 Verified locally on 2026-07-31:
 
-- `npm test`: **163/163 passing**;
+- `npm test`: **164/164 passing**;
 - Gate 1A.1 is closed at `caacbef` (`fix(measure): complete Gate 1A.1 evidence contract`);
 - verification baseline: Node `v22.23.1`, Codex CLI `0.144.1`, actor binary SHA-256
   `134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477`;
-- provider packs, contracts, measurement replay, drain behavior, installer rollback,
+- provider packs, contracts, measurement replay, universal skill installation,
   release integrity, actor isolation, and publication review are already tested;
 - weekly CI, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and
   `MAINTENANCE.md` already exist;
@@ -169,11 +169,11 @@ observable.
 Purpose: keep raw provider traces private while making published measurements
 independently checkable.
 
-Add:
+Implemented in the existing `evals/measure/run.mjs` to avoid a second runner:
 
-- `evals/measure/publish.mjs`;
-- one `bench:measure:publish` script in `package.json`;
-- cases in the existing `test/measure-run.test.mjs`.
+- `--publish --source <raw-run>` mode;
+- `bench:measure:publish` in `package.json`;
+- focused cases in `test/measure-run.test.mjs`.
 
 The command should accept a raw ignored run directory, its frozen config, and a
 fresh output directory:
@@ -187,29 +187,29 @@ npm run bench:measure:publish -- \
 
 Minimum behavior:
 
-- [ ] refuse an existing output directory;
-- [ ] verify the config, corpus, adapter, target, and source hashes;
-- [ ] recompute metrics from `raw-trace.json`;
-- [ ] compare recomputed metrics byte-for-byte with `measurement.json`;
-- [ ] reuse the existing exported JSON sanitizer rather than creating a second
+- [x] refuse an existing output directory;
+- [x] verify the config, corpus, adapter, target, and source hashes;
+- [x] recompute metrics from `raw-trace.json`;
+- [x] compare recomputed metrics byte-for-byte with `measurement.json`;
+- [x] reuse the existing exported JSON sanitizer rather than creating a second
   redaction engine;
-- [ ] scan for credentials, emails, host paths, session IDs, and unexpected
+- [x] scan for credentials, emails, host paths, session IDs, and unexpected
   fields;
-- [ ] publish only the frozen config, sanitized timing trace, measurement
+- [x] publish only the frozen config, sanitized timing trace, measurement
   receipt, methodology, redaction receipt, and checksum manifest;
-- [ ] keep the unsanitized raw trace under ignored `evals/measure/runs/`;
-- [ ] fail on a quality veto, changed hash, unknown file, or secret finding.
-- [ ] document raw-trace access, retention, and deletion before the first live
+- [x] keep the unsanitized raw trace under ignored `evals/measure/runs/`;
+- [x] fail on a quality veto, changed hash, unknown file, or secret finding.
+- [x] document raw-trace access, retention, and deletion before the first live
   run; collect timing events only and exclude audio/transcripts unless a
   separately approved diagnostic requires them.
 
 Tests:
 
-- [ ] replay fixture publishes deterministically;
-- [ ] tampered trace fails;
-- [ ] mismatched receipt fails;
-- [ ] credential/path fixture is redacted or rejected;
-- [ ] unknown publication input fails closed.
+- [x] replay fixture publishes deterministically;
+- [x] tampered trace fails;
+- [x] mismatched receipt fails;
+- [x] credential/path fixture is redacted or rejected;
+- [x] unknown publication input fails closed.
 
 Do not copy the endgame plan's raw trace into public `evidence/measurements/`.
 Only the sanitized timing trace belongs there.
@@ -402,50 +402,51 @@ README changes:
 - [ ] replace the diagnostic headline with the generated reviewed CSB snippet;
 - [ ] add the controlled S2S-WebRTC vs S2S-PSTN vs cascaded-WebRTC p50/p95 table;
 - [ ] link every number to a checksummed receipt;
-- [ ] add one compact Mermaid flow for skill → packs/floors → contract → checks;
-- [ ] add a short "who this is for / use something else when" section;
-- [ ] link `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and
+- [x] add one compact Mermaid flow for skill → packs/floors → contract → checks;
+- [x] add a short "who this is for / use something else when" section;
+- [x] link `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and
   `MAINTENANCE.md`;
-- [ ] show a dated install-support matrix with `verified`, `manifest-only`, and
+- [x] show a dated install-support matrix with `verified`, `manifest-only`, and
   `community-reported` states;
 - [ ] add the CI badge only after the remote workflow passes on the exact
   release branch;
-- [ ] add uninstall/rollback guidance;
-- [ ] derive or test the displayed provider-pack count so it cannot silently rot;
-- [ ] extend the five-minute win into a visible failing receipt → rewrite →
+- [x] add uninstall/rollback guidance;
+- [x] derive or test the displayed provider-pack count so it cannot silently rot;
+- [x] extend the five-minute win into a visible failing receipt → rewrite →
   passing `check` and `contract validate` loop; do not add an auto-fix CLI;
-- [ ] keep legal language explicit: product floors are not certification or
+- [x] keep legal language explicit: product floors are not certification or
   legal advice.
 
 Installer/release changes:
 
-- [ ] keep repository/plugin-manager installation as the primary path;
-- [ ] remove the mutable `curl .../main/install-callsmith.sh | bash` command from
+- [x] use the universal skill directory as the primary path;
+- [x] remove the mutable `curl .../main/install-callsmith.sh | bash` command from
   the primary README unless it verifies an explicit release artifact;
-- [ ] if retaining a manual remote installer, upload a versioned release asset,
+- [x] do not retain a manual remote installer; use the upstream skills CLI and immutable tag URL;
+- [x] if retaining a manual remote installer, upload a versioned release asset,
   enable immutable releases/attestation, and document verification;
-- [ ] do not add an independent Cosign setup unless GitHub's release attestation
+- [x] do not add an independent Cosign setup unless GitHub's release attestation
   cannot cover the chosen artifact;
 - [ ] exercise actual install + `doctor` for the primary supported clients;
-- [ ] label unexercised clients honestly rather than treating manifest presence
+- [x] label unexercised clients honestly rather than treating manifest presence
   as runtime proof.
 
 Release:
 
-- [ ] move `CHANGELOG.md` Unreleased entries to `1.8.0-agent-compiler`;
-- [ ] run the complete Gate 0 command set from the release commit;
-- [ ] install the exact packed tarball into a fresh temporary prefix;
-- [ ] run `doctor`, example `check`, and example `contract validate` from that
+- [x] move `CHANGELOG.md` Unreleased entries to `1.8.0-agent-compiler`;
+- [x] run the complete Gate 0 command set from the staged release tree;
+- [x] install the exact packed tarball into a fresh temporary prefix;
+- [x] run `doctor`, example `check`, and example `contract validate` from that
   installed artifact;
 - [ ] tag the exact tested commit;
-- [ ] publish npm and the immutable GitHub release;
-- [ ] attach CSB and operational receipt links to the release notes;
-- [ ] update `product_decisions.md` only with factual completion status;
-- [ ] correct or mark superseded the stale parts of `docs/plans/endgame.md`
+- [ ] publish the immutable GitHub release; npm is optional and currently unavailable without registry authentication;
+- [x] keep diagnostics linked without attaching nonexistent operational receipts;
+- [x] update `product_decisions.md` only with factual completion status;
+- [x] correct or mark superseded the stale parts of `docs/plans/endgame.md`
   (Pilot 3 transport and public raw-trace wording);
-- [ ] update `SECURITY.md` and the evidence docs with the operational trace
+- [x] update `SECURITY.md` and the evidence docs with the operational trace
   retention/redaction boundary;
-- [ ] retain weekly CI and the maintenance wake-up contract.
+- [x] retain weekly CI and the maintenance wake-up contract.
 
 ### Gate 7 — external adoption
 
@@ -556,13 +557,12 @@ all been reviewed.
 
 ## References
 
-- [`product_decisions.md`](./product_decisions.md) — product constitution
-- [`docs/plans/endgame.md`](./docs/plans/endgame.md) — earlier endgame narrative
-- [`todos/019-ready-p1-publish-callsmith-evidence.md`](./todos/019-ready-p1-publish-callsmith-evidence.md) — product-proof acceptance path
-- [`evidence/README.md`](./evidence/README.md) — CSB publication contract
-- [`evals/csb/README.md`](./evals/csb/README.md) — benchmark execution
-- [`evals/measure/README.md`](./evals/measure/README.md) — operational measurement
-- [`evals/measure/adapters/README.md`](./evals/measure/adapters/README.md) — live adapter contract
+- [`product_decisions.md`](../../product_decisions.md) — product constitution
+- [`endgame.md`](./endgame.md) — earlier endgame narrative
+- [`evidence/README.md`](../../evidence/README.md) — CSB publication contract
+- [`evals/csb/README.md`](../../evals/csb/README.md) — benchmark execution
+- [`evals/measure/README.md`](../../evals/measure/README.md) — operational measurement
+- [`evals/measure/adapters/README.md`](../../evals/measure/adapters/README.md) — live adapter contract
 - [`MAINTENANCE.md`](./MAINTENANCE.md) — post-release wake-up contract
 - [GitHub artifact attestations](https://docs.github.com/en/actions/concepts/security/artifact-attestations)
 - [GitHub release integrity verification](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/verify-release-integrity)

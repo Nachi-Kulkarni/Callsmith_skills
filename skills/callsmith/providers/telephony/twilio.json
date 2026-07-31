@@ -1,0 +1,146 @@
+{
+  "id": "twilio",
+  "kind": "telephony",
+  "label": "Twilio (Voice + Media Streams)",
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-07-10",
+    "expires_at": "2026-10-08",
+    "sources": [
+      "https://www.twilio.com/docs/voice/tutorials/how-carry-out-phone-conversations-media-streams"
+    ]
+  },
+  "transport": "websocket",
+  "ingest": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Audio played back to the PSTN caller is G.711 μ-law 8 kHz. The bridge must hand Twilio μ-law 8 kHz."
+  },
+  "egress": {
+    "format": "mulaw",
+    "sample_rate": 8000,
+    "channels": 1,
+    "bit_depth": 8,
+    "note": "Outbound Media Stream delivers G.711 μ-law 8 kHz mono. Narrowband. Add ?sampleRate=16000 to the stream for 16 kHz PCM instead."
+  },
+  "lifecycle": [
+    "streamStarted",
+    "media (inbound)",
+    "mark",
+    "clear",
+    "streamStopped",
+    "callEnded"
+  ],
+  "potholes": [
+    {
+      "id": "8khz_mulaw_narrowband",
+      "severity": "blocker",
+      "note": "Default Media Stream is μ-law 8 kHz. Decode + resample before any realtime model or STT.",
+      "mitigated_by": ["audio_normalization"]
+    },
+    {
+      "id": "sampleRate_param_for_pcm16k",
+      "severity": "note",
+      "note": "Requesting ?sampleRate=16000 yields raw 16-bit PCM at 16 kHz and skips the μ-law decode, but still needs resampling for 24 kHz models."
+    },
+    {
+      "id": "mark_clear_for_interruption",
+      "severity": "warning",
+      "note": "Barge-in is implemented with mark/clear events on the outbound stream. To interrupt TTS/queued audio, send clear on the mark id; do not rely on audio buffering alone."
+    },
+    {
+      "id": "dialcard_webhook_state",
+      "severity": "note",
+      "note": "Call + stream lifecycle are separate. The stream can start after connect and stop before hangup. Map both to a single session state machine."
+    },
+    {
+      "id": "agent_self_interruption_echo",
+      "severity": "blocker",
+      "note": "PSTN media streams carry no echo canceller in your process. Outbound TTS can leak back into the inbound leg (carrier echo, caller speakerphone), the VAD fires on the agent's own voice, and the bot interrupts itself in a loop. Mitigate with orchestration-level AEC (e.g. LiveKit server-side AEC on SIP), gating VAD while the agent speaks, or echo-aware endpointing."
+    },
+    {
+      "id": "mark_tracking_played_audio",
+      "severity": "warning",
+      "note": "Twilio buffers outbound audio you already sent. Attach a mark per chunk and track mark acknowledgements to know what the caller actually heard; on barge-in send clear and treat un-marked audio as unplayed when resuming, or the transcript and the caller's reality diverge."
+    },
+    {
+      "id": "transfer_mechanics",
+      "severity": "note",
+      "note": "human_handoff=transfer on Twilio is a second leg: conference the caller with a Dialed human leg (warm) or redirect the call (blind). Record the transfer-failure fallback (callback/voicemail) in the contract; a failed Dial with no fallback strands the caller."
+    }
+  ],
+  "env_keys": [
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_APP_SID"
+  ],
+  "doc_urls": [
+    "https://www.twilio.com/docs/voice/tutorials/how-carry-out-phone-conversations-media-streams"
+  ],
+  "cost_estimates": {
+    "billing": "per_minute",
+    "rate_usd": 0.013,
+    "per_minute_usd": 0.013,
+    "notes": "US domestic voice ($0.0085/min) + media streams ($0.0045/min)"
+  },
+  "context7": {
+    "library_id": "/twilio/twilio-python",
+    "topics": [
+      "media-streams",
+      "voice-webhooks"
+    ]
+  },
+  "latency_estimates": {
+    "media_rtt_ms": 80
+  },
+  "latency_evidence": [
+    {
+      "metric": "media_rtt_ms",
+      "source": "planning_estimate",
+      "region": "not_measured",
+      "sample_size": 0,
+      "planning_value_ms": 80,
+      "percentiles_ms": {
+        "p50": null,
+        "p95": null,
+        "p99": null
+      },
+      "methodology": "Callsmith architecture-budget placeholder; benchmark in the deployment region before setting an SLO."
+    }
+  ],
+  "interruption": {
+    "mechanism": "mark_clear",
+    "description": "Twilio supports mark/clear events on Media Streams. Attach a 'mark' with an ID when sending audio; on interruption, send 'clear' with that mark ID to immediately stop playback.",
+    "code_hint": "Send {\"event\":\"clear\",\"streamSid\":\"<sid>\"} to flush buffered audio. Pipecat's TwilioFrameSerializer handles this automatically."
+  },
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [],
+  "deployment": {
+    "hosted_option": {
+      "name": "twilio-cloud",
+      "managed_runtime": false,
+      "region_pinning": true,
+      "pricing_url": "https://www.twilio.com/voice/pricing",
+      "note": "Twilio runs the carrier/media edge, not your agent. Regional voice products and edge locations exist; pin the region near both callers and your worker for latency and residency."
+    },
+    "self_host_notes": "Your bridge/worker is yours to host wherever the orchestration pack says. Twilio-side concurrency is carrier-grade; your side scales on concurrent media streams.",
+    "concurrency_model": "managed",
+    "regions": {
+      "media_edges": ["us", "eu"],
+      "worker_regions": ["not_applicable"],
+      "model_regions": ["not_applicable"],
+      "recording_regions": ["unknown"],
+      "transcript_regions": ["not_applicable"],
+      "routing": "configurable",
+      "residency_controls": "documented",
+      "verified_at": "2026-07-24",
+      "sources": ["https://www.twilio.com/docs/global-infrastructure", "https://www.twilio.com/docs/global-infrastructure/edge-locations"]
+    },
+    "drain_behavior": "n/a"
+  }
+}
