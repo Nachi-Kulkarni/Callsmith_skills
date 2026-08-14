@@ -25,17 +25,24 @@ function safeEcho(value) {
   return String(value).replace(/[\x00-\x1f\x7f]/g, '?').slice(0, 80);
 }
 
-export function loadProviders() {
+// Single providers/ walk, shared with validatePacks (validate.mjs) so the two cannot drift.
+export function* iterProviderPacks() {
   const dir = path.join(ROOT, 'providers');
-  const out = {};
   for (const kindDir of fs.readdirSync(dir)) {
     if (kindDir.startsWith('_')) continue;
     const kindPath = path.join(dir, kindDir);
     if (!fs.statSync(kindPath).isDirectory()) continue;
     for (const f of fs.readdirSync(kindPath).filter(f => f.endsWith('.json'))) {
-      const p = JSON.parse(fs.readFileSync(path.join(kindPath, f), 'utf8'));
-      out[p.id] = p;
+      yield JSON.parse(fs.readFileSync(path.join(kindPath, f), 'utf8'));
     }
+  }
+}
+
+export function loadProviders() {
+  const out = {};
+  for (const p of iterProviderPacks()) {
+    if (out[p.id] !== undefined) throw new Error(`Duplicate provider id "${safeEcho(p.id)}" in providers/ — pack ids must be unique.`);
+    out[p.id] = p;
   }
   return out;
 }
@@ -118,7 +125,7 @@ function isAudioSentinel(format) {
   return !format || AUDIO_SENTINELS.has(format);
 }
 
-function planAudioDiff(from, to) {
+export function planAudioDiff(from, to) {
   const e = from.egress || {};
   const i = to.ingest || {};
   if (isAudioSentinel(e.format) || isAudioSentinel(i.format)) return { steps: [], unsupported: [] };
@@ -181,6 +188,7 @@ export function resolve(answers, providers) {
   if (orch) pipeline.push({ role: 'orchestration', pack: orch });
   if (vad) pipeline.push({ role: 'vad', pack: vad });
   if (mode === 'realtime' || mode === 'hybrid') {
+    if (!sel.realtime?.id) throw new Error('Realtime architecture requires a realtime model but none was selected.');
     pipeline.push({ role: 'realtime', pack: providers[sel.realtime.id] });
   }
   if (mode === 'cascaded' || mode === 'hybrid') {
@@ -601,7 +609,8 @@ export function detectImpossibilities(answers, providers) {
   }
   // native_capability_conflicts guard. NOTE: no installed pack currently declares a
   // conflict — this is a reserved guard for future SIP-direct carriers or similar
-  // incompatibilities. The shape is exercised by test/impossibility.test.mjs (sip-only-carrier).
+  // incompatibilities. The shape is exercised by test/resolver.test.mjs (in-memory
+  // sip-carrier fixture).
   // Dedupe symmetric declarations (A declares "X vs Y" and B declares "Y vs X") by a canonical key.
   const conflictKeys = new Set();
   for (const { role, pack } of selectedPacks) {

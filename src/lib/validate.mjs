@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iterProviderPacks } from './resolver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCHEMA = JSON.parse(fs.readFileSync(path.join(ROOT, 'providers', '_schema.json'), 'utf8'));
@@ -75,16 +76,9 @@ export function validatePack(pack) {
 }
 
 export function validatePacks() {
-  const dir = path.join(ROOT, 'providers');
   const allErrors = [];
-  for (const kindDir of fs.readdirSync(dir)) {
-    if (kindDir.startsWith('_')) continue;
-    const kindPath = path.join(dir, kindDir);
-    if (!fs.statSync(kindPath).isDirectory()) continue;
-    for (const f of fs.readdirSync(kindPath).filter(f => f.endsWith('.json'))) {
-      const pack = JSON.parse(fs.readFileSync(path.join(kindPath, f), 'utf8'));
-      allErrors.push(...validatePack(pack));
-    }
+  for (const pack of iterProviderPacks()) {
+    allErrors.push(...validatePack(pack));
   }
   return allErrors;
 }

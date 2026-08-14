@@ -22,7 +22,7 @@
     },
     "native_capability_conflicts": {
       "type": "array",
-      "description": "Reserved guard. Optional explicit conflicts between this pack's native capabilities and capabilities claimed by other selected packs. No installed pack currently declares a conflict; this field exists so a future SIP-direct carrier (or similar incompatibility) can refuse an incompatible stack at forge time. The shape is exercised by test/impossibility.test.mjs.",
+      "description": "Reserved guard. Optional explicit conflicts between this pack's native capabilities and capabilities claimed by other selected packs. No installed pack currently declares a conflict; this field exists so a future SIP-direct carrier (or similar incompatibility) can refuse an incompatible stack at forge time. The shape is exercised by test/resolver.test.mjs.",
       "items": {
         "type": "object",
         "required": ["capability", "conflicts_with"],
