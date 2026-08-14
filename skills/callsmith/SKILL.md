@@ -1,7 +1,7 @@
 ---
 name: callsmith
-description: "Design production voice AI agents across telephony and realtime or cascaded speech. Use for architecture, implementation, hardening, deployment, scaling, provider selection, audio physics, safety floors, and voice-agent evaluation."
-argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|noise-cancellation|check|packs] [target]"
+description: "Design production voice AI agents across telephony and realtime or cascaded speech. Use for architecture, implementation, hardening, deployment, scaling, provider selection, audio physics, safety floors, and latency measurement."
+argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|noise-cancellation|security|multilingual|check|packs] [target]"
 allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
@@ -34,7 +34,7 @@ Primary install for users: `npx skills add https://github.com/Nachi-Kulkarni/Cal
 
 ## Command routing (playbooks)
 
-Exactly nine modes. Load **only** the matching file when invoked:
+One playbook per invocation. Load **only** the matching file when invoked:
 
 | Argument | Load | When |
 |---|---|---|
@@ -47,6 +47,8 @@ Exactly nine modes. Load **only** the matching file when invoked:
 | `harden` | `reference/harden.md` | Pre-pilot resilience / safety / state machine |
 | `deploy` | `reference/deploy.md`; it routes to `reference/deploy-capacity.md` for capacity/scalability claims | Cloud vs self-host; drain, regions, warm pools, concurrency |
 | `noise-cancellation` | `reference/noise-cancellation.md` | Open-source echo/noise cleanup, side-speaker suppression, speaker control, and overlap extraction |
+| `security` | `reference/security.md` | Card-data routing, PII redaction boundaries, voice-channel prompt injection, recording access |
+| `multilingual` | `reference/multilingual.md` | Code-switching STT, multilingual vs per-language legs, per-language TTS voices and evals |
 
 No argument → default compile loop below.
 `check` / `packs` → verification CLI only (not playbooks).
@@ -63,7 +65,7 @@ These are agent modes, not generators.
 7. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
 8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
 9. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
-10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency / noise-cancellation as needed. Use ttft only to isolate the LLM leg. Use noise-cancellation when contaminated input, echo, side speech, or false barge-in requires an audio-processing decision. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers. Follow the capacity branch routed by `reference/deploy.md` before designing a load harness or stating a concurrency ceiling, calls-per-pod number, pod count, or autoscaler threshold.
+10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency / noise-cancellation / security / multilingual as needed. Use ttft only to isolate the LLM leg. Use noise-cancellation when contaminated input, echo, side speech, or false barge-in requires an audio-processing decision. Use security when payment capture, PII persistence, or caller-driven tool injection is in scope; use multilingual when callers mix or switch languages. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers. Follow the capacity branch routed by `reference/deploy.md` before designing a load harness or stating a concurrency ceiling, calls-per-pod number, pod count, or autoscaler threshold.
 
 Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
 Not menu coverage 1.0.
@@ -108,6 +110,8 @@ Optional: keep `voice.answers.json` for `callsmith check` — values must use **
 | Deploy | `reference/deploy.md` + pack `deployment` fields + `check` Operations |
 | Capacity / scale | `reference/deploy.md` → `reference/deploy-capacity.md`; load workload or evidence detail only when needed |
 | Noise / echo / side speakers | `reference/noise-cancellation.md`; keep office measurements as priors and re-measure the target channel |
+| Payments / PII / injection | `reference/security.md`; card digits never enter transcripts, traces, or logs |
+| Mixed-language callers | `reference/multilingual.md`; per-language WER and turn gap, never one blended metric |
 
 ```bash
 callsmith packs

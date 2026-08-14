@@ -88,6 +88,10 @@ callsmith contract validate --file examples/clinic-triage/callsmith.recipe.md \
 We gave GPT-5.6 Luna at `xhigh` the same 32 voice-app briefs twice. In one set it worked normally.
 In the other it could use Callsmith. We then checked the finished design files.
 
+We have only run this test with one model family so far. It does not measure call quality, latency,
+uptime, cost, or user success. Read the [plain-English report](./evidence/diagnostics/luna-xhigh-full-suite-20260731.md),
+[test rules](./evidence/README.md), and [full limitations](./evidence/HONEST-NUMBERS.md).
+
 | What the reviewer checked | Normal run | Using Callsmith |
 |---|---:|---:|
 | Checklist items completed | 26/128 | 128/128 |
@@ -97,10 +101,6 @@ In the other it could use Callsmith. We then checked the finished design files.
 Many of the normal drafts had good ideas and passed some checks. Most missing points came from audio
 and handoff details that were left unclear. The test counted a check only when the decision was
 written down and agreed with the rest of the design.
-
-We have only run this test with one model family so far. It does not measure call quality, latency,
-uptime, cost, or user success. Read the [plain-English report](./evidence/diagnostics/luna-xhigh-full-suite-20260731.md),
-[test rules](./evidence/README.md), and [full limitations](./evidence/HONEST-NUMBERS.md).
 
 ## Things you can ask Callsmith to do
 
@@ -116,6 +116,8 @@ uptime, cost, or user success. Read the [plain-English report](./evidence/diagno
 | `/callsmith harden` | Checks failures, state, tools, and safety before a pilot |
 | `/callsmith deploy` | Plans regions, warmup, scaling, and safe shutdowns |
 | `/callsmith noise-cancellation` | Designs and validates open-source echo, noise, and side-speaker suppression |
+| `/callsmith security` | Keeps card numbers, personal data, and caller-driven tool abuse out of transcripts and logs |
+| `/callsmith multilingual` | Plans mixed-language callers, voices, and per-language quality checks |
 
 ## Optional CLI checks
 

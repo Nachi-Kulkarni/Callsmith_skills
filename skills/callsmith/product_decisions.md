@@ -8,6 +8,23 @@ Every line below is a committed decision unless marked **[OPEN]**.
 
 ---
 
+## Glossary (plain English)
+
+| Term | Meaning |
+|---|---|
+| **Wedge** | The one thing the product does that nothing else does; every feature must serve it. |
+| **Floor** | A minimum safety choice (consent, retention, handoff) the agent must rewrite the design to meet — mentioning it is not meeting it. |
+| **Pack** | A dated, sourced JSON file of checked facts about one provider: audio formats, quirks, costs, env keys. |
+| **Contract** | The single handoff document (`callsmith.recipe.md`) another engineer builds from. |
+| **Receipt** | The machine-readable JSON block at the top of a contract that makes its choices testable. |
+| **Compile loop** | The agent's core job: ask, load packs, apply floors, write one contract, then implement. |
+| **CSB** | CallsmithBench — the benchmark that compares with/without-Callsmith agent runs on binary, machine-checked points. |
+| **Evidence class** | The label on every pack fact saying how it was verified and when it expires. |
+| **Planning estimate** | A vendor or pack number good enough for design math, not a production promise until measured yourself. |
+| **Drain** | Shutting workers down by finishing in-flight calls first instead of hanging up on callers. |
+
+---
+
 ## 1. Identity
 
 **callsmith teaches coding agents to design production voice agents, while deterministic tools verify facts the agent must not invent.**
@@ -207,7 +224,7 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | Hooks **[OPEN]** | Pre-ship constraints (floors + pack load) without competing CLI generator |
 | Plugins | Packs as extensibility; future agent-runtime plugins optional |
 | Workflows | Agent multi-step: dig-deeper → contract → implement → harden → eval |
-| Playbooks (`reference/*`) | Optional modes: audit, critique, architecture, latency, ttft, prompts (runtime conversation), harden, deploy |
+| Playbooks (`reference/*`) | Optional modes: audit, critique, architecture, latency, ttft, prompts (runtime conversation), harden, deploy, noise-cancellation, security, multilingual |
 | Deploy capacity references (`reference/deploy-*.md`) | General voice-load workflow and the mandatory validity/attribution contract before sizing claims |
 
 ---
@@ -234,6 +251,8 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | C16 | The standalone CSB-Load reference harness is not shipped; use the real target's drain test and `/callsmith deploy` evidence contract | **DONE** (removed) |
 | C17 | `prompts` edits the production runtime prompt; safety, audio, and tool enforcement remain code-owned | **DECIDED** |
 | C18 | `/callsmith deploy` owns scalability and requires paced-audio validity, open/closed arrival models, attribution-before-verdict, per-target ceiling, and versioned `run.json` before sizing claims | **DECIDED** |
+| C19 | `security` is an agent playbook: card capture routed to DTMF masking or out-of-band links, PII redaction at the trust boundary, voice-channel prompt injection controls, recording access + retention enforcement; floors stay canonical in `reference/policy.md` | **DECIDED** |
+| C20 | `multilingual` is an agent playbook: vendor multilingual claims are planning estimates, language answers stay canonical IDs, WER/turn-gap measured per language, never blended | **DECIDED** |
 
 ---
 

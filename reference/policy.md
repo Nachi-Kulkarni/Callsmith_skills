@@ -33,6 +33,8 @@ Provider values in `voice.answers.json` use menu IDs; the receipt uses pack IDs:
 | TTS | `elevenlabs`, `sarvam`, `cartesia` | same |
 | VAD | `silero`, `deepgram_endpointing`, `webrtc_vad` | `silero`, `deepgram-endpointing`, `webrtc-vad` |
 
+Menu IDs (e.g. `gpt_4o`) are stable handles for answers files; the currently pinned model version and its dated evidence live in the provider pack, not the ID.
+
 Omit provider legs that do not exist. The string `"none"` is never a provider ID. Unknown providers require a real researched pack; they are not synthesized.
 
 ## Channel constraints

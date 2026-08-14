@@ -57,6 +57,37 @@ Load `reference/deploy-workload.md` only when constructing traffic or adapters. 
 
 Treat a graceful-drain test as shutdown evidence only. Do not convert its pass into a capacity claim.
 
+## Failover and degradation
+
+Providers fail. Design the ladder before the pilot, not during the incident.
+
+Failover targets must already exist in the answers and packs. A fallback STT or TTS provider absent
+from `voice.answers.json` has no pack, no env keys, no validated transforms — failing over to it is
+synthesis at the worst possible moment. Research and install the pack now, or the target stays off
+the ladder.
+
+The degradation ladder, in order:
+
+1. **Retry the same leg** — bounded retries with backoff for transient 429/5xx; most "outages" are
+   one dropped connection.
+2. **Fall back to a second provider** for that leg (STT or TTS), with pack-backed transforms, env
+   keys, and latency/cost deltas recorded before the pilot.
+3. **Busy message + callback handoff** (`human_handoff: callback`) — an honest message plus a
+   durably queued callback promise, never a dropped call.
+
+Rules:
+
+- Never fail over mid-call to a leg with different audio transforms. A fallback whose sample-rate
+  or codec path differs changes the physics mid-stream: ship it only with a pack-validated and
+  tested alternate chain, otherwise drain the call to human handoff instead.
+- LLM and realtime legs hold in-flight conversation state in the model session; they do not
+  transparently fail over. Model-leg failure is ladder rung 3, not rung 2.
+- Failover is a measured property like capacity: before claiming an availability number, state
+  `invalid run` / `lower bound >= N` / `attributed ceiling N` per the same evidence discipline as
+  `reference/deploy-capacity.md`. A failover path never exercised under load is a diagram, not a
+  control.
+- Record the ladder in the contract build notes: triggers, targets, and who owns the callback queue.
+
 ## Floors tie-in (residency)
 
 When an approved organizational contract states a residency region, the receipt names compute, telephony/media edge, model endpoint, recording, and transcript locations. The resolver performs technical compatibility only and fails closed on unknown or incompatible legs; counsel/compliance owns the legal conclusion. A `whatsapp_voice` async design carries no PSTN-region assumptions.
