@@ -173,7 +173,7 @@ for (const scheduled of schedule) {
     const persistedRunDir = join(trialRoot, arm);
     const isolated = dryRun
       ? null
-      : createIsolatedActorWorkspace(`${scheduled.trial}-${scenario.id}-${arm}`);
+      : createIsolatedActorWorkspace(`${scheduled.trial}-${scenario.id}`);
     const runDir = dryRun
       ? persistedRunDir
       : isolated.cwd;
@@ -188,17 +188,6 @@ for (const scheduled of schedule) {
     if (existsSync(artifactPaths.answers)) {
       writeFileSync(join(runDir, 'input-seed.answers.json'), readFileSync(artifactPaths.answers));
     }
-    const controlledInputs = {
-      brief: join(runDir, 'brief.md'),
-      scenario: join(runDir, 'scenario.json'),
-      output_schema: join(runDir, 'OUTPUT_SCHEMA.md'),
-      actor_prompt: promptPath,
-      input_seed: join(runDir, 'input-seed.answers.json'),
-    };
-    const before = snapshotArtifacts([
-      ...Object.values(artifactPaths),
-      ...Object.values(controlledInputs),
-    ]);
     const armRepro = {
       prompt_sha256: hashFile(promptPath),
       scenario_sha256: source.scenarios[scenario.id],
@@ -218,6 +207,19 @@ for (const scheduled of schedule) {
       budget: config.budget,
     };
     writeJson(join(runDir, 'reproducibility.json'), armRepro);
+    const controlledInputs = {
+      brief: join(runDir, 'brief.md'),
+      scenario: join(runDir, 'scenario.json'),
+      output_schema: join(runDir, 'OUTPUT_SCHEMA.md'),
+      readme: join(runDir, 'README.md'),
+      reproducibility: join(runDir, 'reproducibility.json'),
+      actor_prompt: promptPath,
+      input_seed: join(runDir, 'input-seed.answers.json'),
+    };
+    const before = snapshotArtifacts([
+      ...Object.values(artifactPaths),
+      ...Object.values(controlledInputs),
+    ]);
 
     if (dryRun) {
       const actorStatus = { status: 'DRY_RUN', valid: false, reasons: ['dry runs are never scored'] };
@@ -301,6 +303,16 @@ for (const scheduled of schedule) {
     rmSync(isolated.root, { recursive: true, force: true });
     result.arms[arm] = { runDir: persistedRunDir, actor: actorStatus, score, reproducibility: armRepro };
     console.log(validity.valid ? 'valid' : `INVALID (${validity.reasons.join('; ')})`);
+  }
+
+  // Input symmetry is an invariant, not a convention: identical controlled
+  // inputs across arms of a trial, asserted in code before any pair is scored.
+  if (result.arms.BASE && result.arms.WITH) {
+    for (const name of ['brief.md', 'scenario.json', 'OUTPUT_SCHEMA.md', 'input-seed.answers.json']) {
+      const base = readFileSync(join(trialRoot, 'BASE', name));
+      const withArm = readFileSync(join(trialRoot, 'WITH', name));
+      if (!base.equals(withArm)) fail(`input symmetry violated: ${name} differs between arms`);
+    }
   }
 
   const withScore = result.arms.WITH?.score;

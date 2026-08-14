@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds } from '../evals/csb/harness/score.mjs';
-import { prepareArmWorkspace } from '../evals/csb/harness/prepare.mjs';
+import { prepareArmWorkspace, outputSchemaText } from '../evals/csb/harness/prepare.mjs';
 import { buildActorPrompt } from '../evals/csb/harness/prompts.mjs';
 import {
   actorSpec,
@@ -120,12 +120,19 @@ describe('CSB prepareArmWorkspace', () => {
       assert.doesNotMatch(p, /G_FLOOR|verify_1_|targetAnswers|oracle\.json/i);
       assert.doesNotMatch(p, /mcq_1_|judge-rubric/i);
     }
-    assert.match(withP, /SKILL\.md|provider/i);
-    assert.match(withP, /Canonical|canonical option ids|whatsapp_voice|Omit/i);
-    assert.match(withP, /non-empty/i);
-    assert.match(baseP, /do \*\*not\*\* have a Callsmith skill/i);
-    // BASE must not receive full Callsmith sealed enum dump (keeps ablation honest)
-    assert.doesNotMatch(baseP, /Canonical answers vocabulary|gemini_live|custom_fastapi/i);
+    // Fairness contract: prompts route, they never inline gate vocabulary.
+    // The interface (enums, receipt shape) lives in OUTPUT_SCHEMA.md for BOTH arms.
+    assert.match(withP, /SKILL\.md/);
+    for (const p of [withP, baseP]) {
+      assert.doesNotMatch(p, /thirty_days|ninety_days|whatsapp_voice|warm_transfer|transfer\|callback/);
+      assert.doesNotMatch(p, /BASE arm|WITH arm/i);
+    }
+    const schema = outputSchemaText();
+    assert.match(schema, /thirty_days/);
+    assert.match(schema, /json callsmith-contract/);
+    assert.match(schema, /turn_gap_ms/);
+    // BASE gets the interface but not the skill's judgment content.
+    assert.doesNotMatch(baseP, /SKILL\.md|provider packs|verification CLI/i);
   });
 });
 

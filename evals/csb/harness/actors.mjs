@@ -103,12 +103,19 @@ export function prepareGrokActorHome(
 
 export function actorEnvironment(spec, { cwd, arm, actorHome, actorBin } = {}) {
   if (spec.tool === 'opencode') {
-    return {
-      ...process.env,
-      PATH: arm === 'WITH'
-        ? `${join(cwd, '.bin')}:${process.env.PATH || ''}`
-        : process.env.PATH || '',
-    };
+    // Scrub vars that would reveal the harness repo path or run configuration.
+    // ponytail: full HOME isolation would also lose opencode's provider auth,
+    // so opencode stays diagnostic-grade (README publication rules).
+    const env = { ...process.env };
+    delete env.PWD;
+    delete env.OLDPWD;
+    for (const key of Object.keys(env)) {
+      if (key.startsWith('CSB_') || key.startsWith('OPENCODE_EVAL_')) delete env[key];
+    }
+    env.PATH = arm === 'WITH'
+      ? `${join(cwd, '.bin')}:${process.env.PATH || ''}`
+      : process.env.PATH || '';
+    return env;
   }
   // codex and grok share the same fail-closed scrubbed environment; only the
   // tool-specific home variables differ.

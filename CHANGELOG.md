@@ -18,6 +18,7 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 - All nine shipped plugin/marketplace manifests now carry the exact package.json version, enforced by a new release-integrity test (the `.kimi` marketplace format marker excepted).
 - CI: Node 20/22 matrix, `timeout-minutes`, superseded-run cancellation, and coverage reporting; `engines` corrected to `>=20.12` (the suite requires `entry.parentPath`). Added `sync:skill` (single-source mirror script) and a tag-triggered release workflow that runs the gates and attaches the packed tarball to a GitHub Release.
 - Removed the `.DS_Store` filter fossil from the release walk and the `REQUIRED_SECTIONS.length` tautology from contract tests; backfilled derivable changelog dates (1.3.0, 1.6.0, 1.7.0) from git history.
+- CSB fairness hardening (prompt revision 2, breaking comparability with pre-2026-08-15 runs): OUTPUT_SCHEMA.md now publishes the answers enum table and receipt field shape to BOTH arms so BASE fails only on judgment, never vocabulary availability; both actor prompts rewritten short and natural-register (DeepSWE-style) with the WITH prompt routing to the skill instead of inlining gate answers; neutral workspace READMEs/tmpdir labels (no arm identity); opencode actor env scrubbed of repo-path and CSB variables; per-trial input symmetry asserted in code; `reproducibility.json` and `README.md` made immutable controls; dead `oracle.menu` receipt-provider block and its synthetic-only test removed.
 
 ## [1.8.0-agent-compiler] — 2026-07-31
 

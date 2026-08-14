@@ -580,7 +580,7 @@ export function validateCanonicalInputs(armRoot, arm, scenario) {
 
 function normalizePromptWorkspace(value) {
   return String(value).split('\n').map((line) => (
-    line.startsWith('- Work only inside ') ? '- Work only inside $WORKSPACE.' : line
+    /^-?\s*Work only inside /.test(line) ? 'Work only inside $WORKSPACE.' : line
   )).join('\n');
 }
 

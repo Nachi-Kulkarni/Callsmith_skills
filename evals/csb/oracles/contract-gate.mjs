@@ -5,7 +5,6 @@
  * when domain is regulated.
  */
 import { validateContract } from '../../../src/lib/contract.mjs';
-import { expandAnswers } from '../../../src/lib/resolver.mjs';
 import {
   CONSENT_RANK,
   RETENTION_RANK,
@@ -48,29 +47,6 @@ export function scoreContractGate(recipeText, answers, oracle) {
     for (const [id, actual, expected] of comparisons) {
       const ok = actual === expected;
       run(id, ok, ok ? `${actual} matches answers` : `receipt ${actual ?? '(missing)'} != answers ${expected ?? '(missing)'}`);
-    }
-
-    if (oracle?.menu) {
-      try {
-        const expanded = expandAnswers(answers, oracle.menu, { strict: true });
-        const expectedProviders = Object.fromEntries(Object.entries(expanded.providers || {})
-          .filter(([, selection]) => selection?.id)
-          .map(([role, selection]) => [role, selection.id]));
-        const actualProviders = receipt.providers || {};
-        const roles = [...new Set([...Object.keys(expectedProviders), ...Object.keys(actualProviders)])].sort();
-        for (const role of roles) {
-          const actual = actualProviders[role];
-          const expected = expectedProviders[role];
-          const ok = actual === expected;
-          run(
-            `receipt_provider_${role}_matches_answers`,
-            ok,
-            ok ? `${role}:${actual} matches answers` : `receipt ${role}:${actual ?? '(missing)'} != answers ${expected ?? '(missing)'}`,
-          );
-        }
-      } catch (error) {
-        run('answers_expand_for_receipt', false, `answers cannot be normalized for receipt comparison: ${error.message}`);
-      }
     }
   }
 

@@ -450,6 +450,30 @@ optional: LLM essay judge (weight 0)
 4. **Schema versioned** — `schema_version: 1` required on load.
 5. **No public lift from fixtures alone** — fixture summaries set `publishable: false`.
 
+### Fairness hardening (2026-08-15, prompt revision 2)
+
+A full harness audit (input symmetry, oracle independence, leakage, validity,
+determinism, counterbalancing) plus the DeepSWE prompt lessons produced these
+locked rules. Runs before this revision are not comparable to runs after it.
+
+- **The interface belongs to both arms.** `OUTPUT_SCHEMA.md` (byte-identical per
+  arm) publishes the full answers enum table and the receipt field shape. BASE
+  can now fail only on judgment — floors, physics, consistency — never on
+  vocabulary availability. Floor minimums, packs, and the CLI loop remain
+  WITH-only; that is the measured product.
+- **Prompts route, never coach.** Both prompts are short, natural-register task
+  statements (DeepSWE style). The WITH prompt says the skill is installed and to
+  read `SKILL.md`; it no longer inlines enum lists, channel rules, or floor
+  answers. Lift therefore attributes to the skill bundle, not the prompt.
+- **No arm identity disclosure.** Workspace READMEs and tmpdir labels are
+  neutral; which arm is which lives only in harness-side metadata.
+- **Env scrubbing for opencode actors** (`PWD`, `OLDPWD`, `CSB_*`,
+  `OPENCODE_*` removed) so the harness repo path cannot leak.
+- **Input symmetry is asserted in code** per trial (brief, scenario,
+  `OUTPUT_SCHEMA.md`, seed hashes compared across arms) before any pair scores.
+- **`reproducibility.json` and `README.md` are immutable controls** — actor
+  tampering invalidates the arm.
+
 ### Critical files
 
 - New: `evals/csb/**` (this design + oracles + score + core10)

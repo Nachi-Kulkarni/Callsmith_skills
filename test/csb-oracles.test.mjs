@@ -16,7 +16,6 @@ import {
 } from '../evals/csb/harness/score.mjs';
 import { DETERMINISTIC_TRAPS } from '../evals/csb/oracles/real.mjs';
 import { scoreContractGate } from '../evals/csb/oracles/contract-gate.mjs';
-import { loadMenu } from '../src/lib/resolver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -212,18 +211,5 @@ describe('examples golden still contract-valid', () => {
       },
     });
     assert.equal(g.pass, true, g.errors.join('; '));
-  });
-
-  it('contract receipt provider choices must match normalized answers', () => {
-    const answers = JSON.parse(
-      fs.readFileSync(path.join(ROOT, 'examples/clinic-triage/voice.answers.json'), 'utf8'),
-    );
-    const recipe = fs.readFileSync(
-      path.join(ROOT, 'examples/clinic-triage/callsmith.recipe.md'),
-      'utf8',
-    ).replace('"telephony": "twilio"', '"telephony": "exotel"');
-    const result = scoreContractGate(recipe, answers, { contract_domain: 'medical', menu: loadMenu() });
-    assert.equal(result.pass, false);
-    assert.match(result.errors.join('; '), /receipt telephony:exotel != answers twilio/);
   });
 });
