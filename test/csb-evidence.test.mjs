@@ -85,6 +85,23 @@ describe('CSB evidence publication', () => {
     }
   });
 
+  it('fail-closes on a forged commit pin under the real provenance verifier', () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-evidence-forged-'));
+    const out = path.join(temp, 'published');
+    try {
+      const source = createRawPublishableRun(temp, 'raw-run');
+      // No stub: the default verifyCheckoutProvenance must reject the fixture's
+      // commit pin (b*40 exists in no repository) before any evidence is written.
+      assert.throws(
+        () => buildEvidenceBundle({ source, out }),
+        /Recorded benchmark commit is unavailable: b{40}/,
+      );
+      assert.equal(fs.existsSync(out), false);
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
+  });
+
   it('refuses to turn a diagnostic run into public evidence', () => {
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-evidence-refuse-'));
     const source = createRawPublishableRun(temp, 'raw-run');
@@ -139,6 +156,8 @@ describe('CSB evidence publication', () => {
   });
 });
 
-function testProvenance() {
-  return true;
+function testProvenance(config) {
+  // Weak stub: only asserts the verifier is consulted with the parsed run config
+  // carrying a full commit pin. Rejection is covered by the forged-commit test above.
+  assert.match(config.git?.commit || '', /^[a-f0-9]{40}$/);
 }

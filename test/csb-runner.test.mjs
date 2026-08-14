@@ -1,10 +1,11 @@
 /**
  * Phase 2 runner: prepare workspaces without oracle leak; dry-run + score-fixtures.
  */
-import { describe, it } from 'node:test';
+import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds } from '../evals/csb/harness/score.mjs';
@@ -32,11 +33,15 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RUNNER = path.join(ROOT, 'evals/csb/harness/run-arms.mjs');
+// Scratch run roots live in tmpdir, not evals/csb/runs, and are removed even
+// when tests fail — leaking _test-* dirs into the repo was how 127MB accrued.
+const RUNS = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-runner-test-'));
+after(() => fs.rmSync(RUNS, { recursive: true, force: true }));
 
 describe('CSB prepareArmWorkspace', () => {
   const scenario = loadScenario('clinic-floor-poison');
-  const baseDir = path.join(ROOT, 'evals/csb/runs/_test-prepare-BASE');
-  const withDir = path.join(ROOT, 'evals/csb/runs/_test-prepare-WITH');
+  const baseDir = path.join(RUNS, '_test-prepare-BASE');
+  const withDir = path.join(RUNS, '_test-prepare-WITH');
 
   it('BASE has brief+seed, no skill/packs/cli, no oracle leak', () => {
     fs.rmSync(baseDir, { recursive: true, force: true });
@@ -346,7 +351,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('dry-run prepares both arms and does not publish CSB-Δ', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-dry-run');
+    const out = path.join(RUNS, '_test-dry-run');
     fs.rmSync(out, { recursive: true, force: true });
     const r = spawnSync(
       process.execPath,
@@ -370,7 +375,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('score-fixtures emits demo deltas but marks unpublished', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-fixtures');
+    const out = path.join(RUNS, '_test-fixtures');
     fs.rmSync(out, { recursive: true, force: true });
     const r = spawnSync(
       process.execPath,
@@ -386,7 +391,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('excludes solved scenarios from low-cost screening schedules', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-exclude');
+    const out = path.join(RUNS, '_test-exclude');
     fs.rmSync(out, { recursive: true, force: true });
     const r = spawnSync(process.execPath, [
       RUNNER, '--dry-run', '--arms', 'WITH', '--exclude', 'clinic-floor-poison', '--out', out,
@@ -400,7 +405,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('requires an explicit model pin before a live run', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-no-model');
+    const out = path.join(RUNS, '_test-no-model');
     fs.rmSync(out, { recursive: true, force: true });
     const r = spawnSync(process.execPath, [RUNNER, '--scenario', 'clinic-floor-poison', '--out', out], {
       encoding: 'utf8', cwd: ROOT,
@@ -411,7 +416,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('requires a Codex reasoning pin before a live run', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-no-reasoning');
+    const out = path.join(RUNS, '_test-no-reasoning');
     fs.rmSync(out, { recursive: true, force: true });
     const r = spawnSync(process.execPath, [
       RUNNER,
@@ -426,7 +431,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('requires a Grok reasoning pin before a live run', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-no-grok-reasoning');
+    const out = path.join(RUNS, '_test-no-grok-reasoning');
     fs.rmSync(out, { recursive: true, force: true });
     const r = spawnSync(process.execPath, [
       RUNNER,
@@ -441,7 +446,7 @@ describe('CSB run-arms CLI', () => {
   });
 
   it('refuses to overwrite an existing run root', () => {
-    const out = path.join(ROOT, 'evals/csb/runs/_test-reused-root');
+    const out = path.join(RUNS, '_test-reused-root');
     fs.rmSync(out, { recursive: true, force: true });
     fs.mkdirSync(out, { recursive: true });
     const r = spawnSync(process.execPath, [RUNNER, '--dry-run', '--scenario', 'clinic-floor-poison', '--out', out], {
@@ -469,7 +474,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('invalidates failed actors even when artifacts exist', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-invalid-actor');
+    const dir = path.join(RUNS, '_test-invalid-actor');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const answers = path.join(dir, 'voice.answers.json');
@@ -487,7 +492,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('invalidates truncated output or a required invalid trace', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-invalid-trace');
+    const dir = path.join(RUNS, '_test-invalid-trace');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const answers = path.join(dir, 'voice.answers.json');
@@ -512,7 +517,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('invalidates stale or unchanged artifacts', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-stale-artifacts');
+    const dir = path.join(RUNS, '_test-stale-artifacts');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const answers = path.join(dir, 'voice.answers.json');
@@ -532,7 +537,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('rejects symlinked actor artifacts', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-symlink-artifact');
+    const dir = path.join(RUNS, '_test-symlink-artifact');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const target = path.join(dir, 'target.json');
@@ -552,7 +557,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('rejects directory artifacts without attempting to read them', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-directory-artifact');
+    const dir = path.join(RUNS, '_test-directory-artifact');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const answers = path.join(dir, 'voice.answers.json');
@@ -570,7 +575,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('does not treat an mtime-only touch as rewriting seeded output', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-touched-seed');
+    const dir = path.join(RUNS, '_test-touched-seed');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const answers = path.join(dir, 'voice.answers.json');
@@ -591,7 +596,7 @@ describe('CSB validity and repeated-run statistics', () => {
   });
 
   it('invalidates an actor that changes a controlled benchmark input', () => {
-    const dir = path.join(ROOT, 'evals/csb/runs/_test-mutated-input');
+    const dir = path.join(RUNS, '_test-mutated-input');
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     const answers = path.join(dir, 'voice.answers.json');

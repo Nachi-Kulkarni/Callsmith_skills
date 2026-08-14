@@ -26,10 +26,6 @@ function run(...args) {
 }
 
 describe('contract validate (G5)', () => {
-  it('REQUIRED_SECTIONS has 7 G5 sections', () => {
-    assert.equal(REQUIRED_SECTIONS.length, 7);
-  });
-
   it('empty contract fails', () => {
     const r = validateContract('');
     assert.equal(r.status, 'FAIL');

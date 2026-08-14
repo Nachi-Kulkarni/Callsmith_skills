@@ -190,8 +190,10 @@ function buildBundle(root, name, options) {
 
 const REVIEW_OPTIONS = { provenanceVerifier: testProvenance };
 
-function testProvenance() {
-  return true;
+function testProvenance(config) {
+  // Weak stub: only asserts the verifier is consulted with the parsed run config
+  // carrying a full commit pin. Rejection is covered in csb-evidence.test.mjs.
+  assert.match(config.git?.commit || '', /^[a-f0-9]{40}$/);
 }
 
 function withTempDir(callback) {
