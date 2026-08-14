@@ -1,5 +1,11 @@
 # Luna/xhigh full-suite diagnostic
 
+> **RETRACTED (2026-08-15).** The numbers in this report cannot be reproduced from retained
+> artifacts and are withdrawn. They were produced under a pre-fairness harness whose BASE arm
+> lacked the published output interface, and the scoring provenance is no longer trustworthy.
+> Replaced by the fairness-hardened runs in
+> [`csb-fair-harness-20260815.md`](./csb-fair-harness-20260815.md).
+
 The same coding model received the same voice-agent brief twice. One run worked normally; the other
 could also use Callsmith's guidance, provider facts, and checks. Both had to finish the design files.
 

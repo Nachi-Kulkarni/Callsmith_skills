@@ -85,22 +85,38 @@ callsmith contract validate --file examples/clinic-triage/callsmith.recipe.md \
 
 ## What we have tested
 
-We gave GPT-5.6 Luna at `xhigh` the same 32 voice-app briefs twice. In one set it worked normally.
-In the other it could use Callsmith. We then checked the finished design files.
+Current models design voice agents well. Callsmith makes their designs verifiable.
 
-We have only run this test with one model family so far. It does not measure call quality, latency,
-uptime, cost, or user success. Read the [plain-English report](./evidence/diagnostics/luna-xhigh-full-suite-20260731.md),
+Diagnostic numbers from live paired CSB runs (2026-08-15, harness prompt revision 2 +
+published interface): the same agent, same brief, same budget — once working normally,
+once with the Callsmith skill. Both arms receive the identical output interface
+(canonical enums, receipt schema); the skill is the only difference. Scores are
+deterministic gates on the artifacts, never a judge.
+
+**10–11 briefs per model · deterministic gates · paired arms** — single run per
+scenario (diagnostic grade; 3-repetition runs with tightened intervals come before any
+product claim). OpenCode runs are diagnostic-grade isolation; Codex runs are
+publication-eligible. This measures design artifacts, not call quality, latency,
+uptime, or deployed cost.
+
+| | Normal | + Callsmith | lift |
+|---|---:|---:|---:|
+| DeepSeek V4 Flash — fully gated designs | 7/10 | 9/9* | **+30pp** |
+| GPT-5.6-Luna xhigh — fully gated designs | 6/11 | 11/11 | **+45pp** |
+
+Per-gate (both models, normal arm): reality traps 100%, stack physics 100% — the
+models are good. The lift lives entirely in **safety-floor completion** and
+**machine-validatable contract consistency**, the two things the skill enforces.
+The frontier model gained *more* than the cheap one: strong reasoning writes
+confident designs, and nothing without a verifier makes it re-check them.
+
+\* one WITH arm was invalidated by the actor omitting its recipe file (correctly
+caught by validity gates), not by the skill.
+
+Read the [run report](./evidence/diagnostics/csb-fair-harness-20260815.md),
 [test rules](./evidence/README.md), and [full limitations](./evidence/HONEST-NUMBERS.md).
-
-| What the reviewer checked | Normal run | Using Callsmith |
-|---|---:|---:|
-| Checklist items completed | 26/128 | 128/128 |
-| Safe recording, retention, and handoff choices | 14/32 | 32/32 |
-| Designs without hard contradictions | 12/32 | 32/32 |
-
-Many of the normal drafts had good ideas and passed some checks. Most missing points came from audio
-and handoff details that were left unclear. The test counted a check only when the decision was
-written down and agreed with the rest of the design.
+Earlier (2026-07) diagnostic numbers published in this README were withdrawn —
+see the note atop the old report.
 
 ## Things you can ask Callsmith to do
 
