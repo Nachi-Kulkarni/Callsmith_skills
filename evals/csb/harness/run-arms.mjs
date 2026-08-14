@@ -12,7 +12,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds, scoreArm, pairDelta } from './score.mjs';
 import { prepareArmWorkspace, readArmArtifacts, REPO_ROOT } from './prepare.mjs';
@@ -146,11 +146,19 @@ const config = {
   scenarios: scenarioIds,
   arms: armsWanted,
   budget: { timeout_ms_per_arm: timeoutMs, max_captured_output_bytes_per_stream: 20 * 1024 * 1024 },
+  arm_execution: 'parallel',
   source,
   schedule,
 };
 
-mkdirSync(outRoot, { recursive: true });
+mkdirSync(dirname(outRoot), { recursive: true });
+try {
+  // Atomic: two runners that race past the existsSync check above cannot both win.
+  mkdirSync(outRoot);
+} catch (error) {
+  if (error.code === 'EEXIST') fail(`Refusing reused run directory: ${outRoot}`);
+  throw error;
+}
 writeJson(join(outRoot, 'config.json'), config);
 console.log(`\nCallsmithBench ${config.mode}: ${schedule.length} scheduled pair(s)/arm set`);
 console.log(`  model: ${actorModel || 'not applicable'}`);
@@ -169,7 +177,7 @@ for (const scheduled of schedule) {
     continue;
   }
 
-  for (const arm of scheduled.arms) {
+  const runArm = async (arm) => {
     const persistedRunDir = join(trialRoot, arm);
     const isolated = dryRun
       ? null
@@ -226,7 +234,7 @@ for (const scheduled of schedule) {
       writeJson(join(runDir, 'actor.status.json'), actorStatus);
       result.arms[arm] = { runDir, actor: actorStatus, score: null, reproducibility: armRepro };
       console.log(`  trial ${scheduled.trial} ${scenario.id} ${arm}: prepared`);
-      continue;
+      return;
     }
 
     process.stdout.write(`  trial ${scheduled.trial} ${scenario.id} ${arm}: actor ... `);
@@ -303,7 +311,10 @@ for (const scheduled of schedule) {
     rmSync(isolated.root, { recursive: true, force: true });
     result.arms[arm] = { runDir: persistedRunDir, actor: actorStatus, score, reproducibility: armRepro };
     console.log(validity.valid ? 'valid' : `INVALID (${validity.reasons.join('; ')})`);
-  }
+  };
+  // Arms of a trial run concurrently: independent workspaces, no shared state.
+  // The recorded arm_order remains the deterministic counterbalance label.
+  await Promise.all(scheduled.arms.map((arm) => runArm(arm)));
 
   // Input symmetry is an invariant, not a convention: identical controlled
   // inputs across arms of a trial, asserted in code before any pair is scored.
