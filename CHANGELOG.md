@@ -4,6 +4,8 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+- Added `/callsmith noise-cancellation` (`reference/noise-cancellation.md`) — open-source echo/noise/side-speaker suppression playbook: contaminant classification, WebRTC APM/RNNoise/DeepFilterNet/Silero/ECAPA/TSE boundaries, sustained level gating, speaker-attributed control, one-rung-at-a-time build order, and a field experiment ledger with dated priors.
+
 ## [1.8.0-agent-compiler] — 2026-07-31
 
 - Added a lean, self-contained `skills/callsmith/` distribution for one-command installation through

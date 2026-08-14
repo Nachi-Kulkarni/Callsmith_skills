@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 const filesUnder = (directory) => fs.readdirSync(path.join(ROOT, directory), { recursive: true, withFileTypes: true })
-  .filter((entry) => entry.isFile())
+  .filter((entry) => entry.isFile() && entry.name !== '.DS_Store')
   .map((entry) => path.join(entry.parentPath.slice(path.join(ROOT, directory).length + 1), entry.name))
   .sort();
 
@@ -48,9 +48,15 @@ describe('release integrity', () => {
     );
   });
 
+  it('ships noise cancellation as a routed Callsmith reference', () => {
+    assert.match(read('SKILL.md'), /`noise-cancellation`.*reference\/noise-cancellation\.md/);
+    assert.equal(read('skills/callsmith/reference/noise-cancellation.md'), read('reference/noise-cancellation.md'));
+    assert.match(read('reference/noise-cancellation.md'), /ca64b7d3638fc70f/);
+  });
+
   it('keeps the public provider-pack count derived from the shipped library', () => {
     const count = filesUnder('providers').filter((file) => file.endsWith('.json') && file !== '_schema.json').length;
-    assert.match(read('README.md'), new RegExp(`${count} checked packs`));
+    assert.match(read('README.md'), new RegExp(`${count} voice providers`));
     assert.match(read('SKILL.md'), new RegExp(`Provider packs \\(${count}\\)`));
   });
 
