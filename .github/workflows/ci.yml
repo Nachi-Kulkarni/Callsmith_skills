@@ -8,18 +8,26 @@ on:
     # red with no human in the loop. Red is the only pager (see MAINTENANCE.md).
     - cron: '17 5 * * 1'
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
 
       - name: Run callsmith test suite
-        run: npm test
+        run: npm test -- --experimental-test-coverage
 
       - name: Verification CLI smoke
         run: |
@@ -31,6 +39,7 @@ jobs:
 
   validate-packs:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

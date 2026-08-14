@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import {
   loadMenu,
   loadProviders,
@@ -22,19 +23,25 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 const [cmd, ...rest] = process.argv.slice(2);
-const args = parseArgs(rest);
-
-function parseArgs(a) {
-  const o = {};
-  for (let i = 0; i < a.length; i++) {
-    const k = a[i];
-    if (k.startsWith('--')) {
-      o[k.slice(2)] = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : true;
-    } else {
-      o._ = (o._ || []).concat(k);
-    }
-  }
-  return o;
+let args;
+let positional;
+try {
+  ({ values: args, positionals: positional } = parseArgs({
+    args: rest,
+    options: {
+      json: { type: 'boolean' },
+      file: { type: 'string' },
+      answers: { type: 'string' },
+      domain: { type: 'string' },
+      version: { type: 'boolean' },
+      help: { type: 'boolean' },
+    },
+    allowPositionals: true,
+    strict: true,
+  }));
+} catch (e) {
+  console.error(`error: ${e.message}\nRun: callsmith --help`);
+  process.exit(2);
 }
 
 function die(msg, code = 1) {
@@ -119,7 +126,7 @@ function cmdVerifyPacks() {
 }
 
 function readAnswers(file) {
-  if (!file || file === true) die('--answers <file> is required');
+  if (!file) die('--answers <file> is required');
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
@@ -223,17 +230,17 @@ function cmdCheck() {
 }
 
 function cmdContractValidate() {
-  const file = args.file || args.f || positional[1];
-  if (!file || file === true) die('usage: callsmith contract validate --file <handoff.md> [--answers voice.answers.json] [--domain medical|...]');
+  const file = args.file || positional[1];
+  if (!file) die('usage: callsmith contract validate --file <handoff.md> [--answers voice.answers.json] [--domain medical|...]');
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch (e) {
     die(`could not read contract file "${file}": ${e.message}`);
   }
-  const domain = args.domain === true ? undefined : args.domain;
+  const domain = args.domain;
   const report = validateContract(text, { domain, providers: loadProviders() });
-  if (args.answers && args.answers !== true) {
+  if (args.answers) {
     let answers;
     try {
       answers = JSON.parse(fs.readFileSync(args.answers, 'utf8'));
@@ -243,8 +250,6 @@ function cmdContractValidate() {
     report.answers_consistency = validateContractAnswers(report.receipt, answers, loadMenu());
     report.errors.push(...report.answers_consistency.errors);
     report.status = report.errors.length ? 'FAIL' : 'PASS';
-  } else if (args.answers === true) {
-    die('--answers requires a JSON file path');
   }
   if (args.json === true) {
     console.log(JSON.stringify(report, null, 2));
@@ -328,8 +333,6 @@ if (cmd === '--version' || cmd === 'version' || args.version === true) {
   console.log(VERSION);
   process.exit(0);
 }
-
-const positional = args._ || [];
 
 if (cmd === 'packs') {
   cmdPacks();

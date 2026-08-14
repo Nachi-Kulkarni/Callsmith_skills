@@ -20,7 +20,7 @@
     ]
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.12"
   },
   "scripts": {
     "callsmith": "node bin/callsmith.mjs",
@@ -36,7 +36,8 @@
     "bench:measure": "node evals/measure/run.mjs",
     "bench:measure:publish": "node evals/measure/run.mjs --publish",
     "doctor": "node bin/callsmith.mjs doctor",
-    "pack:validate": "node bin/callsmith.mjs pack validate"
+    "pack:validate": "node bin/callsmith.mjs pack validate",
+    "sync:skill": "rm -rf skills/callsmith/reference skills/callsmith/providers skills/callsmith/examples && cp -R reference providers examples skills/callsmith/ && cp SKILL.md product_decisions.md skills/callsmith/"
   },
   "keywords": [
     "voice",

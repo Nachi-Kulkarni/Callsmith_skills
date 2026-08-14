@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Release gates (docs/RELEASING.md)
+        run: |
+          node --test
+          node bin/callsmith.mjs pack validate
+          node bin/callsmith.mjs verify-packs
+          npm pack --dry-run
+      - run: npm pack
+      # npm publish goes here once NPM_TOKEN / registry auth exists (docs/RELEASING.md).
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.tgz'
+          generate_release_notes: true
