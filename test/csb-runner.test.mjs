@@ -134,6 +134,20 @@ describe('CSB prepareArmWorkspace', () => {
     // BASE gets the interface but not the skill's judgment content.
     assert.doesNotMatch(baseP, /SKILL\.md|provider packs|verification CLI/i);
   });
+
+  it('OUTPUT_SCHEMA publishes the complete menu interface (no hidden enums)', () => {
+    const menu = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/menu.json'), 'utf8'));
+    const schema = outputSchemaText();
+    for (const group of menu.groups) {
+      assert.ok(schema.includes(`\`${group.id}\``), `OUTPUT_SCHEMA missing group: ${group.id}`);
+      for (const option of group.options) {
+        assert.ok(schema.includes(`\`${option.id}\``), `OUTPUT_SCHEMA missing option: ${group.id}/${option.id}`);
+      }
+    }
+    assert.match(schema, /"surface"/);
+    assert.match(schema, /"recording_consent"/);
+    assert.match(schema, /"human_handoff"/);
+  });
 });
 
 describe('CSB run-arms CLI', () => {

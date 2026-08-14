@@ -17,6 +17,12 @@ const HERE = fileURLToPath(new URL('.', import.meta.url));
 export const REPO_ROOT = resolve(HERE, '../../..');
 
 export function outputSchemaText() {
+  // The answers interface IS the menu. Generated, never hand-maintained —
+  // a hand-copied table drifted from menu.json once and invalidated a suite.
+  const menu = JSON.parse(readFileSync(join(REPO_ROOT, 'data/menu.json'), 'utf8'));
+  const rows = menu.groups
+    .map((g) => `| \`${g.id}\` | ${g.options.map((o) => `\`${o.id}\``).join(', ')} |`)
+    .join('\n');
   return [
     '# Required outputs',
     '',
@@ -24,28 +30,14 @@ export function outputSchemaText() {
     '',
     '## 1. `voice.answers.json`',
     '',
-    'JSON object of design choices using exactly these string enum tokens. Values outside',
-    'these lists do not resolve. Include the keys that apply; **omit** unused provider keys',
-    '(never use the string `"none"` as a provider id).',
+    'JSON object of design choices using exactly these string enum tokens (the full',
+    'answer interface). Values outside these lists do not resolve. Include the keys',
+    'that apply; **omit** unused provider keys (never use the string `"none"` as a',
+    'provider id).',
     '',
     '| Field | Allowed values |',
     '|---|---|',
-    '| `surface` | `inbound_pstn`, `outbound_pstn`, `web_voice`, `webrtc_app`, `whatsapp_voice` |',
-    '| `architecture` | `realtime_s2s`, `cascaded`, `hybrid` |',
-    '| `recording_consent` | `none`, `announce`, `explicit` |',
-    '| `transcript_retention` | `ephemeral`, `seven_days`, `thirty_days`, `ninety_days` |',
-    '| `human_handoff` | `none`, `transfer`, `callback`, `ticket` |',
-    '| `language` | `english`, `hindi`, `hinglish`, `tamil`, `kannada`, `multilingual` |',
-    '| `telephony` | `exotel`, `twilio`, `plivo`, `telnyx`, `vonage` |',
-    '| `orchestration` | `livekit`, `pipecat`, `custom_fastapi` |',
-    '| `realtime_model` | `gemini_live`, `openai_realtime` |',
-    '| `stt` | `deepgram`, `assemblyai` |',
-    '| `llm` | `gpt_4o`, `claude`, `gemini_l` |',
-    '| `tts` | `elevenlabs`, `sarvam`, `cartesia` |',
-    '| `vad` | `silero`, `deepgram_endpointing`, `webrtc_vad` |',
-    '',
-    'Other common keys (free choice where no enum applies): `barge_in`, `tools`,',
-    '`business_logic`, `latency`, `deployment`.',
+    rows,
     '',
     '## 2. `callsmith.recipe.md`',
     '',
@@ -56,9 +48,13 @@ export function outputSchemaText() {
     '{',
     '  "schema_version": 1,',
     '  "domain": "general|medical|banking|collections|legal|insurance",',
+    '  "surface": "<same surface value as voice.answers.json>",',
     '  "providers": { "<role>": { "id": "<provider id>" } },',
     '  "policy": {',
     '    "basis": "callsmith_default|organization_policy|legal_review|explicit_risk_acceptance",',
+    '    "recording_consent": "<same value as voice.answers.json>",',
+    '    "transcript_retention": "<same value as voice.answers.json>",',
+    '    "human_handoff": "<same value as voice.answers.json>",',
     '    "retention_basis": "<why this retention>",',
     '    "jurisdiction": "<jurisdiction or \\"none\\">"',
     '  },',
@@ -67,7 +63,8 @@ export function outputSchemaText() {
     '```',
     '',
     'Provider roles: `telephony`, `orchestration`, `realtime`, `stt`, `llm`, `tts`, `vad`.',
-    'The receipt policy must match `voice.answers.json`. `percentile` must be 50, 95, or 99.',
+    'The receipt policy and surface must match `voice.answers.json`. `percentile` must be',
+    '50, 95, or 99.',
     '',
     'Then include headings/content for:',
     '',
