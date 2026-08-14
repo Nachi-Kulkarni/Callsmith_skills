@@ -1,0 +1,18 @@
+{
+  "surface": "whatsapp_voice",
+  "architecture": "cascaded",
+  "orchestration": "custom_fastapi",
+  "stt": "deepgram",
+  "llm": "gemini_l",
+  "tts": "sarvam",
+  "vad": "silero",
+  "language": "hinglish",
+  "barge_in": "disabled",
+  "latency": "low_cost",
+  "business_logic": "booking",
+  "tools": "openapi",
+  "human_handoff": "ticket",
+  "recording_consent": "none",
+  "transcript_retention": "seven_days",
+  "deployment": "railway"
+}

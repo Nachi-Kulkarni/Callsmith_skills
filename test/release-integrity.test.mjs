@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 const filesUnder = (directory) => fs.readdirSync(path.join(ROOT, directory), { recursive: true, withFileTypes: true })
-  .filter((entry) => entry.isFile() && entry.name !== '.DS_Store')
+  .filter((entry) => entry.isFile())
   .map((entry) => path.join(entry.parentPath.slice(path.join(ROOT, directory).length + 1), entry.name))
   .sort();
 
@@ -97,6 +97,30 @@ describe('release integrity', () => {
     assert.deepEqual(pkg.pi.skills, ['./skills']);
     assert.ok(fs.existsSync(path.join(ROOT, '.opencode/plugins/callsmith.js')));
     assert.ok(fs.existsSync(path.join(ROOT, '.pi/extensions/callsmith.ts')));
+  });
+
+  it('keeps every shipped manifest version in lockstep with package.json', () => {
+    const pkg = JSON.parse(read('package.json'));
+    // .kimi-plugin/marketplace.json is excluded: its top-level "version": "2" is the
+    // marketplace format marker, not a plugin version; it carries no plugin version.
+    const versioned = [
+      'plugin.json',
+      '.agy/plugin.json',
+      '.claude-plugin/plugin.json',
+      '.claude-plugin/marketplace.json',
+      '.kimi-plugin/plugin.json',
+      '.cursor-plugin/plugin.json',
+      '.devin-plugin/plugin.json',
+      '.grok-plugin/plugin.json',
+      '.codex-plugin/plugin.json',
+    ];
+    for (const file of versioned) {
+      const manifest = JSON.parse(read(file));
+      const versions = [manifest.version, manifest.metadata?.version, manifest.plugins?.[0]?.version]
+        .filter((version) => version !== undefined);
+      assert.ok(versions.length > 0, `${file} carries no version`);
+      for (const version of versions) assert.equal(version, pkg.version, `${file} version drift from package.json`);
+    }
   });
 
   it('keeps committed contracts visible to normal git staging', () => {
