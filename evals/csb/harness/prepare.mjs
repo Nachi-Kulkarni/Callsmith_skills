@@ -23,6 +23,14 @@ export function outputSchemaText() {
   const rows = menu.groups
     .map((g) => `| \`${g.id}\` | ${g.options.map((o) => `\`${o.id}\``).join(', ')} |`)
     .join('\n');
+  // Receipts use pack ids; answers use menu ids. They differ for a few providers —
+  // publish the mapping (generated from menu maps) so it cannot drift.
+  const idMaps = menu.groups.flatMap((g) => g.options
+    .filter((o) => o.maps?.provider && o.maps.provider !== o.id)
+    .map((o) => `\`${o.id}\` → \`${o.maps.provider}\``));
+  const idMapLine = idMaps.length
+    ? `Receipt \`providers\` use **pack ids**, which differ from the answer ids above only here: ${idMaps.join(', ')}.`
+    : 'Receipt `providers` use **pack ids** (same values as the answer ids above).';
   return [
     '# Required outputs',
     '',
@@ -64,9 +72,10 @@ export function outputSchemaText() {
     '```',
     '',
     'Rules: `providers` values are flat lowercase pack-id strings, one per role',
-    '(`telephony`, `orchestration`, `realtime`, `stt`, `llm`, `tts`, `vad`). The receipt',
-    '`surface` and policy floors must match `voice.answers.json`. `percentile` must be',
-    '50, 95, or 99. Regulated domains (`medical`, `banking`, `collections`, `legal`,',
+    '(`telephony`, `orchestration`, `realtime`, `stt`, `llm`, `tts`, `vad`).',
+    idMapLine,
+    'The receipt `surface` and policy floors must match `voice.answers.json`. `percentile`',
+    'must be 50, 95, or 99. Regulated domains (`medical`, `banking`, `collections`, `legal`,',
     '`insurance`) additionally require a real `jurisdiction` and floor-minimum choices.',
     '',
     'Then include headings/content for:',

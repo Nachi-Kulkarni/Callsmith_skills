@@ -143,6 +143,12 @@ describe('CSB prepareArmWorkspace', () => {
       assert.ok(schema.includes(`\`${group.id}\``), `OUTPUT_SCHEMA missing group: ${group.id}`);
       for (const option of group.options) {
         assert.ok(schema.includes(`\`${option.id}\``), `OUTPUT_SCHEMA missing option: ${group.id}/${option.id}`);
+        if (option.maps?.provider && option.maps.provider !== option.id) {
+          assert.ok(
+            schema.includes(`\`${option.id}\` → \`${option.maps.provider}\``),
+            `OUTPUT_SCHEMA missing pack-id mapping: ${option.id} → ${option.maps.provider}`,
+          );
+        }
       }
     }
     assert.match(schema, /"surface"/);
