@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds } from '../evals/csb/harness/score.mjs';
 import { prepareArmWorkspace, outputSchemaText } from '../evals/csb/harness/prepare.mjs';
+import { validateContract } from '../src/lib/contract.mjs';
 import { buildActorPrompt } from '../evals/csb/harness/prompts.mjs';
 import {
   actorSpec,
@@ -147,6 +148,23 @@ describe('CSB prepareArmWorkspace', () => {
     assert.match(schema, /"surface"/);
     assert.match(schema, /"recording_consent"/);
     assert.match(schema, /"human_handoff"/);
+  });
+
+  it('OUTPUT_SCHEMA receipt example is validator-true (published interface = real schema)', () => {
+    const schema = outputSchemaText();
+    const fenced = schema.match(/```json callsmith-contract\n[\s\S]*?```/);
+    assert.ok(fenced, 'no fenced receipt example in OUTPUT_SCHEMA');
+    const sections = [
+      '## Intent / use case', 'inbound support line; answers calls and books follow-ups.',
+      '## Stack (providers + why)', 'twilio telephony, livekit orchestration, silero vad.',
+      '## Audio path', 'twilio mulaw 8k decoded and resampled by livekit to model rates.',
+      '## Interruption / barge-in', 'livekit owns barge-in flush and TTS cancellation.',
+      '## Floors', 'announce consent, thirty days retention, transfer handoff for escalations.',
+      '## Latency / cost', 'turn gap p95 target 900 ms; modeled cost noted per minute.',
+      '## Build / implement notes', 'deploy workers warm; drain on shutdown.',
+    ].join('\n\n');
+    const report = validateContract(`${fenced[0]}\n\n${sections}`, {});
+    assert.equal(report.status, 'PASS', report.errors.join('; '));
   });
 });
 
