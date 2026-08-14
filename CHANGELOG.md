@@ -5,6 +5,19 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 ## [Unreleased]
 
 - Added `/callsmith noise-cancellation` (`reference/noise-cancellation.md`) — open-source echo/noise/side-speaker suppression playbook: contaminant classification, WebRTC APM/RNNoise/DeepFilterNet/Silero/ECAPA/TSE boundaries, sustained level gating, speaker-attributed control, one-rung-at-a-time build order, and a field experiment ledger with dated priors.
+- Added `/callsmith security` (`reference/security.md`) — card-data routing (DTMF masking on both legs or out-of-band payment links; PAN/CVV never in transcripts, traces, or logs), PII redaction at the trust boundary before persistence, voice-channel prompt injection controls (tool allowlists, typed args, confirmation), and recording access + retention enforcement tied to the policy floors.
+- Added `/callsmith multilingual` (`reference/multilingual.md`) — code-switching STT degradation treated as unmeasured by vendors (planning estimates only), multilingual vs per-language leg choice, per-language TTS voice and pronunciation checks, deployed-population accent calibration, DTMF fallback when ASR confidence collapses in-code-switch, and per-language WER/turn-gap evals (never blended).
+- Added a "Failover and degradation" section to `reference/deploy.md` — failover targets must exist in answers/packs (no synthesis), a retry → fallback provider → busy message + callback ladder, no mid-call failover to a leg with different audio transforms without re-validated physics, and failover treated as a measured property under the deploy-capacity evidence discipline.
+- Reworded the skill description's tail from "voice-agent evaluation" to "latency measurement" — the shipped skill carries latency/ttft playbooks and turn-trace schemas, not eval tooling.
+- Added `test/resolver.test.mjs` — 25 direct unit tests for the resolver physics engine (audio format-pair planning, expandAnswers error paths, cost/latency math, interruption ordering, potholes, impossibilities incl. native capability conflicts); previously zero direct coverage.
+- Replaced the hand-rolled CLI parser with `node:util` `parseArgs` in strict mode — unknown flags now fail loudly instead of silently printing human output when `--json` was requested; removed the `positional` TDZ trap and dead `=== true` guards.
+- Deduplicated the providers/ directory walk into a shared `iterProviderPacks()` used by both `loadProviders` and `validatePacks`, added a duplicate-pack-id guard, and replaced the raw TypeError on a missing realtime leg with a proper error.
+- Evidence tests no longer stub the provenance verifier: a new adversarial test runs the real `verifyCheckoutProvenance` against a forged commit pin and asserts fail-closed rejection with no partial bundle.
+- csb-runner test scratch dirs moved from `evals/csb/runs/` to `os.tmpdir()` with an `after()` cleanup hook — failed runs can no longer leak residue (the source of 127 MB of local artifacts).
+- Added WhatsApp and S2S in-app examples (`examples/whatsapp-reminder/`, `examples/s2s-inapp-support/`), both validated clean by `check` and `contract validate`.
+- All nine shipped plugin/marketplace manifests now carry the exact package.json version, enforced by a new release-integrity test (the `.kimi` marketplace format marker excepted).
+- CI: Node 20/22 matrix, `timeout-minutes`, superseded-run cancellation, and coverage reporting; `engines` corrected to `>=20.12` (the suite requires `entry.parentPath`). Added `sync:skill` (single-source mirror script) and a tag-triggered release workflow that runs the gates and attaches the packed tarball to a GitHub Release.
+- Removed the `.DS_Store` filter fossil from the release walk and the `REQUIRED_SECTIONS.length` tautology from contract tests; backfilled derivable changelog dates (1.3.0, 1.6.0, 1.7.0) from git history.
 
 ## [1.8.0-agent-compiler] — 2026-07-31
 
@@ -28,7 +41,7 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 - Extended contract receipts with optional deployment target, region, and drain ownership; refreshed pack transfer, stream-lifecycle, prompt-cache, and TTS segmentation guidance from official sources.
 - Added the weekly scheduled CI evidence gate — the repo pages its owner when pack evidence expires or drifts — and `MAINTENANCE.md`, the wake-up contract for the feature-complete posture.
 
-## [1.7.0-agent-compiler] — Deploy playbook + deployment physics
+## [1.7.0-agent-compiler] — 2026-07-25 — Deploy playbook + deployment physics
 
 ### Added
 - **`/callsmith deploy`** (`reference/deploy.md`) — cloud-vs-self-host playbook: managed paths (LiveKit Cloud managed agents, Pipecat Cloud) vs self-host, the ten deployment decisions (compute model, concurrency, drain, cold start/warm pools, region physics, SIP ownership, secrets inventory, LB/WebSocket reality, observability, cost break-even), residency floor tie-in, and a Deployment Plan output template.
@@ -43,7 +56,7 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 ### Changed
 - CSB publication gate: a repeated full suite is now ≥10 scenarios (core10 or superset) after the suite grew to 11.
 
-## [1.6.0-agent-compiler] — Regime change: agent compiler + verification
+## [1.6.0-agent-compiler] — 2026-07-10 — Regime change: agent compiler + verification
 
 ### Removed (deterministic generation)
 - `scaffold`, `forge`, `init`, `simulate`, `docs`, `intake`, `spec`, `explain`, `context`, `release-check` as product commands (CLI exits 2 with guidance)
@@ -141,7 +154,7 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 - `--help` exited 1 as "unknown command".
 - Latent bug in `compile.mjs` where `tool-calling.md` content was passed to `path.join` instead of `write`.
 
-## [1.3.0] - Tier 2
+## [1.3.0] - 2026-06-29 - Tier 2
 
 ### Added
 - Cost estimation, conversation state, error handling context.
