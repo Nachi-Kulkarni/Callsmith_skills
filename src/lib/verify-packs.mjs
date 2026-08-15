@@ -85,6 +85,30 @@ export function verifyPacks(providers, menu, options = {}) {
   };
 }
 
+/**
+ * Quarterly-ritual helper (MAINTENANCE.md): which packs need re-verification soon,
+ * in expiry order, with their primary sources. Expired packs (days_left < 0)
+ * already fail verifyPacks; this report is the "schedule the refresh" view.
+ */
+export function packRefreshReport(providers, { now, withinDays = 30 } = {}) {
+  const current = normalizeNow(now);
+  const horizon = current.getTime() + withinDays * DAY_MS;
+  const due = [];
+  for (const [id, pack] of Object.entries(providers || {})) {
+    const expiresAt = parseDateOnly(pack.verification?.expires_at, true);
+    if (!expiresAt || expiresAt.getTime() > horizon) continue;
+    due.push({
+      pack: id,
+      verified_at: pack.verification.verified_at,
+      expires_at: pack.verification.expires_at,
+      days_left: Math.ceil((expiresAt.getTime() - current.getTime()) / DAY_MS),
+      sources: pack.verification.sources || [],
+    });
+  }
+  due.sort((a, b) => a.expires_at.localeCompare(b.expires_at));
+  return { generated_at: current.toISOString(), within_days: withinDays, due };
+}
+
 function verifyRegions(regions, addFailure) {
   if (!regions) return addFailure('missing deployment.regions matrix');
   for (const field of ['media_edges', 'worker_regions', 'model_regions', 'recording_regions', 'transcript_regions']) {

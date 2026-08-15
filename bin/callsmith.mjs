@@ -16,7 +16,7 @@ import {
   detectImpossibilities,
 } from '../src/lib/resolver.mjs';
 import { validatePacks } from '../src/lib/validate.mjs';
-import { verifyPacks } from '../src/lib/verify-packs.mjs';
+import { verifyPacks, packRefreshReport } from '../src/lib/verify-packs.mjs';
 import { validateContract, validateContractAnswers } from '../src/lib/contract.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,6 +33,8 @@ try {
       file: { type: 'string' },
       answers: { type: 'string' },
       domain: { type: 'string' },
+      due: { type: 'boolean' },
+      within: { type: 'string' },
       version: { type: 'boolean' },
       help: { type: 'boolean' },
     },
@@ -59,6 +61,7 @@ Usage:
   callsmith pack show <id>                 Show one pack (JSON)
   callsmith pack validate [--json]         Schema-validate all packs
   callsmith verify-packs [--json]          Evidence provenance/date/expiry checks
+  callsmith verify-packs --due [--within N]  Packs needing re-verification soon
   callsmith check --answers <file>         Physics report from pack data
   callsmith contract validate --file <f>   Semantic receipt + handoff contract
        [--answers voice.answers.json]
@@ -114,6 +117,24 @@ function cmdPackValidate() {
 function cmdVerifyPacks() {
   const providers = loadProviders();
   const menu = loadMenu();
+  if (args.due === true) {
+    const within = args.within === undefined ? 30 : Number(args.within);
+    if (!Number.isInteger(within) || within < 0) die('--within must be a non-negative integer (days)');
+    const report = packRefreshReport(providers, { withinDays: within });
+    if (args.json === true) {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (!report.due.length) {
+      console.log(`No pack evidence expires within ${within} days (${report.generated_at.slice(0, 10)}).`);
+    } else {
+      console.log(`Pack refresh treadmill — ${report.due.length} pack(s) expiring within ${within} days:\n`);
+      for (const item of report.due) {
+        const left = item.days_left < 0 ? `EXPIRED ${-item.days_left}d ago` : `${item.days_left}d left`;
+        console.log(`  ${item.expires_at}  ${String(left).padEnd(16)} ${item.pack}  (${item.sources[0] ?? 'no source'})`);
+      }
+      console.log('\nRe-verify against primary sources, then bump verified_at/expires_at (MAINTENANCE.md).');
+    }
+    return;
+  }
   const report = verifyPacks(providers, menu);
   if (args.json === true) {
     console.log(JSON.stringify(report, null, 2));
@@ -127,11 +148,16 @@ function cmdVerifyPacks() {
 
 function readAnswers(file) {
   if (!file) die('--answers <file> is required');
+  let parsed;
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
     die(`could not parse answers file "${file}": ${e.message}`);
   }
+  if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
+    die(`answers file "${file}" must contain a JSON object of answer fields, got ${parsed === null ? 'null' : Array.isArray(parsed) ? 'an array' : `a ${typeof parsed}`}`);
+  }
+  return parsed;
 }
 
 function cmdCheck() {
@@ -274,23 +300,23 @@ function cmdDoctor() {
   const issues = [];
   const skillPath = path.join(ROOT, 'SKILL.md');
   if (!fs.existsSync(skillPath)) issues.push('SKILL.md missing');
-  for (const playbook of [
-    'audit.md',
-    'critique.md',
-    'architecture.md',
-    'deploy.md',
-    'ttft.md',
-    'harden.md',
-    'contract.md',
-    'policy.md',
-    'workflow.md',
-    'latency.md',
-    'turn-trace.schema.json',
-  ]) {
+  // Canon completeness: every playbook the skill routes to must exist, plus the
+  // non-routed canon (policy/contract/workflow/current-docs, deploy subtree, trace
+  // schemas). Derived from SKILL.md so adding a routing row updates doctor for free.
+  const skill = fs.existsSync(skillPath) ? fs.readFileSync(skillPath, 'utf8') : '';
+  const routed = [...skill.matchAll(/reference\/([a-z0-9-]+\.md)/g)].map((m) => m[1]);
+  const canon = new Set([
+    ...routed,
+    'policy.md', 'contract.md', 'workflow.md', 'current-docs.md',
+    'deploy-capacity.md', 'deploy-workload.md', 'deploy-evidence.md',
+    'turn-trace.schema.json', 'turn-trace.v2.schema.json',
+  ]);
+  for (const playbook of [...canon].sort()) {
     if (!fs.existsSync(path.join(ROOT, 'reference', playbook))) {
       issues.push(`reference/${playbook} missing`);
     }
   }
+  if (routed.length < 8) issues.push('SKILL.md routes fewer than 8 playbooks — routing table looks broken');
   const providers = loadProviders();
   const n = Object.keys(providers).length;
   if (n < 1) issues.push('no provider packs loaded');
@@ -325,6 +351,17 @@ function cmdGone(name) {
 }
 
 // --- route ---
+// A corrupt pack file or unexpected crash must print one clean line, not a stack
+// trace — this CLI's output is consumed by agents and CI, not debugged by eye.
+let routed = false;
+try {
+  routed = route();
+} catch (e) {
+  die(e.message || String(e));
+}
+if (!routed) die(`unknown command "${cmd}". Run: callsmith --help`);
+
+function route() {
 if (!cmd || cmd === 'help' || cmd === '--help' || args.help === true) {
   console.log(HELP);
   process.exit(0);
@@ -364,5 +401,7 @@ if (cmd === 'packs') {
 ) {
   cmdGone(cmd);
 } else {
-  die(`unknown command "${cmd}". Run: callsmith --help`);
+  return false;
+}
+return true;
 }

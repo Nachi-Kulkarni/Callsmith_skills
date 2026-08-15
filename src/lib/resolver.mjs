@@ -577,7 +577,9 @@ export function detectImpossibilities(answers, providers) {
       const pack = selection?.id ? providers[selection.id] : null;
       const regions = pack?.deployment?.regions;
       const values = role === 'telephony' ? regions?.media_edges : role === 'orchestration' ? regions?.worker_regions : regions?.model_regions;
-      if (!values || values.some((value) => ['any', 'global', 'not_applicable'].includes(value))) continue;
+      // A sentinel exempts a leg only when the WHOLE array is sentinel values — a
+      // mixed array (["not_applicable","us-east"]) must still answer the pin.
+      if (!values || values.every((value) => ['any', 'global', 'not_applicable'].includes(value))) continue;
       if (values.includes('unknown') || !values.includes(flags.region)) {
         impossible.push({
           code: 'region_unverified',

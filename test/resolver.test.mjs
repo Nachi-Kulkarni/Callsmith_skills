@@ -245,6 +245,27 @@ describe('detectImpossibilities', () => {
     assert.match(out[0].message, /"ghost" was selected for telephony/);
   });
 
+  it('region pin: a wholly-sentinel array exempts the leg, a mixed array must answer the pin', () => {
+    const sentinel = pack('tel-any', {
+      deployment: { regions: { media_edges: ['not_applicable'] } },
+    });
+    const mixed = pack('tel-mixed', {
+      deployment: { regions: { media_edges: ['not_applicable', 'us-east'] } },
+    });
+    const flags = (id) => ({ needs_telephony: true, mode: 'realtime', region: 'in', direction: 'inbound' });
+    const exempt = detectImpossibilities(
+      { flags: flags('tel-any'), providers: { telephony: { id: 'tel-any' } } },
+      { 'tel-any': sentinel },
+    );
+    assert.equal(exempt.filter(c => c.code === 'region_unverified').length, 0);
+    const pinned = detectImpossibilities(
+      { flags: flags('tel-mixed'), providers: { telephony: { id: 'tel-mixed' } } },
+      { 'tel-mixed': mixed },
+    );
+    assert.equal(pinned.filter(c => c.code === 'region_unverified').length, 1);
+    assert.match(pinned.find(c => c.code === 'region_unverified').message, /tel-mixed/);
+  });
+
   it('flags cascaded stacks missing stt/llm/tts legs', () => {
     const out = detectImpossibilities({ flags: { mode: 'cascaded' }, providers: {} }, {});
     assert.equal(out.filter(c => c.code === 'missing_leg').length, 3);
