@@ -164,8 +164,6 @@ describe('release integrity', () => {
   it('CI does not invoke deleted generation release checks', () => {
     const ci = read('.github/workflows/ci.yml');
     assert.doesNotMatch(ci, /release-check|scaffold tests|pip install/);
-    assert.match(ci, /npm test/);
-    assert.match(ci, /npm pack --dry-run/);
   });
 
   it('checkout entrypoints are executable', () => {

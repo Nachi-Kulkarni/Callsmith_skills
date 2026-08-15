@@ -72,7 +72,7 @@ The eval must prove **value_gained** (physics + floors + ship honesty) and keep 
 | Implementable contract | Blind second agent from recipe only |
 | No scaffold debt | Forbidden tool list is P2P invariant |
 
-### Incredible GitHub project
+### Public credibility
 
 Stars stick when outsiders can:
 

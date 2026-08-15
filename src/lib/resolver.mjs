@@ -311,12 +311,17 @@ export function resolveOperationsConfig(sel, providers, flags) {
   let effectiveHosting = requestedHosting;
   const adjustments = [];
 
-  if (orchId === 'custom-fastapi' && requestedHosting !== 'self_hosted') {
-    effectiveHosting = 'self_hosted';
-    adjustments.push('Custom FastAPI forces self-hosted ownership: your app owns the media WebSocket, codecs, resampling, cleanup, and incident debugging.');
-  } else if (orchId === 'pipecat' && requestedHosting === 'managed_cloud') {
-    effectiveHosting = 'hybrid_worker';
-    adjustments.push('Pipecat runs as your worker process. Provider APIs can be hosted, but deploys, scaling, traces, and frame-level debugging belong to your team.');
+  // Hosting rules live in the orchestration pack (deployment.hosting_rules), not here:
+  // `force` downgrades any other requested model; `cap` downgrades anything above it.
+  const HOSTING_RANK = { managed_cloud: 2, hybrid_worker: 1, self_hosted: 0 };
+  const rules = orch?.deployment?.hosting_rules || null;
+  if (rules?.force && HOSTING_RANK[rules.force] !== undefined && effectiveHosting !== rules.force) {
+    effectiveHosting = rules.force;
+    adjustments.push(rules.reason || `${orchId} forces ${rules.force} hosting.`);
+  } else if (rules?.cap && HOSTING_RANK[rules.cap] !== undefined
+    && HOSTING_RANK[effectiveHosting] > HOSTING_RANK[rules.cap]) {
+    effectiveHosting = rules.cap;
+    adjustments.push(rules.reason || `${orchId} hosting is capped at ${rules.cap}.`);
   }
 
   const hostingLabels = {
@@ -506,9 +511,11 @@ export function computeCost(sel, providers, flags = {}, operations = null) {
 
     let perMin = ce.per_minute_usd || 0;
     let notes = ce.notes || '';
-    if (role === 'orchestration' && pack.id === 'livekit' && ops.effective_hosting_model === 'self_hosted') {
+    if (role === 'orchestration' && ce.self_host_platform_fee_zero === true
+      && ops.effective_hosting_model === 'self_hosted') {
       perMin = 0;
-      notes = 'Self-hosted LiveKit removes the modeled LiveKit Cloud per-minute fee; infrastructure cost is not included.';
+      notes = ce.self_host_note
+        || 'Self-hosted orchestration removes the modeled platform per-minute fee; infrastructure cost is not included.';
     }
     legs.push({
       role,

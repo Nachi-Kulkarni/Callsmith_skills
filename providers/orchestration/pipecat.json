@@ -114,6 +114,10 @@
       "note": "Pipecat Cloud (by Daily) runs hosted bot runners with managed scaling. Pilot-friendly; verify current region coverage and per-minute pricing before committing a regulated deployment."
     },
     "self_host_notes": "Open source; self-host as a bot runner on VMs or Fly machines, typically one bot process per call. You own process supervision, drain on SIGTERM, warm pools for VAD/provider connections, and frame-level tracing.",
+    "hosting_rules": {
+      "cap": "hybrid_worker",
+      "reason": "Pipecat runs as your worker process. Provider APIs can be hosted, but deploys, scaling, traces, and frame-level debugging belong to your team."
+    },
     "concurrency_model": "process_per_call",
     "regions": {
       "media_edges": ["not_applicable"],

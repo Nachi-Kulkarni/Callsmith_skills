@@ -69,7 +69,10 @@
     "billing": "per_minute",
     "rate_usd": 0.005,
     "per_minute_usd": 0.005,
-    "notes": "LiveKit Cloud per-participant. Self-hosted is free."
+    "notes": "LiveKit Cloud per-participant. Self-hosted is free.",
+    "self_host_platform_fee_zero": true,
+    "self_host_note": "Self-hosted LiveKit removes the modeled LiveKit Cloud per-minute fee; infrastructure cost is not included.",
+    "self_host_sources": ["https://livekit.com/pricing"]
   },
   "context7": {
     "library_id": "/livekit/agents",

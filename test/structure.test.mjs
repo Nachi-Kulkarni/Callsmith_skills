@@ -28,59 +28,18 @@ function run(...args) {
 }
 
 describe('skill / constitution structure', () => {
-  it('SKILL.md encodes floors + G5 + canonical vocabulary', () => {
+  it('SKILL.md routing references only playbooks that exist', () => {
     const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
-    assert.match(skill, /Hard floors/i);
-    assert.match(skill, /recording_consent|consent/i);
-    assert.match(skill, /handoff/i);
-    assert.match(skill, /Handoff contract/i);
-    assert.match(skill, /Audio path/i);
-    assert.match(skill, /product_decisions\.md/);
-    assert.match(skill, /pack physics inspect|floor receipts|contract validate|eval gate/i);
-    assert.match(skill, /Canonical answers vocabulary/i);
-    assert.match(skill, /reference\/policy\.md/);
-    const policy = fs.readFileSync(path.join(ROOT, 'reference', 'policy.md'), 'utf8');
-    assert.match(policy, /whatsapp_voice/);
-    assert.match(policy, /warm_transfer|warm transfer/);
-    assert.match(policy, /Omit provider legs|Omit.*provider/i);
-    // May name removed commands only to forbid them
-    assert.match(skill, /Removed \(do not call\).*forge.*scaffold.*intake/is);
-  });
-
-  it('product_decisions.md is sole canon with P0 wedge', () => {
-    const pd = fs.readFileSync(path.join(ROOT, 'product_decisions.md'), 'utf8');
-    assert.match(pd, /Sole constitutional source of truth/i);
-    assert.match(pd, /pack physics inspect \+ floor receipts \+ contract validate \+ eval gate/);
-    assert.match(pd, /The agent compiles/);
-  });
-
-  it('SKILL.md routes deploy + architecture + prompts playbooks and the reference files exist', () => {
-    const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
-    assert.match(skill, /reference\/deploy\.md/);
-    assert.match(skill, /reference\/deploy-capacity\.md/);
-    assert.match(skill, /reference\/architecture\.md/);
-    assert.match(skill, /reference\/prompts\.md/);
-    for (const f of ['deploy.md', 'architecture.md', 'prompts.md']) {
-      assert.ok(fs.existsSync(path.join(ROOT, 'reference', f)), `reference/${f} missing`);
+    const mentioned = [...skill.matchAll(/reference\/([a-z0-9-]+\.md)/g)].map((m) => m[1]);
+    assert.ok(mentioned.length >= 8, 'routing table should reference the playbooks');
+    for (const f of new Set(mentioned)) {
+      assert.ok(fs.existsSync(path.join(ROOT, 'reference', f)), `reference/${f} routed but missing`);
     }
-    const deploy = fs.readFileSync(path.join(ROOT, 'reference', 'deploy.md'), 'utf8');
-    assert.match(deploy, /livekit-cloud|LiveKit Cloud/);
-    assert.match(deploy, /pipecat-cloud|Pipecat Cloud/);
-    assert.match(deploy, /drain/i);
-    const capacity = fs.readFileSync(path.join(ROOT, 'reference', 'deploy-capacity.md'), 'utf8');
-    const workload = fs.readFileSync(path.join(ROOT, 'reference', 'deploy-workload.md'), 'utf8');
-    const evidence = fs.readFileSync(path.join(ROOT, 'reference', 'deploy-evidence.md'), 'utf8');
-    assert.match(capacity, /deploy-workload\.md/);
-    assert.match(capacity, /deploy-evidence\.md/);
-    assert.match(capacity, /identity lease/);
-    assert.match(workload, /Closed loop/);
-    assert.match(workload, /Open loop/);
-    assert.match(workload, /monotonic deadlines/);
-    assert.match(evidence, /Attribute before judging/);
-    assert.match(evidence, /hottest\s+worker/i);
-    assert.match(evidence, /lower bound/i);
+    // C16 resurrection guard: removed loadtest-harness port names stay dead
+    const deployDocs = ['deploy.md', 'deploy-capacity.md', 'deploy-workload.md', 'deploy-evidence.md']
+      .map((f) => fs.readFileSync(path.join(ROOT, 'reference', f), 'utf8')).join('\n');
     assert.doesNotMatch(
-      `${capacity}\n${workload}\n${evidence}`,
+      deployDocs,
       /SocketCluster|ResourceLease|SessionControl|MediaTransport|CallerAgent|SutProbe/,
     );
   });

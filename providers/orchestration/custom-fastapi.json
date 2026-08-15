@@ -68,6 +68,10 @@
   "deployment": {
     "hosted_option": null,
     "self_host_notes": "Self-host is the only path: there is no managed runtime for a custom bridge. You own process supervision, SIGTERM drain, concurrency scaling, warm pools (VAD session, provider connections), LB idle timeouts above max call duration, and frame-level diagnostics.",
+    "hosting_rules": {
+      "force": "self_hosted",
+      "reason": "Custom FastAPI forces self-hosted ownership: your app owns the media WebSocket, codecs, resampling, cleanup, and incident debugging."
+    },
     "concurrency_model": "custom",
     "regions": {
       "media_edges": ["not_applicable"],

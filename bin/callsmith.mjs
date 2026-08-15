@@ -163,7 +163,7 @@ function cmdCheck() {
   const advisories = impossible.filter((item) => item.severity === 'advisory');
   if (blockers.length) {
     if (args.json === true) {
-      console.log(JSON.stringify({ impossible }, null, 2));
+      console.log(JSON.stringify({ impossible, advisories, resolve: null }, null, 2));
     } else {
       console.error('\nStack is impossible (from pack physics):\n');
       for (const i of blockers) console.error(`  [${i.code}] ${i.message}`);

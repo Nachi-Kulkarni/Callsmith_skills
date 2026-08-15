@@ -153,6 +153,23 @@ describe('resolveInterruption', () => {
   });
 });
 
+describe('resolveOperationsConfig hosting rules (pack-driven)', () => {
+  it('caps pipecat at hybrid_worker when managed cloud is requested', () => {
+    const providers = { pipecat: pack('pipecat', { deployment: { hosting_rules: {
+      cap: 'hybrid_worker', reason: 'worker is yours',
+    } } }) };
+    const sel = { orchestration: { id: 'pipecat' } };
+    const out = resolveOperationsConfig(sel, providers, { hosting_model: 'managed_cloud' });
+    assert.equal(out.effective_hosting_model, 'hybrid_worker');
+    assert.deepEqual(out.adjustments, ['worker is yours']);
+    // at or below the cap: no adjustment
+    assert.equal(
+      resolveOperationsConfig(sel, providers, { hosting_model: 'hybrid_worker' }).effective_hosting_model,
+      'hybrid_worker',
+    );
+  });
+});
+
 describe('computeCost', () => {
   it('sums per-minute legs and scales to hour / 1k calls (hand-computed)', () => {
     const providers = {
@@ -168,8 +185,12 @@ describe('computeCost', () => {
     assert.equal(out.per_1k_calls_usd, 45);          // 0.009 * 5 * 1000
   });
 
-  it('zeroes the LiveKit per-minute fee only when self-hosted', () => {
-    const providers = { livekit: pack('livekit', { label: 'LiveKit Agents', cost_estimates: { per_minute_usd: 0.004, notes: 'cloud' } }) };
+  it('zeroes the platform per-minute fee only when the pack says self-hosting removes it', () => {
+    const providers = { livekit: pack('livekit', { label: 'LiveKit Agents', cost_estimates: {
+      per_minute_usd: 0.004, notes: 'cloud',
+      self_host_platform_fee_zero: true,
+      self_host_note: 'Self-hosted LiveKit removes the modeled LiveKit Cloud per-minute fee; infrastructure cost is not included.',
+    } }) };
     const sel = { orchestration: { id: 'livekit' } };
     const leg = (hosting) => computeCost(sel, providers, {}, resolveOperationsConfig(sel, providers, { hosting_model: hosting })).legs[0];
     assert.equal(leg('self_hosted').per_minute_usd, 0);
