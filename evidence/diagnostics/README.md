@@ -61,6 +61,6 @@ and the timing tradeoff. Because one scheduled arm was invalid, it remains diagn
 promoted through a selective retry.
 
 [`luna-xhigh-full-suite-20260731.md`](./luna-xhigh-full-suite-20260731.md) records the later
-11-scenario Luna/xhigh diagnostic in plain language. It explains the all-or-nothing handoff score,
-keeps the invalid arm visible, and does not treat a strict BASE miss as proof that an unassisted model
-cannot produce useful work.
+11-scenario Luna/xhigh diagnostic in plain language — **retracted 2026-08-15** (numbers not
+reproducible from retained artifacts; see the banner atop it). The current fairness-hardened
+diagnostics are in [`csb-fair-harness-20260815.md`](./csb-fair-harness-20260815.md).

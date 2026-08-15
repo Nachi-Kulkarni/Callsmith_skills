@@ -8,9 +8,11 @@ No release-level product-lift number is published yet. The latest Luna/xhigh ful
 found 128/128 individual checks passed with Callsmith and 26/128 without it. The assisted artifacts
 met all four strict handoff checks in 32/32 valid pairs; the unassisted artifacts did not meet all four
 together. One of 33 scheduled pairs was invalid, so the run remains non-publishable and will not be
-repaired with a selective retry. Read the
-[plain-language diagnostic](./diagnostics/luna-xhigh-full-suite-20260731.md), the
-[earlier Grok diagnostic](./diagnostics/grok-core10-20260712.md), and
+repaired with a selective retry. That 2026-07 Luna run was **retracted** (see the note atop its
+report); the current diagnostics are the fairness-hardened runs in
+[csb-fair-harness-20260815.md](./diagnostics/csb-fair-harness-20260815.md) — DeepSeek V4 Flash and
+Luna/xhigh, single run per scenario — plus the
+[earlier Grok diagnostic](./diagnostics/grok-core10-20260712.md) and
 [Honest Numbers](./HONEST-NUMBERS.md).
 
 Earlier runs that predate the complete actor-isolation boundary remain

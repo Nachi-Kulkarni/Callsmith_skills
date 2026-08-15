@@ -41,8 +41,9 @@ a single artifact that satisfied all four strict handoff checks at once.
 | No hard contradictions | 12/32 | 32/32 |
 
 One scheduled WITH arm finished with its answers file unchanged, so the complete run remains invalid
-and non-publishable. This is a single-family diagnostic, not Callsmith's release claim. See the
-[plain-language report](./diagnostics/luna-xhigh-full-suite-20260731.md).
+and non-publishable. This is a single-family diagnostic, not Callsmith's release claim. That 2026-07
+run was later **retracted**; the current measured diagnostics live in
+[csb-fair-harness-20260815.md](./diagnostics/csb-fair-harness-20260815.md).
 
 ## Earlier Grok diagnostic
 
