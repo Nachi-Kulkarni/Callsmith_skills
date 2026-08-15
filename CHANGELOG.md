@@ -4,6 +4,8 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-08-15
+
 - Added `/callsmith noise-cancellation` (`reference/noise-cancellation.md`) — open-source echo/noise/side-speaker suppression playbook: contaminant classification, WebRTC APM/RNNoise/DeepFilterNet/Silero/ECAPA/TSE boundaries, sustained level gating, speaker-attributed control, one-rung-at-a-time build order, and a field experiment ledger with dated priors.
 - Added `/callsmith security` (`reference/security.md`) — card-data routing (DTMF masking on both legs or out-of-band payment links; PAN/CVV never in transcripts, traces, or logs), PII redaction at the trust boundary before persistence, voice-channel prompt injection controls (tool allowlists, typed args, confirmation), and recording access + retention enforcement tied to the policy floors.
 - Added `/callsmith multilingual` (`reference/multilingual.md`) — code-switching STT degradation treated as unmeasured by vendors (planning estimates only), multilingual vs per-language leg choice, per-language TTS voice and pronunciation checks, deployed-population accent calibration, DTMF fallback when ASR confidence collapses in-code-switch, and per-language WER/turn-gap evals (never blended).

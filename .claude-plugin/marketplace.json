@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Official Callsmith plugin marketplace for voice-agent engineering",
-    "version": "1.8.0-agent-compiler"
+    "version": "1.9.0"
   },
   "plugins": [
     {
       "name": "callsmith",
       "description": "Design production voice agents with verified provider physics, safety floors, contracts, and eval gates.",
-      "version": "1.8.0-agent-compiler",
+      "version": "1.9.0",
       "author": {
         "name": "Nachi Kulkarni",
         "url": "https://github.com/Nachi-Kulkarni"

@@ -1,6 +1,6 @@
 {
   "name": "@callsmith/cli",
-  "version": "1.8.0-agent-compiler",
+  "version": "1.9.0",
   "description": "Teach coding agents to design production voice agents; validate provider packs, physics, floors, and eval bar. The agent compiles — callsmith verifies.",
   "type": "module",
   "bin": {
