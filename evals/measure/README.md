@@ -1,5 +1,12 @@
 # Callsmith measurement
 
+> **Status: experimental.** The runner, corpus integrity, provenance pins, and publication
+> path are machine-proven against the replay fixture — but **no live adapter is implemented
+> yet** (`adapters/` contains only the contract) and the frozen corpus is 20 FSDD digit
+> clips from 2 speakers at 8 kHz: adequate for transport-timing mechanics, not for
+> representative ASR/EOU load. Numbers from this track must not be quoted as provider
+> measurements until a live adapter exists and its raw traces clear review.
+
 `run.mjs` is the provider-neutral measurement boundary. A stack adapter must play the frozen corpus at the caller boundary and write a raw `turn-trace.schema.json` trace; the runner verifies corpus hashes, environment preflight, region/cohort pins, trace semantics, nearest-rank percentiles, and quality vetoes before emitting `callsmith_measurement` pack evidence.
 
 ```bash

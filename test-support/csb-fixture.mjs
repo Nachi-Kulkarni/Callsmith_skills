@@ -78,6 +78,7 @@ export function createRawPublishableRun(root, name, {
     scenarios,
     arms: ['BASE', 'WITH'],
     budget,
+    arm_execution: 'sequential',
     source,
     schedule,
   };

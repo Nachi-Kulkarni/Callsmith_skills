@@ -12,7 +12,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join, relative, resolve, sep, dirname } from 'node:path';
+import { basename, join, relative, resolve, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, listScenarioIds, scoreArm, pairDelta } from './score.mjs';
 import { prepareArmWorkspace, readArmArtifacts, REPO_ROOT } from './prepare.mjs';
@@ -42,6 +42,7 @@ const HERE = fileURLToPath(new URL('.', import.meta.url));
 const args = parseArgs(process.argv.slice(2));
 const dryRun = args['dry-run'] === true;
 const scoreFixtures = args['score-fixtures'] === true;
+const resumeDir = args.resume ? resolve(String(args.resume)) : null;
 const actorTool = String(args['actor-tool'] || process.env.CSB_ACTOR_TOOL || 'opencode').toLowerCase();
 const actorToolEnvBin = {
   codex: 'CODEX_BIN',
@@ -74,14 +75,17 @@ try {
 const actorModel = actor.model;
 const derivedActorFamily = modelFamilyFor(actorModel);
 const actorFamily = derivedActorFamily;
-const runId = args['run-id'] || new Date().toISOString().replace(/[:.]/g, '-');
-const outRoot = resolve(args.out || join(HERE, '..', 'runs', runId));
+const runId = resumeDir
+  ? basename(resumeDir)
+  : (args['run-id'] || new Date().toISOString().replace(/[:.]/g, '-'));
+const outRoot = resumeDir || resolve(args.out || join(HERE, '..', 'runs', runId));
 const runs = parsePositiveInt(args.runs || '1', '--runs');
 const seed = String(args.seed || 'callsmith-csb-v1');
 const timeoutMs = parsePositiveInt(
   args['timeout-ms'] || process.env.OPENCODE_EVAL_TIMEOUT_MS || '600000',
   '--timeout-ms',
 );
+const armExecution = parseArmExecution(args['arm-execution'] || 'parallel');
 
 let scenarioIds = listScenarioIds();
 if (args.scenario || args.only) {
@@ -97,6 +101,14 @@ const armsWanted = parseArms(args.arms || 'both');
 
 if (!scenarioIds.length) fail('No scenarios selected.');
 if (!armsWanted.length) fail('No valid arms selected.');
+if (resumeDir && (dryRun || scoreFixtures)) fail('--resume applies to live runs only.');
+if (resumeDir) {
+  if (!existsSync(join(resumeDir, 'config.json'))) fail(`--resume: ${resumeDir} has no config.json.`);
+  if (existsSync(join(resumeDir, 'summary.json'))) {
+    fail(`--resume: ${resumeDir} already has summary.json (the run finished; start a new run).`);
+  }
+}
+if (!resumeDir && existsSync(outRoot)) fail(`Refusing reused run directory: ${outRoot}`);
 if (!dryRun && !scoreFixtures && !actorModel) {
   fail('Live publishable runs require --actor-model (or the selected actor model environment variable).');
 }
@@ -106,19 +118,46 @@ if (!dryRun && !scoreFixtures && ['codex', 'grok'].includes(actor.tool) && !acto
 if (!dryRun && !scoreFixtures && ['codex', 'grok'].includes(actor.tool) && !derivedActorFamily) {
   fail(`Live ${actor.tool} publication requires a model ID with a reviewed family mapping.`);
 }
-if (existsSync(outRoot)) fail(`Refusing reused run directory: ${outRoot}`);
 
 const git = gitState();
 if (!dryRun && !scoreFixtures && git.dirty) {
   fail('Live benchmark requires a clean git worktree so its source can be reproduced.');
 }
 
+// Crash resume: continue a predeclared run from its last complete trial boundary.
+// A trial with artifacts but no pair.json means the crash hit mid-trial; re-running
+// a partially executed trial conditions on failure, so only a fresh run is allowed.
+let resumedConfig = null;
+if (resumeDir) {
+  resumedConfig = JSON.parse(readFileSync(join(resumeDir, 'config.json'), 'utf8'));
+  if (resumedConfig.mode !== 'live') fail('--resume applies to live runs only.');
+  if (resumedConfig.git?.commit !== git.commit) {
+    fail(`--resume: HEAD moved since the run started (${resumedConfig.git?.commit} → ${git.commit}); start a new run.`);
+  }
+  if (seed !== resumedConfig.seed || String(runs) !== String(resumedConfig.runs)) {
+    fail('--resume: --seed/--runs must match the original run; the schedule is predeclared.');
+  }
+  if (JSON.stringify([...resumedConfig.scenarios].sort()) !== JSON.stringify([...scenarioIds].sort())) {
+    fail('--resume: scenario selection differs from the original run.');
+  }
+  if (JSON.stringify(resumedConfig.arms) !== JSON.stringify(armsWanted)) {
+    fail('--resume: --arms differs from the original run.');
+  }
+}
+
 const schedule = seededSchedule(scenarioIds, scoreFixtures ? 1 : runs, armsWanted, seed);
 const source = sourceManifest(scenarioIds);
+if (resumeDir && JSON.stringify(source) !== JSON.stringify(resumedConfig.source)) {
+  fail('--resume: pack/harness/scenario sources changed since the run started; start a new run.');
+}
 if (!dryRun && !scoreFixtures) actor.binary = resolveActorExecutable(actor.binary, REPO_ROOT);
 const toolVersion = scoreFixtures || dryRun ? toolVersionFor(actor.binary) : requireToolVersion(actor.binary);
 const actorBinarySha256 = !dryRun && !scoreFixtures ? hashFile(actor.binary) : null;
-const config = {
+if (resumeDir && (toolVersion !== resumedConfig.actor.version
+  || actorBinarySha256 !== resumedConfig.actor.binary_sha256)) {
+  fail('--resume: actor binary or version changed since the run started; start a new run.');
+}
+const config = resumeDir ? resumedConfig : {
   schema_version: 2,
   run_id: runId,
   mode: scoreFixtures ? 'fixtures' : dryRun ? 'dry-run' : 'live',
@@ -146,23 +185,30 @@ const config = {
   scenarios: scenarioIds,
   arms: armsWanted,
   budget: { timeout_ms_per_arm: timeoutMs, max_captured_output_bytes_per_stream: 20 * 1024 * 1024 },
-  arm_execution: 'parallel',
+  // Parallel arms share one model subscription: throttling and rate-limit jitter can
+  // hit arms differentially and cannot be counterbalanced away (arms run at the same
+  // instant). Sequential execution removes the confound and is required for
+  // publication-eligible runs.
+  arm_execution: armExecution,
   source,
   schedule,
 };
 
-mkdirSync(dirname(outRoot), { recursive: true });
-try {
-  // Atomic: two runners that race past the existsSync check above cannot both win.
-  mkdirSync(outRoot);
-} catch (error) {
-  if (error.code === 'EEXIST') fail(`Refusing reused run directory: ${outRoot}`);
-  throw error;
+if (!resumeDir) {
+  mkdirSync(dirname(outRoot), { recursive: true });
+  try {
+    // Atomic: two runners that race past the existsSync check above cannot both win.
+    mkdirSync(outRoot);
+  } catch (error) {
+    if (error.code === 'EEXIST') fail(`Refusing reused run directory: ${outRoot}`);
+    throw error;
+  }
+  writeJson(join(outRoot, 'config.json'), config);
 }
-writeJson(join(outRoot, 'config.json'), config);
 console.log(`\nCallsmithBench ${config.mode}: ${schedule.length} scheduled pair(s)/arm set`);
 console.log(`  model: ${actorModel || 'not applicable'}`);
 console.log(`  seed: ${seed}; repeated runs: ${runs}`);
+console.log(`  arms: ${config.arm_execution || 'parallel'}`);
 console.log(`  out: ${outRoot}\n`);
 
 const results = [];
@@ -170,6 +216,12 @@ for (const scheduled of schedule) {
   const scenario = loadScenario(scheduled.scenarioId);
   const trialRoot = join(outRoot, `trial-${String(scheduled.trial).padStart(3, '0')}`, scenario.id);
   const result = { trial: scheduled.trial, scenarioId: scenario.id, arm_order: scheduled.arms, arms: {}, pair: null };
+
+  if (resumeDir && loadCompletedTrial(trialRoot, scheduled, result)) {
+    results.push(result);
+    console.log(`  trial ${scheduled.trial} ${scenario.id}: resumed from disk (${result.pair ? 'paired' : 'incomplete'})`);
+    continue;
+  }
 
   if (scoreFixtures) {
     result.pair = scoreFixturePair(scenario, trialRoot);
@@ -185,136 +237,145 @@ for (const scheduled of schedule) {
     const runDir = dryRun
       ? persistedRunDir
       : isolated.cwd;
-    prepareArmWorkspace(arm, scenario, runDir);
-    const prompt = buildActorPrompt(arm, scenario, runDir);
-    const promptPath = join(runDir, 'actor-prompt.md');
-    writeFileSync(promptPath, prompt);
-    const artifactPaths = {
-      answers: join(runDir, 'voice.answers.json'),
-      recipe: join(runDir, 'callsmith.recipe.md'),
-    };
-    if (existsSync(artifactPaths.answers)) {
-      writeFileSync(join(runDir, 'input-seed.answers.json'), readFileSync(artifactPaths.answers));
-    }
-    const armRepro = {
-      prompt_sha256: hashFile(promptPath),
-      scenario_sha256: source.scenarios[scenario.id],
-      provider_packs_sha256: source.provider_packs_sha256,
-      harness_sha256: source.harness_sha256,
-      scorer_sha256: source.scorer_sha256,
-      product_sha256: source.product_sha256,
-      model: actorModel || null,
-      model_family: actorFamily || null,
-      actor_tool: actor.tool,
-      actor_reasoning: actor.reasoning,
-      tool_version: toolVersion,
-      actor_binary_sha256: actorBinarySha256,
-      git_commit: git.commit,
-      seed,
-      arm,
-      budget: config.budget,
-    };
-    writeJson(join(runDir, 'reproducibility.json'), armRepro);
-    const controlledInputs = {
-      brief: join(runDir, 'brief.md'),
-      scenario: join(runDir, 'scenario.json'),
-      output_schema: join(runDir, 'OUTPUT_SCHEMA.md'),
-      readme: join(runDir, 'README.md'),
-      reproducibility: join(runDir, 'reproducibility.json'),
-      actor_prompt: promptPath,
-      input_seed: join(runDir, 'input-seed.answers.json'),
-    };
-    const before = snapshotArtifacts([
-      ...Object.values(artifactPaths),
-      ...Object.values(controlledInputs),
-    ]);
-
-    if (dryRun) {
-      const actorStatus = { status: 'DRY_RUN', valid: false, reasons: ['dry runs are never scored'] };
-      writeJson(join(runDir, 'actor.status.json'), actorStatus);
-      result.arms[arm] = { runDir, actor: actorStatus, score: null, reproducibility: armRepro };
-      console.log(`  trial ${scheduled.trial} ${scenario.id} ${arm}: prepared`);
-      return;
-    }
-
-    process.stdout.write(`  trial ${scheduled.trial} ${scenario.id} ${arm}: actor ... `);
-    prepareActorWorkspace(actor, runDir);
-    prepareCodexActorHome(actor, isolated.home, isolated.bin);
-    prepareGrokActorHome(actor, isolated.home, isolated.bin);
-    const sessionsBefore = actor.tool === 'opencode' ? listSessions(actor.binary, runDir) : [];
-    const startedAtMs = Date.now();
-    const processResult = await runActor(actor, {
-      prompt, cwd: runDir, arm, timeout: timeoutMs,
-      actorHome: isolated.home, actorBin: isolated.bin,
-    });
     try {
-      assertIsolatedWorkspace(isolated.root, runDir);
-    } catch (error) {
-      rmSync(isolated.root, { recursive: true, force: true });
-      fail(`Actor workspace boundary violated: ${error.message}`);
-    }
-    writeFileSync(join(runDir, 'actor.stdout.txt'), processResult.stdout || '');
-    writeFileSync(join(runDir, 'actor.stderr.txt'), processResult.stderr || '');
-    const trace = retainActorTrace(
-      actor,
-      processResult,
-      runDir,
-      () => exportNewestSession(actor.binary, sessionsBefore, runDir),
-    );
-    const validity = validateActorTrial({
-      actor: {
-        ...processResult,
-        traceRequired: ['codex', 'grok'].includes(actor.tool),
-        trace,
-      },
-      artifacts: artifactPaths,
-      immutable: controlledInputs,
-      before,
-      startedAtMs,
-    });
-    const actorStatus = {
-      status: processResult.status,
-      signal: processResult.signal || null,
-      duration_ms: processResult.durationMs,
-      timed_out: processResult.timedOut,
-      error: processResult.error,
-      stdout_bytes: processResult.stdoutBytes,
-      stderr_bytes: processResult.stderrBytes,
-      stdout_truncated: processResult.stdoutTruncated,
-      stderr_truncated: processResult.stderrTruncated,
-      started_at: new Date(startedAtMs).toISOString(),
-      finished_at: new Date().toISOString(),
-      valid: validity.valid,
-      invalid_reasons: validity.reasons,
-      session_trace: trace,
-    };
-    writeJson(join(runDir, 'actor.status.json'), actorStatus);
-
-    let score = null;
-    if (validity.valid) {
-      const { answers, recipe } = readArmArtifacts(runDir);
-      score = scoreArm({
-        scenario,
-        answers,
-        recipe,
-        commandLog: ['codex', 'grok'].includes(actor.tool)
-          ? trace.command_log || ''
-          : `${processResult.stdout || ''}\n${processResult.stderr || ''}`,
+      prepareArmWorkspace(arm, scenario, runDir);
+      const prompt = buildActorPrompt(arm, scenario, runDir);
+      const promptPath = join(runDir, 'actor-prompt.md');
+      writeFileSync(promptPath, prompt);
+      const artifactPaths = {
+        answers: join(runDir, 'voice.answers.json'),
+        recipe: join(runDir, 'callsmith.recipe.md'),
+      };
+      if (existsSync(artifactPaths.answers)) {
+        writeFileSync(join(runDir, 'input-seed.answers.json'), readFileSync(artifactPaths.answers));
+      }
+      const armRepro = {
+        prompt_sha256: hashFile(promptPath),
+        scenario_sha256: source.scenarios[scenario.id],
+        provider_packs_sha256: source.provider_packs_sha256,
+        harness_sha256: source.harness_sha256,
+        scorer_sha256: source.scorer_sha256,
+        product_sha256: source.product_sha256,
+        model: actorModel || null,
+        model_family: actorFamily || null,
+        actor_tool: actor.tool,
+        actor_reasoning: actor.reasoning,
+        tool_version: toolVersion,
+        actor_binary_sha256: actorBinarySha256,
+        git_commit: git.commit,
+        seed,
         arm,
+        budget: config.budget,
+      };
+      writeJson(join(runDir, 'reproducibility.json'), armRepro);
+      const controlledInputs = {
+        brief: join(runDir, 'brief.md'),
+        scenario: join(runDir, 'scenario.json'),
+        output_schema: join(runDir, 'OUTPUT_SCHEMA.md'),
+        readme: join(runDir, 'README.md'),
+        reproducibility: join(runDir, 'reproducibility.json'),
+        actor_prompt: promptPath,
+        input_seed: join(runDir, 'input-seed.answers.json'),
+      };
+      const before = snapshotArtifacts([
+        ...Object.values(artifactPaths),
+        ...Object.values(controlledInputs),
+      ]);
+
+      if (dryRun) {
+        const actorStatus = { status: 'DRY_RUN', valid: false, reasons: ['dry runs are never scored'] };
+        writeJson(join(runDir, 'actor.status.json'), actorStatus);
+        result.arms[arm] = { runDir, actor: actorStatus, score: null, reproducibility: armRepro };
+        console.log(`  trial ${scheduled.trial} ${scenario.id} ${arm}: prepared`);
+        return;
+      }
+
+      process.stdout.write(`  trial ${scheduled.trial} ${scenario.id} ${arm}: actor ... `);
+      prepareActorWorkspace(actor, runDir);
+      prepareCodexActorHome(actor, isolated.home, isolated.bin);
+      prepareGrokActorHome(actor, isolated.home, isolated.bin);
+      const sessionsBefore = actor.tool === 'opencode' ? listSessions(actor.binary, runDir) : [];
+      const startedAtMs = Date.now();
+      const processResult = await runActor(actor, {
+        prompt, cwd: runDir, arm, timeout: timeoutMs,
+        actorHome: isolated.home, actorBin: isolated.bin,
       });
-      score.task_success = taskSuccess(score);
-      writeJson(join(runDir, 'score.json'), score);
+      try {
+        assertIsolatedWorkspace(isolated.root, runDir);
+      } catch (error) {
+        rmSync(isolated.root, { recursive: true, force: true });
+        fail(`Actor workspace boundary violated: ${error.message}`);
+      }
+      writeFileSync(join(runDir, 'actor.stdout.txt'), processResult.stdout || '');
+      writeFileSync(join(runDir, 'actor.stderr.txt'), processResult.stderr || '');
+      const trace = retainActorTrace(
+        actor,
+        processResult,
+        runDir,
+        () => exportNewestSession(actor.binary, sessionsBefore, runDir),
+      );
+      const validity = validateActorTrial({
+        actor: {
+          ...processResult,
+          traceRequired: ['codex', 'grok'].includes(actor.tool),
+          trace,
+        },
+        artifacts: artifactPaths,
+        immutable: controlledInputs,
+        before,
+        startedAtMs,
+      });
+      const actorStatus = {
+        status: processResult.status,
+        signal: processResult.signal || null,
+        duration_ms: processResult.durationMs,
+        timed_out: processResult.timedOut,
+        error: processResult.error,
+        stdout_bytes: processResult.stdoutBytes,
+        stderr_bytes: processResult.stderrBytes,
+        stdout_truncated: processResult.stdoutTruncated,
+        stderr_truncated: processResult.stderrTruncated,
+        started_at: new Date(startedAtMs).toISOString(),
+        finished_at: new Date().toISOString(),
+        valid: validity.valid,
+        invalid_reasons: validity.reasons,
+        session_trace: trace,
+      };
+      writeJson(join(runDir, 'actor.status.json'), actorStatus);
+
+      let score = null;
+      if (validity.valid) {
+        const { answers, recipe } = readArmArtifacts(runDir);
+        score = scoreArm({
+          scenario,
+          answers,
+          recipe,
+          commandLog: ['codex', 'grok'].includes(actor.tool)
+            ? trace.command_log || ''
+            : `${processResult.stdout || ''}\n${processResult.stderr || ''}`,
+          arm,
+        });
+        score.task_success = taskSuccess(score);
+        writeJson(join(runDir, 'score.json'), score);
+      }
+      rmSync(join(runDir, '.git'), { recursive: true, force: true });
+      mkdirSync(trialRoot, { recursive: true });
+      cpSync(runDir, persistedRunDir, { recursive: true });
+      result.arms[arm] = { runDir: persistedRunDir, actor: actorStatus, score, reproducibility: armRepro };
+      console.log(validity.valid ? 'valid' : `INVALID (${validity.reasons.join('; ')})`);
+    } finally {
+      // Crash-safe: an aborted run must not leak the isolated actor workspace
+      // (fail()/process.exit paths above clean up before exiting).
+      if (isolated) rmSync(isolated.root, { recursive: true, force: true });
     }
-    rmSync(join(runDir, '.git'), { recursive: true, force: true });
-    mkdirSync(trialRoot, { recursive: true });
-    cpSync(runDir, persistedRunDir, { recursive: true });
-    rmSync(isolated.root, { recursive: true, force: true });
-    result.arms[arm] = { runDir: persistedRunDir, actor: actorStatus, score, reproducibility: armRepro };
-    console.log(validity.valid ? 'valid' : `INVALID (${validity.reasons.join('; ')})`);
   };
-  // Arms of a trial run concurrently: independent workspaces, no shared state.
-  // The recorded arm_order remains the deterministic counterbalance label.
-  await Promise.all(scheduled.arms.map((arm) => runArm(arm)));
+  // Sequential arms run in the recorded counterbalanced order, one at a time;
+  // parallel arms run concurrently in independent workspaces.
+  if ((config.arm_execution || 'parallel') === 'sequential') {
+    for (const arm of scheduled.arms) await runArm(arm);
+  } else {
+    await Promise.all(scheduled.arms.map((arm) => runArm(arm)));
+  }
 
   // Input symmetry is an invariant, not a convention: identical controlled
   // inputs across arms of a trial, asserted in code before any pair is scored.
@@ -400,6 +461,7 @@ function buildSummary(results, configValue, { sourceStable = true } = {}) {
     && configValue.scenarios.length >= 10
     && ['BASE', 'WITH'].every((arm) => configValue.arms.includes(arm));
   const namedModelFamily = typeof configValue.actor.family === 'string' && configValue.actor.family.length > 0;
+  const sequentialArms = configValue.arm_execution === 'sequential';
   const actorIsolationEligible = ['codex', 'grok'].includes(configValue.actor.tool)
     && [
       'ephemeral_session', 'ignore_user_config', 'ignore_user_rules', 'auth_only_home',
@@ -416,11 +478,12 @@ function buildSummary(results, configValue, { sourceStable = true } = {}) {
     schema_version: 2,
     run_id: configValue.run_id,
     run_valid: runValid,
-    publishable: runValid && repeatedCore10 && actorIsolationEligible && namedModelFamily,
+    publishable: runValid && repeatedCore10 && actorIsolationEligible && namedModelFamily && sequentialArms,
     publication_requirements: {
       repeated_core10: repeatedCore10,
       actor_isolation_eligible: actorIsolationEligible,
       named_model_family: namedModelFamily,
+      sequential_arm_execution: sequentialArms,
       source_stable_through_run: sourceStable,
       second_model_family_required_for_product_claim: true,
       product_claim_eligible_from_this_run_alone: false,
@@ -472,7 +535,10 @@ function renderReport(summary, results) {
     );
   }
   if (summary.run_valid && !summary.publishable) {
-    lines.push('**Valid diagnostic run, not a publication run:** publication requires repeated core10; the product claim additionally requires a second model family.', '');
+    lines.push('**Valid diagnostic run, not a publication run:** publication requires repeated core10 and sequential arms; the product claim additionally requires a second model family.', '');
+  }
+  if (config.mode === 'live' && config.arm_execution !== 'sequential') {
+    lines.push('Arms executed in parallel: both arms shared one model subscription, so throttling jitter is an uncontrolled confound. Publication requires `--arm-execution sequential`.', '');
   }
   lines.push('| Trial | Scenario | BASE success | WITH success | Gate Δ (diagnostic) |', '|---:|---|---:|---:|---:|');
   for (const result of results) {
@@ -620,6 +686,31 @@ function parseArms(value) {
   if (value === 'both' || value === true) return ['BASE', 'WITH'];
   return String(value).split(',').map((arm) => arm.trim().toUpperCase())
     .filter((arm, index, all) => ['BASE', 'WITH'].includes(arm) && all.indexOf(arm) === index);
+}
+
+function parseArmExecution(value) {
+  if (value === 'parallel' || value === 'sequential') return value;
+  fail(`--arm-execution must be "parallel" or "sequential" (got "${value}").`);
+}
+
+/** Rehydrate one completed trial of a resumed run; null when it never ran. */
+function loadCompletedTrial(trialRoot, scheduled, result) {
+  if (!existsSync(trialRoot)) return null;
+  if (!existsSync(join(trialRoot, 'pair.json'))) {
+    fail(`--resume: ${trialRoot} has artifacts but no pair.json (crash hit mid-trial). `
+      + 'Re-running a partially executed trial would condition on failure; start a new run.');
+  }
+  result.pair = JSON.parse(readFileSync(join(trialRoot, 'pair.json'), 'utf8'));
+  for (const arm of scheduled.arms) {
+    const armRoot = join(trialRoot, arm);
+    result.arms[arm] = {
+      runDir: armRoot,
+      actor: JSON.parse(readFileSync(join(armRoot, 'actor.status.json'), 'utf8')),
+      score: JSON.parse(readFileSync(join(armRoot, 'score.json'), 'utf8')),
+      reproducibility: JSON.parse(readFileSync(join(armRoot, 'reproducibility.json'), 'utf8')),
+    };
+  }
+  return result;
 }
 
 function parseArgs(items) {

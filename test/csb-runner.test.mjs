@@ -25,6 +25,7 @@ import {
   prepareGrokActorHome,
 } from '../evals/csb/harness/actors.mjs';
 import {
+  clusterConfidenceInterval,
   seededSchedule,
   snapshotArtifacts,
   summarizeValidPairs,
@@ -682,7 +683,8 @@ describe('CSB validity and repeated-run statistics', () => {
     assert.equal(summary.task_success.WITH, 0.75);
     assert.equal(summary.task_success.BASE, 0.25);
     assert.equal(summary.task_success.lift, 0.5);
-    assert.ok(summary.task_success.lift_95ci.low < summary.task_success.lift_95ci.high);
+    assert.ok(summary.task_success.lift_95ci.low <= summary.task_success.lift);
+    assert.ok(summary.task_success.lift <= summary.task_success.lift_95ci.high);
     assert.equal(summary.pass_power_k.k, 2);
     assert.equal(summary.pass_power_k.rate, 0.5);
     assert.equal(summary.regulated_pass_power_k.rate, 1);
@@ -691,6 +693,53 @@ describe('CSB validity and repeated-run statistics', () => {
     assert.equal(summary.physics_lift, 0);
     assert.equal(summary.base_fail, 0.75);
     assert.equal(summary.diagnostic_gate_lift.G_FLOOR, 0.5);
+  });
+
+  it('reports discriminating-gate metrics and a scenario-clustered interval', () => {
+    // Scenario-level lift means differ (a: +1, b: -1), so the cluster bootstrap
+    // has genuine width; repeated trials of one scenario are resampled as one unit.
+    const pairs = [
+      pair('a', score(true, true, true, true), score(false, true, true, true)),
+      pair('a', score(true, true, true, true), score(false, true, true, true)),
+      pair('b', score(false, true, true, true), score(true, true, true, true)),
+      pair('b', score(false, true, true, true), score(true, true, true, true)),
+    ];
+    const summary = summarizeValidPairs(pairs, { runs: 2, regulatedScenarioIds: [] });
+    assert.equal(summary.task_success.lift_95ci.method, 'cluster_bootstrap_percentile_95_10000_by_scenario');
+    assert.ok(summary.task_success.lift_95ci.low < summary.task_success.lift_95ci.high);
+    assert.ok(summary.task_success.lift_95ci.low <= summary.task_success.lift);
+    assert.ok(summary.task_success.lift <= summary.task_success.lift_95ci.high);
+    assert.equal(summary.contract_lift, 0);
+    // BASE fails G_FLOOR on both a-pairs (physics is at BASE ceiling here).
+    assert.equal(summary.base_discriminating_fail, 0.5);
+  });
+
+  it('cluster interval degenerates honestly with a single cluster', () => {
+    const interval = clusterConfidenceInterval([[1, 1, 1]]);
+    assert.equal(interval.method, 'single_cluster_no_variance');
+    assert.equal(interval.low, 1);
+    assert.equal(interval.high, 1);
+    assert.equal(clusterConfidenceInterval([]), null);
+  });
+
+  it('resume fails closed on a missing config and on an already-finished run', () => {
+    const nowhere = path.join(RUNS, '_test-resume-nowhere');
+    const r1 = spawnSync(process.execPath, [RUNNER, '--resume', nowhere, '--actor-model', 'test/model'], {
+      encoding: 'utf8', cwd: ROOT,
+    });
+    assert.notEqual(r1.status, 0);
+    assert.match(r1.stderr, /has no config\.json/);
+
+    const finished = path.join(RUNS, '_test-resume-finished');
+    fs.rmSync(finished, { recursive: true, force: true });
+    fs.mkdirSync(finished, { recursive: true });
+    fs.writeFileSync(path.join(finished, 'config.json'), '{"mode":"live"}');
+    fs.writeFileSync(path.join(finished, 'summary.json'), '{}');
+    const r2 = spawnSync(process.execPath, [RUNNER, '--resume', finished, '--actor-model', 'test/model'], {
+      encoding: 'utf8', cwd: ROOT,
+    });
+    assert.notEqual(r2.status, 0);
+    assert.match(r2.stderr, /already has summary\.json/);
   });
 });
 

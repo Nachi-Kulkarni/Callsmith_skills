@@ -88,9 +88,27 @@ describe('CSB product-claim review', () => {
       });
       const weakReview = reviewPublication([weak, strong], REVIEW_OPTIONS);
       assert.equal(weakReview.product_claim_eligible, false);
-      assert.match(weakReview.failures.join('; '), /gpt-5.6-terra: floor lift is below \+0.5/);
-      assert.match(weakReview.failures.join('; '), /gpt-5.6-terra: physics lift is below \+0.4/);
-      assert.match(weakReview.failures.join('; '), /gpt-5.6-terra: BASE floor\/physics failure rate is below 0.6/);
+      assert.match(weakReview.failures.join('; '), /gpt-5\.6-terra: floor lift is below \+0\.20/);
+      assert.match(weakReview.failures.join('; '), /gpt-5\.6-terra: contract lift is below \+0\.25/);
+      assert.match(weakReview.failures.join('; '), /gpt-5\.6-terra: BASE fails a discriminating gate/);
+    });
+
+    it('blocks parallel-arm runs from a publication claim', () => {
+      withTempDir((root) => {
+        const parallel = buildBundle(root, 'parallel', {
+          model: 'gpt-5.6-luna',
+          family: 'luna',
+        });
+        const configPath = path.join(parallel, 'config.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        config.arm_execution = 'parallel';
+        fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+        writeManifest(parallel);
+        const other = buildBundle(root, 'other', { model: 'gpt-5.6-sol', family: 'sol' });
+        const review = reviewPublication([parallel, other], REVIEW_OPTIONS);
+        assert.equal(review.product_claim_eligible, false);
+        assert.match(review.failures.join('; '), /arms executed in parallel/);
+      });
     });
   });
 
@@ -173,7 +191,7 @@ describe('CSB product-claim review', () => {
       writeManifest(luna);
       assert.throws(
         () => reviewPublication([luna, luna], REVIEW_OPTIONS),
-        /obvious secret or private identifier/,
+        /Sanitization failed closed/,
       );
     });
   });

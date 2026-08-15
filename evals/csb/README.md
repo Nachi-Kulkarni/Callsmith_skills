@@ -14,7 +14,7 @@ The primary metric is the paired lift in **task-success rate** between WITH and 
 CSB success lift +?.??? · WITH ??% · BASE ??% · pass^3 ??%
 ```
 
-The harness also reports a deterministic 10,000-resample paired-bootstrap 95% interval for the lift, reliability as `pass^k`, and per-gate lift. Mean gate-score delta remains available only as a diagnostic; correlated gates are not added together as the headline claim.
+The harness also reports a deterministic 10,000-resample percentile-bootstrap 95% interval for the lift — resampled over **scenario clusters**, not trials, so repeated runs of one scenario cannot fake precision — reliability as `pass^k`, and per-gate lift. Mean gate-score delta remains available only as a diagnostic; correlated gates are not added together as the headline claim.
 
 No public number has been published yet. Fixture scoring proves scorer causality, not product lift.
 
@@ -33,7 +33,8 @@ A publishable run also requires:
 
 - a clean Git worktree and recorded commit;
 - an explicit `--actor-model` pin and detected actor-tool version;
-- a new, unused output directory;
+- a new, unused output directory (or `--resume` of an unfinished run from a complete trial boundary);
+- **sequential arm execution** (`--arm-execution sequential`): parallel arms share one model subscription, and throttling or rate-limit jitter hitting the two arms differentially is an uncontrolled confound counterbalancing cannot remove;
 - prompt, scenario, harness, and provider-pack SHA-256 hashes;
 - recorded time/output budgets and arm timing;
 - paired BASE/WITH trials for every scheduled scenario;
@@ -71,7 +72,12 @@ npm run bench:csb -- \
   --scenario clinic-floor-poison \
   --actor-model provider/model-version \
   --runs 3 \
+  --arm-execution sequential \
   --seed experiment-1
+
+# Resume an interrupted live run from its last complete trial (same seed,
+# runs, scenarios, commit, and source hashes; refuses mid-trial crashes).
+node evals/csb/harness/run-arms.mjs --resume <run-dir> --actor-model <pin>
 
 # Codex CLI via ChatGPT subscription, with model and reasoning both pinned.
 npm run bench:csb -- \

@@ -103,10 +103,16 @@ export function summarizeValidPairs(pairs, { runs = 1, regulatedScenarioIds = []
   const regulated = new Set(regulatedScenarioIds);
 
   const byScenario = new Map();
-  for (const pair of valid) {
+  const liftByScenario = new Map();
+  for (const [i, pair] of valid.entries()) {
     const values = byScenario.get(pair.scenarioId) || [];
     values.push(taskSuccess(pair.WITH));
     byScenario.set(pair.scenarioId, values);
+    // Repeated trials of one scenario are correlated; the interval must resample
+    // scenarios (clusters), not trials, or runs>1 understates uncertainty.
+    const lifts = liftByScenario.get(pair.scenarioId) || [];
+    lifts.push(pairedLift[i]);
+    liftByScenario.set(pair.scenarioId, lifts);
   }
   const passPower = [...byScenario.values()].map((values) => values.length === runs && values.every(Boolean));
   const regulatedPassPower = [...byScenario.entries()]
@@ -125,7 +131,7 @@ export function summarizeValidPairs(pairs, { runs = 1, regulatedScenarioIds = []
       WITH: mean(withValues),
       BASE: mean(baseValues),
       lift: mean(pairedLift),
-      lift_95ci: meanConfidenceInterval(pairedLift),
+      lift_95ci: clusterConfidenceInterval([...liftByScenario.values()]),
     },
     pass_power_k: {
       k: runs,
@@ -141,8 +147,15 @@ export function summarizeValidPairs(pairs, { runs = 1, regulatedScenarioIds = []
     gate_rates: gateRates,
     floor_lift: gateRates.G_FLOOR.lift,
     physics_lift: gateRates.G_PHYS.lift,
+    contract_lift: gateRates.G_CON.lift,
     base_fail: mean(valid.map((p) => Number(
       !p.BASE.gates?.G_FLOOR || !p.BASE.gates?.G_PHYS,
+    ))),
+    // Discriminating gates: where the fairness-hardened interface still lets BASE
+    // fail on judgment (floors, contract). Physics/reality sit at BASE ceiling on
+    // current models, so publication weight lives here (DESIGN.md §4).
+    base_discriminating_fail: mean(valid.map((p) => Number(
+      !p.BASE.gates?.G_FLOOR || !p.BASE.gates?.G_CON,
     ))),
     diagnostic_gate_lift: Object.fromEntries(gateNames.map((gate) => [gate, gateRates[gate].lift])),
     diagnostic_gate_score_delta: mean(valid.map((p) => p.WITH.gateScore - p.BASE.gateScore)),
@@ -167,6 +180,35 @@ export function meanConfidenceInterval(values) {
     low: round(samples[Math.floor(0.025 * (samples.length - 1))]),
     high: round(samples[Math.ceil(0.975 * (samples.length - 1))]),
     method: 'paired_bootstrap_percentile_95_10000',
+  };
+}
+
+/** Percentile bootstrap over clusters (e.g. per-scenario groups), not raw values. */
+export function clusterConfidenceInterval(clusters) {
+  const groups = (clusters || []).filter((group) => Array.isArray(group) && group.length);
+  const flat = groups.flat();
+  if (!flat.length) return null;
+  const center = mean(flat);
+  if (groups.length < 2) return { low: center, high: center, method: 'single_cluster_no_variance' };
+  const random = rng(`cluster-bootstrap:${JSON.stringify(groups)}`);
+  const samples = [];
+  for (let draw = 0; draw < 10_000; draw += 1) {
+    let total = 0;
+    let count = 0;
+    for (let g = 0; g < groups.length; g += 1) {
+      const group = groups[Math.floor(random() * groups.length)];
+      for (const value of group) {
+        total += value;
+        count += 1;
+      }
+    }
+    samples.push(total / count);
+  }
+  samples.sort((a, b) => a - b);
+  return {
+    low: round(samples[Math.floor(0.025 * (samples.length - 1))]),
+    high: round(samples[Math.ceil(0.975 * (samples.length - 1))]),
+    method: 'cluster_bootstrap_percentile_95_10000_by_scenario',
   };
 }
 
