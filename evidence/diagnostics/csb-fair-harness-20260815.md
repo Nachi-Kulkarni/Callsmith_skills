@@ -67,3 +67,35 @@ Per-gate rates (BASE arm):
 Runs (local, gitignored, retained): `evals/csb/runs/dsv4go-fair-full11-r1/`,
 `evals/csb/runs/luna-fair-full11-r1/`. Each arm carries `reproducibility.json`
 (model/tool/commit/budget hashes), the retained actor trace, and per-gate `score.json`.
+
+## Failure analysis (from retained traces, 2026-08-15)
+
+Where the 8 failing BASE arms actually went wrong, and what it says about the product:
+
+**Floor failures are domain-inference misses, not vocabulary misses.** Both models'
+BASE arms failed the same two scenarios for the same reason: the brief *implies* a
+regulated domain without naming it. `india-exotel-hinglish` ("fintech … payment
+failures") implies banking — both models chose `announce` consent where banking floors
+require `explicit`. `whatsapp-not-pstn` ("clinic" triage) implies medical — both chose
+`ticket` handoff (pattern-matching "async → ticket") where medical floors require
+`transfer`, which IS achievable on a WhatsApp thread. Models under-apply domain-keyed
+floors when the domain is buried in the brief; the skill's floor table is the corrective,
+and this is now the cleanest single sentence for what Callsmith does.
+
+**Contract failures split into two classes.** (1) *Enum invention*: BASE wrote
+`policy.basis: "callsmith_banking"` — invented because the published receipt example
+showed a single legal value (`callsmith_default`) instead of enumerating the four; this
+was a real discoverability gap in the published interface and is fixed in the schema as
+of 2026-08-15 (runs above predate that fix). (2) *Mirrored floor misses*: receipts that
+faithfully matched below-floor answers — not a separate failure.
+
+**The one WITH-arm failure is model variance, not skill friction.** The invalidated
+`clinic-floor-poison` WITH arm (DeepSeek) rewrote `voice.answers.json` correctly, then
+exited without ever invoking the verifier or writing the recipe — 1 of 20 WITH arms,
+flash-tier only. The Luna WITH arms all completed the full loop. Watch: if flash-tier
+models routinely stop after the answers step, the skill's "done when" needs to survive
+weaker instruction-following; no change made yet on n=1.
+
+**Verifier usage correlates with success.** Every WITH arm that ran
+`callsmith contract validate` passed G_CON; the only WITH arm that skipped it failed to
+produce a contract at all. The verification loop is the product's active ingredient.
