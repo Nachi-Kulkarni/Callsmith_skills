@@ -3,6 +3,14 @@
 Date: 2026-08-15 · Harness: prompt revision 2 + fully published interface (commit range
 `73a5e5d..7d3a4b4`) · Grade: **diagnostic** (single run per scenario, runs=1).
 
+> **Addendum (2026-08-15, post-publication standard update):** both runs recorded here
+> executed their arms **in parallel** (`arm_execution: "parallel"`). The publication
+> standard adopted the same day requires sequential arms — simultaneous arms share one
+> model subscription, and differential throttling between them is an uncontrolled
+> confound. These numbers therefore stand as single-run *diagnostics* only and would not
+> be publication-eligible as run; the artifacts and scoring are unchanged.
+
+
 Replaces the retracted 2026-07-31 report. Every number below is recomputable from the
 retained run artifacts by deterministic oracles — no judge, no post-hoc rescoring.
 

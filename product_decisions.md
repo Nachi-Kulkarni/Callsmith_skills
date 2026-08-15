@@ -93,14 +93,7 @@ These are promises we will keep and test. Break them = ship fail.
 
 ### Floor policy (minimums)
 
-Same domain floors as skill/eval (non-exhaustive):
-
-| Domain signals | Consent | Retention | Handoff when stakes high |
-|---|---|---|---|
-| Medical / clinical | ≥ announce (prefer explicit) | ≥ 30d | transfer |
-| Banking / payment / KYC | explicit | ≥ 30d | transfer on payment failure |
-| Collections / debt / DNC | explicit | ≥ 90d | transfer on dispute |
-| Legal / insurance (high stakes) | ≥ announce | ≥ 90d | transfer when urgent |
+The single canonical floor table — domains, consent/retention minima, the handoff ladder, and the tool-integration rule — lives in [`reference/policy.md`](./reference/policy.md). It is not duplicated here; conflicting copies lose to it.
 
 **Acknowledging a risk is not handling it.** Floors require rewrite (or explicit written acceptance of legal risk).
 
@@ -224,60 +217,14 @@ Exit codes on validation tools remain a public contract: non-zero on fail.
 | Hooks **[OPEN]** | Pre-ship constraints (floors + pack load) without competing CLI generator |
 | Plugins | Packs as extensibility; future agent-runtime plugins optional |
 | Workflows | Agent multi-step: dig-deeper → contract → implement → harden → eval |
-| Playbooks (`reference/*`) | Optional modes: audit, critique, architecture, latency, ttft, prompts (runtime conversation), harden, deploy, noise-cancellation, security, multilingual |
+| Playbooks (`reference/*`) | Optional modes: audit, critique, architecture, latency, ttft, prompts (runtime conversation), harden, deploy, noise-cancellation, security, multilingual, test, monitor, cost |
 | Deploy capacity references (`reference/deploy-*.md`) | General voice-load workflow and the mandatory validity/attribution contract before sizing claims |
 
 ---
 
-## 10. Decision register (active)
+## 10. Decision register
 
-| ID | Decision | Status |
-|---|---|---|
-| C1 | Constitution: agent compiles; callsmith validates physics, floors, eval bar | **DECIDED** |
-| C2 | **This file is sole product canon** for what to build next | **DECIDED** |
-| C3 | Delete deterministic *generation*; keep deterministic *verification* | **DONE** |
-| C4 | Unknown provider synthesis is forbidden | **DECIDED** |
-| C5 | Scaffold / simulate / forge / preset-init are not product | **DONE** (removed) |
-| C6 | MCQ coverage 1.0 is not completeness | **DECIDED** |
-| C7 | Primary install path is agent skill | **DECIDED** |
-| C8 | +4 delta = no hallucinated physics / no skipped floors / no pretty-but-PSTN-dead demos | **DECIDED** |
-| C9 | Contract validate CLI shape | **DONE** — versioned receipt validates provider IDs, policy basis, jurisdiction, regulated defaults, and percentile turn-gap SLOs |
-| C10 | P0 wedge = pack inspect + floor receipts + contract validate + eval gate | **DECIDED** |
-| C11 | Companion docs (`product.md`, `subtraction.md`, README) must not contradict this file | **DECIDED** |
-| C12 | `deploy` + `architecture` are playbooks (agent modes) backed by pack deployment physics; deterministic generation stays deleted | **DECIDED** |
-| C13 | Packs may carry an optional evidence-graded `deployment` block; CSB publication gate accepts a repeated full suite of ≥10 scenarios (core10 or superset) | **DECIDED** |
-| C14 | Measured latency requires a hashed licensed corpus, pinned config/region/cohort, raw turn traces, nearest-rank percentiles, and quality vetoes; no provider number is inferred | **DECIDED** |
-| C15 | The optional receipt deployment block is additive; managed target/drain claims and regulated residency paths fail closed against structured pack regions | **DECIDED** |
-| C16 | The standalone CSB-Load reference harness is not shipped; use the real target's drain test and `/callsmith deploy` evidence contract | **DONE** (removed) |
-| C17 | `prompts` edits the production runtime prompt; safety, audio, and tool enforcement remain code-owned | **DECIDED** |
-| C18 | `/callsmith deploy` owns scalability and requires paced-audio validity, open/closed arrival models, attribution-before-verdict, per-target ceiling, and versioned `run.json` before sizing claims | **DECIDED** |
-| C19 | `security` is an agent playbook: card capture routed to DTMF masking or out-of-band links, PII redaction at the trust boundary, voice-channel prompt injection controls, recording access + retention enforcement; floors stay canonical in `reference/policy.md` | **DECIDED** |
-| C20 | `multilingual` is an agent playbook: vendor multilingual claims are planning estimates, language answers stay canonical IDs, WER/turn-gap measured per language, never blended | **DECIDED** |
+The decision register (C1–C24) and the constitution changelog live in
+[`docs/decisions-register.md`](./docs/decisions-register.md) — maintainer history, not shipped
+canon. The installed skill payload carries this file only.
 
----
-
-## 11. Working agreements
-
-1. New work starts from **this file**, not from README nostalgia or archived CLI product.
-2. **Do not** open PRs that expand scaffold templates, menu-as-law, synthesis, or lock-as-identity.
-3. **Do** put new knowledge in packs, floors, skill/playbooks, or eval scenarios.
-4. When code and this doc disagree, **this doc wins** — finish the lag.
-5. Optional companions: `product.md` (+4 / irreversibility narrative), `subtraction.md` (historical cut map). Neither overrides this file.
-
----
-
-## Changelog of constitution
-
-| Date | Note |
-|---|---|
-| 2026-07-09 | Regime change: agent compiler + deterministic verification. |
-| 2026-07-09 | Generation code deleted (1.6.0-agent-compiler). Wedge = pack inspect + floors + contract + eval. This file sole forward canon. |
-| 2026-07-09 | `contract validate` shipped (minimal). Example: `examples/clinic-triage/`. Structure tests for floors/no-synthesis/physics. |
-| 2026-07-09 | CallsmithBench (CSB) eval design: ablation CSB-Δ, 4 sealed gates, dual oracle, core10 — `evals/csb/DESIGN.md`. |
-| 2026-07-09 | CSB Phase 1 shipped: schema v1, machine oracles, fixture scorer, CI tests. CSB-Δ unpublished until paired agent run. |
-| 2026-07-10 | Contract receipt v1 replaced keyword-only floor theater; committed contract history is the cross-session evidence trail. |
-| 2026-07-20 | Playbooks `deploy` + `architecture`; optional pack `deployment` blocks (8 packs) + deep potholes (Silero reuse/echo/truncate/session-limit/transfer); menu deploy targets; `check` prints Operations + env keys; scenario `deploy-managed-cloud-pilot` grows suite to 11; publication gate ≥10. |
-| 2026-07-21 | Frozen measurement corpus/harness, structured region matrices, optional deployment receipt enforcement, and CSB-Load drain gate. Provider measurements remain unpublished until live raw traces clear review. |
-| 2026-07-22 | Added `/callsmith prompts` as the runtime-prompt writing and review playbook. |
-| 2026-07-28 | Synthesized the transferable voice load-test rules into three `/callsmith deploy` references; deployment sizing now routes through paced-audio validity, arrival models, attribution, and per-target evidence rather than copied stack recipes or the drain gate alone. |
-| 2026-07-31 | Removed the standalone CSB-Load reference harness; Callsmith keeps the target-neutral deployment evidence contract and does not ship a synthetic capacity runner. |

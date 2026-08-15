@@ -14,7 +14,6 @@
   },
   "model": "gpt-realtime-2",
   "transport": "websocket",
-  "native_sip": true,
   "ingest": {
     "format": "pcm",
     "sample_rate": 24000,

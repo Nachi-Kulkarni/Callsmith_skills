@@ -25,7 +25,7 @@ Voice apps have a lot of small details that are easy to miss. Audio formats need
 must own interruptions. Recording needs a clear consent rule. Transfers and failed tools need a
 safe fallback.
 
-Callsmith gives your coding agent checked details for 21 voice providers and a simple process for
+Callsmith gives your coding agent checked details for 22 voice providers and a simple process for
 turning your brief into a build plan. It helps the agent:
 
 - choose providers that can work together;
@@ -105,13 +105,26 @@ uptime, or deployed cost.
 | GPT-5.6-Luna xhigh — fully gated designs | 6/11 | 11/11 | **+45pp** |
 
 Per-gate (both models, normal arm): reality traps 100%, stack physics 100% — the
-models are good. The lift lives entirely in **safety-floor completion** and
-**machine-validatable contract consistency**, the two things the skill enforces.
-The frontier model gained *more* than the cheap one: strong reasoning writes
-confident designs, and nothing without a verifier makes it re-check them.
+models are good. The lift lives entirely in **floor completion and contract
+consistency, measured against Callsmith's own floors and contract schema** (the
+benchmark scores conformance to this product's rules, not independently verified
+regulatory truth) — the two things the skill enforces. The frontier model gained
+*more* than the cheap one: strong reasoning writes confident designs, and nothing
+without a verifier makes it re-check them.
 
 \* one WITH arm was invalidated by the actor omitting its recipe file (correctly
 caught by validity gates), not by the skill.
+
+Two further limits on this table: (1) both runs executed their two arms
+**in parallel**, sharing one model subscription — the repo's own publication
+standard now requires sequential arms because differential throttling between
+simultaneous arms is an uncontrolled confound, so these diagnostic runs would not
+be publication-eligible as run. (2) The lifts were measured **before** a follow-up
+interface fix (the receipt example's `policy.basis` enum discoverability, commit
+`aa7bddf`): the run report itself attributes part of BASE's contract-consistency
+failures to that gap, so a re-measured lift may be smaller. Treat the table above
+as an upper bound until the next diagnostic repeats it under sequential arms and
+the fixed interface.
 
 Read the [run report](./evidence/diagnostics/csb-fair-harness-20260815.md),
 [test rules](./evidence/README.md), and [full limitations](./evidence/HONEST-NUMBERS.md).
@@ -134,6 +147,9 @@ see the note atop the old report.
 | `/callsmith noise-cancellation` | Designs and validates open-source echo, noise, and side-speaker suppression |
 | `/callsmith security` | Keeps card numbers, personal data, and caller-driven tool abuse out of transcripts and logs |
 | `/callsmith multilingual` | Plans mixed-language callers, voices, and per-language quality checks |
+| `/callsmith test` | Builds conversation test suites: scenario calls, floor-in-runtime-path assertions, regressions |
+| `/callsmith monitor` | Watches the receipt's SLO and floors in production with per-leg spans |
+| `/callsmith cost` | Assembles per-leg $/min from pack data with honest evidence classes |
 
 ## Optional CLI checks
 
@@ -142,6 +158,7 @@ callsmith packs
 callsmith pack show twilio
 callsmith pack validate
 callsmith verify-packs
+callsmith verify-packs --due --within 45
 callsmith check --answers voice.answers.json
 callsmith contract validate --file callsmith.recipe.md --answers voice.answers.json
 callsmith doctor

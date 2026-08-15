@@ -88,6 +88,8 @@ not deployed call latency or token economics.
 - Token-price or whole-session economics unless provider usage receipts are present.
 - That packs, floors, skill instructions, or the CLI individually caused the result; WITH tests them as one product.
 - A universal model-independent effect. Results are scoped to exact model/tool versions and budgets.
+- **Independence of the ground truth.** The oracles derive from the same floor tables and contract schema shipped inside the skill, and G_CON runs the same `validateContract` the WITH arm iterates against. The benchmark measures *conformance to Callsmith's rules*, not the correctness of those rules against external regulatory or provider truth. External grounding (regulatory sources, provider docs as oracle input) would be required to claim more.
+- **Freedom from shared-subscription interference.** The 2026-08-15 diagnostics ran both arms in parallel against one model subscription; differential throttling between simultaneous arms cannot be ruled out as a confound. The publication standard now requires sequential arms; the current diagnostics predate it.
 
 ## When Callsmith may not help
 

@@ -6,7 +6,7 @@
   "bin": {
     "callsmith": "bin/callsmith.mjs"
   },
-  "main": ".opencode/plugins/callsmith.js",
+  "main": "./src/lib/index.mjs",
   "exports": {
     ".": "./src/lib/index.mjs",
     "./opencode": "./.opencode/plugins/callsmith.js"

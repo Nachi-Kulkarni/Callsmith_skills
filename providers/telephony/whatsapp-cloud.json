@@ -1,0 +1,119 @@
+{
+  "id": "whatsapp-cloud",
+  "kind": "telephony",
+  "label": "WhatsApp Business Platform (voice notes)",
+  "transport": "http",
+  "directions": [
+    "inbound",
+    "outbound"
+  ],
+  "native_capabilities": [],
+  "ingest": {
+    "format": "opus",
+    "sample_rate": 16000,
+    "channels": 1,
+    "note": "Voice notes arrive as OGG container, OPUS codec only, mono (audio/ogg; codecs=opus). Meta does not document a pinned sample rate; 16 kHz is the common Opus voice setting — verify against real inbound media before assuming. No live stream: media is downloaded over HTTPS after the webhook."
+  },
+  "egress": {
+    "format": "opus",
+    "sample_rate": 16000,
+    "channels": 1,
+    "note": "Native voice-note rendering requires OGG/OPUS mono. MP3/AAC/AMR sent as type audio deliver fine but render as a plain audio file, not a voice note."
+  },
+  "verification": {
+    "grade": "official_docs",
+    "verified_at": "2026-08-15",
+    "expires_at": "2026-11-13",
+    "sources": [
+      "https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media",
+      "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/audio-messages",
+      "https://developers.facebook.com/docs/whatsapp/pricing"
+    ]
+  },
+  "doc_urls": [
+    "https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media",
+    "https://developers.facebook.com/docs/whatsapp/pricing"
+  ],
+  "cost_estimates": {
+    "billing": "free",
+    "rate_usd": 0,
+    "per_minute_usd": 0,
+    "notes": "Modeled path (user-initiated voice note, reply inside the open customer-service window): free — service conversations have been free since 2024-11-01 and utility templates inside an open window are free. Outside the window you must send template messages, billed per delivered message since 2025-07-01 (rate varies by category, country code, and volume tier — see the rate card, not this pack)."
+  },
+  "interruption": {
+    "mechanism": "none_async_channel",
+    "description": "Asynchronous message exchange — there is no live audio stream, so barge-in, turn gap, and VAD do not apply. Barge-in answers on this surface are wrong, not conservative."
+  },
+  "lifecycle": [
+    "2024-11-01: service conversations became free for all businesses.",
+    "2025-07-01: per-message pricing replaced conversation-based pricing for delivered template messages; volume tiers introduced.",
+    "2026-01-01 onward: India mandatory INR billing localization (complete by 2026-12-31); Brazil BRL from 2026-07-01."
+  ],
+  "potholes": [
+    {
+      "id": "async_not_a_call",
+      "severity": "blocker",
+      "note": "Async file exchange, not a call: replies land as chat messages seconds-to-minutes later. A design with a turn-gap SLO or barge-in plan on this surface is a category error — flag it, do not tune it."
+    },
+    {
+      "id": "egress_opus_mono_only",
+      "severity": "blocker",
+      "note": "Egress must be OGG/OPUS mono for native voice-note rendering; wrong codec or stereo often plays distorted or renders as a non-voice audio file."
+    },
+    {
+      "id": "media_url_expiry",
+      "severity": "warning",
+      "note": "Inbound media URLs from webhooks expire in minutes (media IDs last days); download media when the webhook arrives, not from a later queue replay."
+    },
+    {
+      "id": "audio_16mb_cap",
+      "severity": "warning",
+      "note": "Audio media cap is 16 MB; long notes must be chunked, refused, or moved to another surface — decide before launch."
+    },
+    {
+      "id": "mime_mismatch_131053",
+      "severity": "note",
+      "note": "MIME type must match the actual container (error 131053); verify files with `file`-style checks at the boundary."
+    },
+    {
+      "id": "stt_opus_input_check",
+      "severity": "blocker",
+      "note": "Confirm the STT pack accepts OGG/Opus 16 kHz mono input before skipping a decode step; otherwise you own an opus→PCM transcode in the worker."
+    },
+    {
+      "id": "twenty_four_hour_window",
+      "severity": "warning",
+      "note": "The 24-hour customer-service window bounds free replies; handoff/callback flows that answer later need template messages and per-message pricing."
+    }
+  ],
+  "env_keys": [
+    "WHATSAPP_TOKEN",
+    "WHATSAPP_PHONE_NUMBER_ID"
+  ],
+  "deployment": {
+    "self_host_notes": "API service — nothing to self-host. Your worker receives webhooks, downloads media, and posts replies; region choice is about the STT/LLM legs, not this channel.",
+    "regions": {
+      "media_edges": [
+        "not_applicable"
+      ],
+      "worker_regions": [
+        "any"
+      ],
+      "model_regions": [
+        "not_applicable"
+      ],
+      "recording_regions": [
+        "not_applicable"
+      ],
+      "transcript_regions": [
+        "not_applicable"
+      ],
+      "verified_at": "2026-08-15",
+      "sources": [
+        "https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media"
+      ],
+      "routing": "configurable",
+      "residency_controls": "documented"
+    }
+  }
+}

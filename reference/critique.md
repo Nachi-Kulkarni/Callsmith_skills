@@ -47,6 +47,8 @@ Second opinion on architecture. Goal: the easiest stack to build should also be 
 **I would ship:** <one stack sentence>
 
 ### Taste Score
+Anchor each lens before scoring: **0** = actively harmful choice, **1** = works but a named alternative is strictly better, **2** = defensible with known tradeoffs, **3** = right call, one residual risk named, **4** = right call and the tradeoff is quantified from packs/`check`. A 4 requires a digit (ms or $/min); no digit, no 4.
+
 | Lens | Score / 4 | Finding |
 |---|---:|---|
 | Product fit | ? | … |

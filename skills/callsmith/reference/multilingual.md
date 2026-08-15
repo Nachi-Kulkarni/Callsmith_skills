@@ -49,3 +49,20 @@ When ASR confidence collapses mid-code-switch, the caller must not fall into a r
 - Accent calibration on one region or the founding team
 - Retry loops with no DTMF escape on collapsed confidence
 - Per-language legs chosen for menu coverage instead of a measured gap
+
+## Output
+
+```markdown
+## Multilingual Plan
+
+**Language answers:** … (canonical IDs)
+**Leg choice:** per-language legs / single code-switch model — why
+**Voices:** one reviewed voice per language + pronunciation checks done / pending
+**Fallback:** DTMF escape trigger + prompt language rule
+
+### Per-language evidence (planning until measured)
+| Language | WER source | Turn gap | Cohort n |
+
+### Contract changes required?
+no / yes — sections: …
+```

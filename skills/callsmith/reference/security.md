@@ -13,7 +13,7 @@ Never transcribe card numbers or CVV. Speech is the leak: a PAN in any transcrip
 | Charge on file | Processor-stored token; the tool takes a token from code, not digits from transcript text |
 
 - Suppress STT transcription during DTMF capture; if the caller speaks digits anyway, redact before the first write.
-- Banking / payment / KYC floors still apply: `explicit` consent, `thirty_days` minimum retention, `transfer` on payment failure (`reference/policy.md`).
+- Banking / payment / KYC floors from `reference/policy.md` still apply, including handoff on payment failure.
 
 ## PII minimization and redaction
 

@@ -1,8 +1,8 @@
 ---
 name: callsmith
 description: "Design production voice AI agents across telephony and realtime or cascaded speech. Use for architecture, implementation, hardening, deployment, scaling, provider selection, audio physics, safety floors, and latency measurement."
-argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|noise-cancellation|security|multilingual|check|packs] [target]"
-allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, mcp__context7__resolve-library-id, mcp__context7__query-docs
+argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|noise-cancellation|security|multilingual|test|monitor|cost|check|packs] [target]"
+allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, WebFetch, WebSearch, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
 # callsmith
@@ -49,6 +49,9 @@ One playbook per invocation. Load **only** the matching file when invoked:
 | `noise-cancellation` | `reference/noise-cancellation.md` | Open-source echo/noise cleanup, side-speaker suppression, speaker control, and overlap extraction |
 | `security` | `reference/security.md` | Card-data routing, PII redaction boundaries, voice-channel prompt injection, recording access |
 | `multilingual` | `reference/multilingual.md` | Code-switching STT, multilingual vs per-language legs, per-language TTS voices and evals |
+| `test` | `reference/testing.md` | Functional conversation tests: scenario call suites, floor-in-runtime-path assertions, regression discipline |
+| `monitor` | `reference/observability.md` | Production SLO + floor telemetry, per-leg spans, barge-in/transfer/reconnect alerts, pack-drift rebaseline |
+| `cost` | `reference/cost.md` | Per-leg $/min from pack `cost_estimates`, evidence classes, S2S-vs-cascaded comparison with stated assumptions |
 
 No argument → default compile loop below.
 `check` / `packs` → verification CLI only (not playbooks).
@@ -57,15 +60,15 @@ These are agent modes, not generators.
 ## Your job (compile loop)
 
 1. **Converse** — dig deeper on vague intent (domain, surface, language, compliance, tools, handoff stakes).
-2. **Load packs** — for each provider under consideration, read `providers/<kind>/<id>.json` (or `callsmith pack show <id>`). Do not invent sample rates, barge-in mechanics, or potholes.
+2. **Load packs** — for each provider under consideration, read `providers/<kind>/<id>.json` (or `callsmith pack show <id>`). Do not invent sample rates, barge-in mechanics, or potholes. Note each loaded pack's `verification.expires_at`; if past (or near), tell the user the pack is stale and verify against current official docs before relying on it.
 3. **Verify current APIs** — before implementation, load `reference/current-docs.md`, note today's date, and check version-specific SDK/API usage through Context7 when available. Compare the lookup date with pack evidence/expiry dates. If Context7 is unavailable, use an available web-fetch/browse tool to read the provider's official documentation. Record source and access date. Never guess an API from model memory.
 4. **Apply floors** — load `reference/policy.md` and rewrite design when defaults violate policy. Change **answers fields**, not only prose. Tell the user before → after.
 5. **Normalize vocabulary** — every policy/stack field uses the canonical option IDs in `reference/policy.md`. Free-form synonyms fail tools and gates.
 6. **Physics check** — if the user has answers JSON, run `callsmith check --answers <file>`. Unknown providers: **do not synthesize** — research, write a pack, or refuse to ship.
 7. **Write one non-empty handoff contract** — `callsmith.recipe.md` with all required sections (below). Empty or stub files fail.
-8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script.
+8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script. If no CLI is installed, compare the receipt against `voice.answers.json` by eye using the schema in `reference/contract.md`, and say plainly that the check was manual, not tool-verified.
 9. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
-10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency / noise-cancellation / security / multilingual as needed. Use ttft only to isolate the LLM leg. Use noise-cancellation when contaminated input, echo, side speech, or false barge-in requires an audio-processing decision. Use security when payment capture, PII persistence, or caller-driven tool injection is in scope; use multilingual when callers mix or switch languages. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers. Follow the capacity branch routed by `reference/deploy.md` before designing a load harness or stating a concurrency ceiling, calls-per-pod number, pod count, or autoscaler threshold.
+10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency / noise-cancellation / security / multilingual / test / monitor / cost as needed. Use ttft only to isolate the LLM leg. Use noise-cancellation when contaminated input, echo, side speech, or false barge-in requires an audio-processing decision. Use security when payment capture, PII persistence, or caller-driven tool injection is in scope; use multilingual when callers mix or switch languages. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers; use test after implementation to prove conversation behavior and floors in runtime paths; use monitor when the app is live and the receipt's SLO and floors need watching; use cost when a stack comparison or budget needs per-leg numbers with evidence classes. Follow the capacity branch routed by `reference/deploy.md` before designing a load harness or stating a concurrency ceiling, calls-per-pod number, pod count, or autoscaler threshold.
 
 Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
 Not menu coverage 1.0.
@@ -105,13 +108,12 @@ Optional: keep `voice.answers.json` for `callsmith check` — values must use **
 | Start | User brief + this skill + floors |
 | Choosing providers | Only relevant `providers/**/*.json` |
 | Physics | `callsmith check` or pack fields (ingest/egress/interruption) |
-| Quality | `reference/audit.md`, `reference/prompts.md`, `reference/latency.md`, etc. |
 | Implement | Current version-specific docs + pack potholes for chosen stack |
 | Deploy | `reference/deploy.md` + pack `deployment` fields + `check` Operations |
 | Capacity / scale | `reference/deploy.md` → `reference/deploy-capacity.md`; load workload or evidence detail only when needed |
-| Noise / echo / side speakers | `reference/noise-cancellation.md`; keep office measurements as priors and re-measure the target channel |
-| Payments / PII / injection | `reference/security.md`; card digits never enter transcripts, traces, or logs |
-| Mixed-language callers | `reference/multilingual.md`; per-language WER and turn gap, never one blended metric |
+| Worked example | `examples/clinic-triage/` — a full contract + answers pair that passes `check` and `contract validate` |
+
+Quality-mode loads (audit / critique / architecture / prompts / harden / deploy / latency / noise-cancellation / security / multilingual / test / monitor / cost) follow the routing table above — one playbook per invocation, no preloading.
 
 ```bash
 callsmith packs
@@ -134,7 +136,7 @@ callsmith doctor
 
 **Removed (do not call):** `init`, `forge`, `scaffold`, `simulate`, `intake`, `docs`, `spec`, `release-check`. Generation is your job.
 
-## Provider packs (21)
+## Provider packs (22)
 
 Discover installed packs with `callsmith packs`; load only the selected files. Each pack carries audio ingress/egress, interruption, potholes, evidence-labeled planning inputs, environment keys, and dated sources.
 

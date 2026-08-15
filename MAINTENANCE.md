@@ -19,6 +19,10 @@ rejects unsourced claims automatically. Questions go to discussions.
 
 ## The quarterly ritual (one hour, four times a year)
 
+0. Run `node bin/callsmith.mjs verify-packs --due --within 45` — the treadmill
+   report lists every pack needing re-verification, in expiry order, with its
+   primary source. (Weekly CI already fails hard on *expired* evidence via
+   `doctor` and the real-clock pack test; this step is the heads-up.)
 1. Re-open the most volatile pack sources (pricing, limits, model versions,
    regions) and re-verify against `reference/current-docs.md` policy.
 2. Bump `verification.verified_at` (and `deployment.regions.verified_at` where

@@ -93,7 +93,9 @@ describe('release integrity', () => {
     }
 
     const pkg = JSON.parse(read('package.json'));
-    assert.equal(pkg.main, '.opencode/plugins/callsmith.js');
+    assert.equal(pkg.main, './src/lib/index.mjs');
+    assert.equal(pkg.exports['.'], './src/lib/index.mjs');
+    assert.equal(pkg.exports['./opencode'], './.opencode/plugins/callsmith.js');
     assert.deepEqual(pkg.pi.skills, ['./skills']);
     assert.ok(fs.existsSync(path.join(ROOT, '.opencode/plugins/callsmith.js')));
     assert.ok(fs.existsSync(path.join(ROOT, '.pi/extensions/callsmith.ts')));

@@ -46,25 +46,7 @@ Not menu coverage 1.0.
 
 ## Hard floors (Safety ≤ 2 if violated)
 
-| Domain signals | Min consent | Min retention |
-|---|---|---|
-| Medical / clinical / pharmacy / health | ≥ announce (prefer explicit) | Explicit; typically ≥ 30d |
-| Banking / payment / KYC / UPI / lending | explicit | ≥ 30d |
-| Collections / debt / recovery | explicit | ≥ 90d |
-| Legal | ≥ announce | ≥ 90d |
-| Insurance / FNOL | ≥ announce | ≥ 90d |
-| Government / benefits | ≥ announce | ≥ 30d |
-
-| Stakes | Min handoff |
-|---|---|
-| Urgent medical, payment failure, collections dispute, fraud | transfer |
-| Non-urgent lead-gen | callback or ticket |
-| Async-only channels | ticket |
-
-| Integration | Tools rule |
-|---|---|
-| Booking / CRM / ERP | Prefer OpenAPI; webhook needs written comparison |
-| Collections promise-to-pay | Durable write required |
+Floors, the handoff ladder, and the tool-integration rule are canonical in `reference/policy.md` — load it, do not score from memory or from any copy. Any floor violation caps the Safety dimension at 2, regardless of prose quality.
 
 **Acknowledging a risk is not handling it.**
 

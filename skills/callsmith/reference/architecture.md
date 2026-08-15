@@ -23,7 +23,7 @@ Kill the decision fatigue: pick realtime speech-to-speech, cascaded STT→LLM→
 | Tool determinism | tool calls live inside the audio stream; harder to checkpoint and audit | text checkpoint before acting; idempotency reviewable | cascaded for booking/payment/KYC tools |
 | Auditability (floors) | transcript is derived; consent/retention floors still apply | transcript exists by construction; easiest receipts | regulated → cascaded or hybrid |
 | Interruption | native server VAD; per-pack flush rules (truncate/cancel accounting) | VAD + cancel + flush across legs you own | S2S for fluid barge-in conversation |
-| Cost/min | bundled per-minute (planning est: Gemini Live ≈ $0.025, OpenAI Realtime ≈ $0.06) | sum of parts; cheap on short turns, can exceed S2S on long ones | compute both from packs, don't guess |
+| Cost/min | bundled per-minute (from the pack's `cost_estimates`, planning class) | sum of parts from each leg's `cost_estimates`; cheap on short turns, can exceed S2S on long ones | compute both from packs, don't guess |
 | Failure isolation | one vendor outage = dead agent | degrade/swap per leg | cascaded for ops maturity |
 | Change velocity | prompt + config | per-leg upgrades and evals | cascaded while iterating fast |
 

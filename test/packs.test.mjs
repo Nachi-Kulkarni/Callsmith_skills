@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadProviders, loadMenu } from '../src/lib/resolver.mjs';
 import { validatePacks } from '../src/lib/validate.mjs';
-import { verifyPacks } from '../src/lib/verify-packs.mjs';
+import { packRefreshReport, verifyPacks } from '../src/lib/verify-packs.mjs';
 
 describe('provider packs', () => {
   it('loads packs', () => {
@@ -19,7 +19,9 @@ describe('provider packs', () => {
   });
 
   it('verify-packs has no failures', () => {
-    const report = verifyPacks(loadProviders(), loadMenu(), { now: '2026-07-21T12:00:00Z' });
+    // Real clock: pack dates are honest against today, not a frozen reference
+    // point (verified_at must never be in the future relative to now).
+    const report = verifyPacks(loadProviders(), loadMenu());
     assert.equal(report.failures.length, 0, JSON.stringify(report.failures, null, 2));
   });
 
@@ -47,6 +49,30 @@ describe('provider packs', () => {
 
     const expired = verifyPacks(providers, { groups: [] }, { now: '2026-10-09T00:00:00Z' });
     assert.ok(expired.failures.some(({ message }) => message.includes('evidence expired on 2026-10-08')));
+  });
+
+  it('no pack evidence is expired on the real clock (weekly CI treadmill alarm)', () => {
+    // Frozen-clock tests above prove the logic; this one pages the owner when the
+    // quarterly refresh ritual (MAINTENANCE.md) is overdue — the alarm doctor also raises.
+    const report = verifyPacks(loadProviders(), loadMenu());
+    const expired = report.failures.filter(({ message }) => /expired/.test(message));
+    assert.deepEqual(expired, [], `pack evidence expired — run the refresh ritual: ${JSON.stringify(expired)}`);
+  });
+
+  it('lists the refresh treadmill in expiry order with primary sources', () => {
+    const report = packRefreshReport(loadProviders(), { now: '2026-09-20T12:00:00Z', withinDays: 30 });
+    // All 21 packs expire 2026-10-08 or 2026-10-19 — everything is due within 30d.
+    assert.equal(report.due.length, 21);
+    assert.ok(report.due[0].expires_at <= report.due[1].expires_at, 'sorted by expiry');
+    for (const item of report.due) {
+      assert.ok(item.days_left >= 0 && item.days_left <= 30, `${item.pack} days_left`);
+      assert.ok(item.sources.length >= 1, `${item.pack} carries its primary source`);
+    }
+  });
+
+  it('treadmill stays quiet while evidence is fresh', () => {
+    const report = packRefreshReport(loadProviders(), { now: '2026-07-21T12:00:00Z', withinDays: 14 });
+    assert.equal(report.due.length, 0);
   });
 
   it('rejects unproven latency numbers and accepts a real measured distribution', () => {

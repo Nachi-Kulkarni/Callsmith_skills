@@ -36,7 +36,7 @@ There is no generated `.callsmith/context/*` empire and no scaffold to patch.
 ### Safety & floors
 
 - [ ] PII redaction, consent, transcript retention, opt-out/DNC for phone flows
-- [ ] Domain floors met (collections → explicit + ≥ 90d; banking → explicit + ≥ 30d; medical → ≥ announce + retention explicit)
+- [ ] Domain floors met per `reference/policy.md` (consent/retention minima and handoff ladder)
 - [ ] Consent/handoff present in **runtime paths**, not only docs
 
 ### Operability

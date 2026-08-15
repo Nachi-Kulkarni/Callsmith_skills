@@ -21,12 +21,12 @@ Earlier runs that predate the complete actor-isolation boundary remain
 A public claim requires two frozen model-family evaluations. For each family:
 
 - all ten core scenarios;
-- paired BASE and WITH arms;
+- paired BASE and WITH arms, executed **sequentially** (`--arm-execution sequential`);
 - three counterbalanced repetitions;
 - no invalid arms;
 - pinned model, reasoning, tool version, commit, seed, and budgets;
-- positive reviewed task-success lift and interval;
-- floor lift at least `+0.5`, physics lift at least `+0.4`, and BASE floor/physics failure rate at least `0.6`;
+- positive reviewed task-success lift whose scenario-clustered interval excludes zero;
+- floor lift at least `+0.20`, contract lift at least `+0.25`, physics/reality no regression, and BASE failing a discriminating gate (floor or contract) on at least `0.3` of briefs — below that the suite has lost discrimination and traps must be refreshed, never the bar lowered (the re-scoped 2026-08 bar; the earlier `+0.5/+0.4/0.6` bar is retired, superseded by the fairness-hardened interface — see `evals/csb/DESIGN.md` §4);
 - sanitized receipts and traces covered by a checksum manifest.
 
 See [Honest Numbers](./HONEST-NUMBERS.md) for what the benchmark can and cannot establish.

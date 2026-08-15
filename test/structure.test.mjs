@@ -43,9 +43,53 @@ describe('skill / constitution structure', () => {
       /SocketCluster|ResourceLease|SessionControl|MediaTransport|CallerAgent|SutProbe/,
     );
   });
+
+  it('shipped skill copy is byte-identical to the repo source (npm run sync:skill)', () => {
+    for (const file of ['SKILL.md', 'product_decisions.md']) {
+      assert.equal(
+        fs.readFileSync(path.join(ROOT, file), 'utf8'),
+        fs.readFileSync(path.join(ROOT, 'skills/callsmith', file), 'utf8'),
+        `${file} drifted from the skills/callsmith copy — run npm run sync:skill`,
+      );
+    }
+    for (const dir of ['reference', 'providers', 'examples']) {
+      const source = walkRelative(path.join(ROOT, dir)).sort();
+      const shipped = walkRelative(path.join(ROOT, 'skills/callsmith', dir)).sort();
+      assert.deepEqual(source, shipped, `skills/callsmith/${dir} file set drifted — run npm run sync:skill`);
+      for (const file of source) {
+        assert.equal(
+          fs.readFileSync(path.join(ROOT, dir, file), 'utf8'),
+          fs.readFileSync(path.join(ROOT, 'skills/callsmith', dir, file), 'utf8'),
+          `${dir}/${file} drifted from the shipped copy — run npm run sync:skill`,
+        );
+      }
+    }
+  });
 });
 
+function walkRelative(dir, base = dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(dir, entry.name);
+    return entry.isDirectory() ? walkRelative(file, base) : [path.relative(base, file)];
+  });
+}
+
 describe('no synthesis', () => {
+  it('check rejects malformed answers files with a clean one-line error (no stack trace)', () => {
+    for (const [name, content] of [['null', 'null'], ['array', '[1,2]'], ['scalar', '"x"']]) {
+      const file = path.join(ROOT, 'test', `_bad-${name}.answers.json`);
+      fs.writeFileSync(file, content);
+      try {
+        const r = run('check', '--answers', file);
+        assert.notEqual(r.status, 0, `${name} answers should fail`);
+        assert.match(r.stderr, /must contain a JSON object/);
+        assert.doesNotMatch(r.stderr, /\n\s+at /, 'no stack trace in CLI output');
+      } finally {
+        fs.unlinkSync(file);
+      }
+    }
+  });
+
   it('rejects provider IDs that could escape paths, logs, or generated text', () => {
     for (const id of ['exotel', 'acme-telephony', 'acme_nonexistent', 'A1-2_3']) {
       assert.equal(validateProviderId(id), id);

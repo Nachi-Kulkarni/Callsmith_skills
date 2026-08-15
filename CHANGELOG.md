@@ -4,6 +4,45 @@ All notable changes to callsmith are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+- Public honesty fixes on the evidence surface: the 2026-08-15 diagnostics report carries a dated addendum disclosing that both runs executed arms in parallel (not publication-eligible under the standard adopted the same day; artifacts and scoring unchanged, manifest hash updated); README and HONEST-NUMBERS state the same limit, plus a new ground-truth-independence limitation — the oracles derive from the floors and contract schema shipped in the skill, so CSB measures conformance to Callsmith's rules, not their external correctness.
+- `docs/decisions-register.md` — the decision register (C1–C24) and constitution changelog moved out of the shipped constitution; `product_decisions.md` drops from ~18.5 KB to ~12 KB in the consumer skill payload and keeps a pointer.
+- Skill `allowed-tools` now includes `WebFetch`/`WebSearch`, unblocking the compile loop's own documented web-fetch fallback when Context7 is unavailable; the progressive-disclosure table links `examples/clinic-triage/` (previously unreachable from the skill).
+
+
+
+- `/callsmith test` (`reference/testing.md`) — conversation test suites: scenario call tests that assert outcomes and floors in runtime paths (consent before capture, transfer fallback, DTMF masking) rather than transcript text, regression discipline for prompt/model changes, per-language cohorts, and pilot sampling. CI never dials live PSTN.
+- `providers/telephony/whatsapp-cloud.json` — the WhatsApp Business Platform voice-note pack (22nd): OGG/OPUS-mono-only for native voice-note rendering, 16 MB audio cap, webhook media URL expiry, MIME-mismatch trap, async-channel semantics (no barge-in/turn-gap — a design with them on this surface is a category error), 24 h window and free service replies vs per-message template pricing since 2025-07-01, all sourced to Meta docs dated 2026-08-15. No menu leg selects it; the compile loop loads it directly for WhatsApp briefs, and the `policy.md` no-pack warning became a pointer.
+- `/callsmith monitor` (`reference/observability.md`) — production observability for what the receipt promised: turn-gap SLO from per-leg v2-trace spans, floor telemetry that pages immediately (consent-before-capture, masking violations, deletion jobs), barge-in/reconnect anomaly alerts, per-language cohorts, and pack-drift SLO rebaselining.
+- `/callsmith cost` (`reference/cost.md`) — per-leg $/min assembled from pack `cost_estimates` with evidence classes stated, assumptions declared (turns, length, barge-in rate), S2S-bundled vs cascaded sum-of-parts at the same call profile; cost never overrides a floor.
+- `callsmith verify-packs --due [--within N]` — pack-refresh treadmill report: packs needing re-verification in expiry order with primary sources; documented as step 0 of the MAINTENANCE.md quarterly ritual.
+- `run-arms.mjs --arm-execution sequential` — arms of a trial run one at a time in the recorded counterbalanced order, removing the shared-subscription throttling confound of parallel arms. Required for publication-eligible runs (enforced in `buildSummary` and `review-publication.mjs`); parallel remains the diagnostic default.
+- `run-arms.mjs --resume <run-dir>` — crash recovery for long publication runs: continues a predeclared run from its last complete trial boundary (same seed/runs/scenarios/commit/source hashes), refuses a partially executed trial so no arm is ever re-run conditioned on failure.
+- Scenario-cluster bootstrap: the 95% lift interval resamples scenario clusters, not correlated within-scenario trials; the publication review additionally requires the combined interval to exclude zero.
+- `command_log_evaluable` on every arm score — an empty command log (grok trace shape, quiet opencode runs) means the `no_deleted_generators` trap passed vacuously; reports now say so instead of implying the trap ran.
+- Structure test locking `skills/callsmith/` byte-identical to the repo source (SKILL.md, product_decisions.md, reference/, providers/, examples/) so `sync:skill` drift fails CI.
+- Real-clock pack test: CI now fails the day any pack's evidence actually expires (the weekly-cron alarm MAINTENANCE.md always promised).
+
+### Changed
+- `evidence/README.md` now publishes the re-scoped discriminating-gate publication bar (the retired `+0.5/+0.4/0.6` line was still live on the public proof surface after the C24 re-scope).
+- CSB publication bar re-scoped to the discriminating gates (floor lift ≥ +0.20, contract lift ≥ +0.25, BASE discriminating-fail ≥ 0.3, physics/reality as no-regression vetoes). The fairness-hardened interface removed vocabulary-availability failures, leaving physics/reality at BASE ceiling on current models — the old physics ≥ +0.4 / base-fail ≥ 0.6 thresholds were unreachable by construction. Full rationale and audit trail in `evals/csb/DESIGN.md`; the saturation alarm (discriminating-fail < 0.3) now mandates trap refresh, never bar-lowering.
+- The canonical floor table lives solely in `reference/policy.md` (now carrying the handoff ladder and collections durable-write rule). The drifted copy in `audit.md` (which had grown a "Government / benefits" floor the contract schema cannot express) and the condensed copies in `harden.md`, `security.md`, and `product_decisions.md` are pointers now.
+- `doctor` derives the required reference canon from SKILL.md routing instead of a stale 11-of-18 list; it now covers all playbooks plus `turn-trace.v2.schema.json`, `current-docs.md`, and the deploy subtree.
+- `reference/architecture.md` no longer hard-codes $/min planning numbers two lines above "compute both from packs, don't guess" — the cost lens points at pack `cost_estimates`.
+- `reference/multilingual.md` gained the output template its siblings all carry; `reference/critique.md` taste-score lens now has 0–4 anchors (a 4 requires a digit).
+- README scoreboard carries an upper-bound caveat: the published lifts were measured before the receipt-example interface fix, part of whose BASE contract failures the run report attributes to that gap.
+- `evals/measure/README.md` is banner-marked experimental: no live adapter exists and the frozen corpus (20 FSDD digit clips) proves transport timing only.
+- Publication review reuses `assertNoSecrets` from `build-evidence.mjs` instead of a drifting duplicate scanner.
+- `package.json` `main` now points at `src/lib/index.mjs` (the library entry) instead of the OpenCode plugin shim.
+
+### Fixed
+- Region residency check: a single `any`/`global`/`not_applicable` entry anywhere in a regions array exempted the whole leg from the pin check; sentinel exemption now applies only when the entire array is sentinel values, so mixed arrays (e.g. `["not_applicable","us-east"]`) must answer the pin. All shipped packs carry pure sentinel arrays, so behavior is unchanged on current data (locked by a new unit test).
+- `check --answers` on a `null`/array/scalar JSON file now fails with a clean one-line error instead of a raw `TypeError` message; the CLI route wraps dispatch so a corrupt pack file or unexpected crash prints one clean `error:` line, never a stack trace.
+- SKILL.md's progressive-disclosure table no longer duplicates the routing table's quality-mode rows (deleted seven rows; stage rows and the worked-example link stay).
+- `run-arms.mjs` cleans the isolated actor workspace in a `finally` block — a mid-run crash no longer leaks `callsmith-csb-*` tmpdirs (the failure mode that once left 127 MB behind).
+- Removed the undocumented top-level `native_sip` field from the OpenAI Realtime pack (dead, absent from `_schema.json`, redundant with `native_capabilities`).
+- Removed the empty leftover `reference/deploy/` directory.
+
 ## [1.9.0] — 2026-08-15
 
 - Added `/callsmith noise-cancellation` (`reference/noise-cancellation.md`) — open-source echo/noise/side-speaker suppression playbook: contaminant classification, WebRTC APM/RNNoise/DeepFilterNet/Silero/ECAPA/TSE boundaries, sustained level gating, speaker-attributed control, one-rung-at-a-time build order, and a field experiment ledger with dated priors.
