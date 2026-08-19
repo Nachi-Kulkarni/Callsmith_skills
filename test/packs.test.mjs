@@ -61,8 +61,9 @@ describe('provider packs', () => {
 
   it('lists the refresh treadmill in expiry order with primary sources', () => {
     const report = packRefreshReport(loadProviders(), { now: '2026-09-20T12:00:00Z', withinDays: 30 });
-    // All 21 packs expire 2026-10-08 or 2026-10-19 — everything is due within 30d.
-    assert.equal(report.due.length, 21);
+    // Gemini Live was refreshed on 2026-08-19; the other 20 packs are due within 30d.
+    assert.equal(report.due.length, 20);
+    assert.ok(!report.due.some(({ pack }) => pack === 'gemini-live'));
     assert.ok(report.due[0].expires_at <= report.due[1].expires_at, 'sorted by expiry');
     for (const item of report.due) {
       assert.ok(item.days_left >= 0 && item.days_left <= 30, `${item.pack} days_left`);

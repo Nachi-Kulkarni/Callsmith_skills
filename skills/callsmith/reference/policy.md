@@ -11,14 +11,14 @@ Load this reference before writing `voice.answers.json` or a contract receipt. N
 | `recording_consent` | `none`, `announce`, `explicit` |
 | `transcript_retention` | `ephemeral`, `seven_days`, `thirty_days`, `ninety_days` |
 | `human_handoff` | `none`, `transfer`, `callback`, `ticket` |
-| `language` | `english`, `hindi`, `hinglish`, `tamil`, `kannada`, `multilingual` |
+| `language` | any BCP 47 language tag, or `multilingual` when switching is required |
 
 Common mappings:
 
 - warm transfer / live agent → `transfer`
 - verbal opt-in → `explicit`
 - keep for 30 days → `thirty_days`
-- English and Hindi → `multilingual` or `hinglish`
+- Several supported languages with one stable default → that primary language's BCP 47 tag; use `multilingual` only when switching is required
 - WhatsApp voice notes → `whatsapp_voice`, without a telephony key
 
 Provider values in `voice.answers.json` use menu IDs; the receipt uses pack IDs:

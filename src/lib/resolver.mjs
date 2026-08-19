@@ -25,6 +25,11 @@ function safeEcho(value) {
   return String(value).replace(/[\x00-\x1f\x7f]/g, '?').slice(0, 80);
 }
 
+function normalizeLanguageTag(value) {
+  if (typeof value !== 'string') return null;
+  try { return new Intl.Locale(value).toString(); } catch { return null; }
+}
+
 // Single providers/ walk, shared with validatePacks (validate.mjs) so the two cannot drift.
 export function* iterProviderPacks() {
   const dir = path.join(ROOT, 'providers');
@@ -81,6 +86,12 @@ export function expandAnswers(raw, menu, opts = {}) {
     }
     const opt = g.options.find(o => o.id === choice);
     if (!opt) {
+      const languageTag = g.accepts_bcp47 ? normalizeLanguageTag(choice) : null;
+      if (languageTag) {
+        labels[g.id] = languageTag;
+        flags.language = languageTag;
+        continue;
+      }
       const kindHolder = g.options.find(o => o.maps?.kind);
       if (kindHolder && typeof choice === 'string' && choice) {
         validateProviderId(choice);
@@ -88,7 +99,8 @@ export function expandAnswers(raw, menu, opts = {}) {
         labels[g.id] = choice;
       }
       if (!kindHolder && choice !== '' && choice !== null && choice !== undefined) {
-        throw new Error(`Invalid answer for "${safeEcho(g.id)}": "${safeEcho(choice)}". Expected one of: ${g.options.map(o => o.id).join(', ')}`);
+        const custom = g.accepts_bcp47 ? ' or a valid BCP 47 language tag' : '';
+        throw new Error(`Invalid answer for "${safeEcho(g.id)}": "${safeEcho(choice)}". Expected one of: ${g.options.map(o => o.id).join(', ')}${custom}`);
       }
       continue;
     }

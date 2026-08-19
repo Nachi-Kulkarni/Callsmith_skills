@@ -23,6 +23,17 @@ Each scenario is a caller profile + goal + assertions. Assert outcomes, never tr
 - **Floors in runtime paths** (not docs): the consent utterance plays *before* sensitive capture or recording starts; a transfer-eligible utterance actually triggers the transfer path; a failed transfer falls back per the contract instead of stranding the caller; card digits route through DTMF masking (`security.md`), never a transcript.
 - **Recovery**: DTMF escape after repeated ASR failure, voicemail detection, reconnect, mid-call provider 5xx.
 
+For an agent-first call, add a no-caller-speech startup scenario. Simulate carrier answer/media
+start and assert behavior and ordering, not exact prose:
+
+- no startup stimulus or outbound audio before confirmed answer;
+- exactly one provider-native startup stimulus after answer, without any caller audio;
+- the first non-silent audible turn belongs to the agent and contains the required identity/purpose;
+- caller media is not forwarded early enough to steal the opening turn, and preserved media is
+  released when first assistant audio starts;
+- if assistant audio never starts, the bounded gate opens to listening instead of deadlocking;
+- reconnect or session resumption does not replay the opener.
+
 Assert semantic facts (intent fired, slot equals X, transfer API invoked) — byte-diffing transcripts is flaky against nondeterministic STT/TTS and proves nothing.
 
 ## Regression discipline
@@ -42,6 +53,7 @@ Before launch, review a sample of real calls (listen + trace) against the same a
 - One blended pass rate across languages or scenarios
 - Live PSTN calls or vendor keys required to run CI
 - Only the happy path scripted; no transfer-failure, no barge-in mid-answer, no DTMF escape
+- “Agent speaks first” tested by prompt text or a transcript mock instead of a no-input transport scenario
 - Prompt changes shipped without the regression suite
 - Barge-in tested only with clean single-speaker audio (echo/side-speaker cases live in `noise-cancellation.md`)
 - Golden transcripts kept after their scenario assertions were rewritten

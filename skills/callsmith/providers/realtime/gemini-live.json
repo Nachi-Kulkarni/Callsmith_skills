@@ -4,11 +4,12 @@
   "label": "Gemini Live (gemini-3.1-flash-live-preview)",
   "verification": {
     "grade": "official_docs",
-    "verified_at": "2026-07-10",
-    "expires_at": "2026-10-08",
+    "verified_at": "2026-08-19",
+    "expires_at": "2026-11-17",
     "sources": [
       "https://ai.google.dev/gemini-api/docs/live",
-      "https://ai.google.dev/api/multimodal-live"
+      "https://ai.google.dev/api/multimodal-live",
+      "https://ai.google.dev/gemini-api/docs/live-api/capabilities"
     ]
   },
   "model": "gemini-3.1-flash-live-preview",
@@ -54,6 +55,11 @@
       "note": "send_realtime_input triggers model response automatically via server-side VAD; you do not manually commit turns in the optimized path. Coordinate turn logic with this."
     },
     {
+      "id": "agent_first_requires_post_answer_stimulus",
+      "severity": "blocker",
+      "note": "A system instruction can define the opening but does not itself start a turn. For agent-first calls, wait for confirmed carrier answer/media start, then send one short in-conversation text instruction with send_realtime_input(text=...). On gemini-3.1-flash-live-preview, send_client_content is for seeding initial history, not this live startup turn. Do not inject fake caller audio or wait for caller VAD."
+    },
+    {
       "id": "interruption_requires_flush",
       "severity": "blocker",
       "note": "On barge-in, Gemini emits interruption_detected; stop playing queued output audio and flush the outbound buffer, else the caller hears overlapping speech."
@@ -75,7 +81,8 @@
   ],
   "doc_urls": [
     "https://ai.google.dev/gemini-api/docs/live",
-    "https://ai.google.dev/api/multimodal-live"
+    "https://ai.google.dev/api/multimodal-live",
+    "https://ai.google.dev/gemini-api/docs/live-api/capabilities"
   ],
   "cost_estimates": {
     "billing": "per_minute",

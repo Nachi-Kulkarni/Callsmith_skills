@@ -1,21 +1,21 @@
 ---
 name: callsmith
-description: "Design production voice AI agents across telephony and realtime or cascaded speech. Use for architecture, implementation, hardening, deployment, scaling, provider selection, audio physics, safety floors, and latency measurement."
+description: "Use when a user is building, changing, reviewing, debugging, testing, or shipping software that listens and speaks: phone agents, WebRTC or app voice, voice notes, and STT-to-LLM-to-TTS or realtime speech stacks. Also trigger when such a system waits for the caller to speak before greeting, has slow first audio, broken interruption or echo, audio-format mismatches, unsafe consent, retention, or handoff, uncertain provider or architecture choices, deploy drops, multilingual failures, or unproven scale and cost claims. Turn the brief or code into pack-backed decisions, enforced safety floors, measured audio behavior, a validated handoff contract, and framework-native implementation."
 argument-hint: "[audit|critique|architecture|latency|ttft|prompts|harden|deploy|noise-cancellation|security|multilingual|test|monitor|cost|check|packs] [target]"
 allowed-tools: Bash(callsmith *), Bash(node *), Bash(npx callsmith *), Bash(ctx7 *), Read, Write, Edit, WebFetch, WebSearch, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
 # callsmith
 
-**You are the compiler.** callsmith teaches you to design production voice agents; packs, floors, and evals verify what you must not invent.
+Convert the user's brief or existing voice code into clear decisions, one validated handoff contract, and working code in the project's framework.
 
-> The agent compiles. callsmith validates the physics, floors, and eval bar.
+Use provider packs for audio, interruption, deployment, and cost facts. Apply the safety rules in `reference/policy.md`. Verify the result with the CLI when it is available.
 
-Constitution: `product_decisions.md`. Wedge: pack physics inspect + floor receipts + contract validate + eval gate.
+`product_decisions.md` is the product constitution: the agent writes the design and code; Callsmith checks domain facts, safety floors, and the eval bar.
 
-Not a scaffold generator. Not a 22-question coverage machine. You converse, dig deeper, load **provider packs**, **rewrite** floor violations, write one **handoff contract**, then implement with framework-native code (LiveKit / Pipecat / custom).
+Ask only the questions needed to settle the current design. Load the relevant packs, rewrite unsafe defaults, write one handoff contract, and implement with LiveKit, Pipecat, or the project's existing framework. Callsmith does not generate scaffolds or run a fixed questionnaire.
 
-The hard part is not the model. It is the audio bridge (μ-law 8 kHz ↔ PCM), barge-in, echo ownership, per-provider quirks — plus regulated floors (consent, retention, handoff).
+Voice failures usually sit in the audio and call-control path: μ-law 8 kHz and PCM transforms, barge-in, echo ownership, provider quirks, consent, retention, and human handoff.
 
 ## Setup
 
@@ -53,11 +53,37 @@ One playbook per invocation. Load **only** the matching file when invoked:
 | `monitor` | `reference/observability.md` | Production SLO + floor telemetry, per-leg spans, barge-in/transfer/reconnect alerts, pack-drift rebaseline |
 | `cost` | `reference/cost.md` | Per-leg $/min from pack `cost_estimates`, evidence classes, S2S-vs-cascaded comparison with stated assumptions |
 
-No argument → default compile loop below.
+No argument → default compile loop below. That is every project's starting point — there is no `init`.
 `check` / `packs` → verification CLI only (not playbooks).
 These are agent modes, not generators.
 
+## Lifecycle: suggest the next command
+
+End **every** invocation — compile loop or playbook — with one line telling the user the next command to run and why, picked here. If the suggestion is already done (check `callsmith.decisions.md`), suggest the next undone step on the main path.
+
+Main path: **compile (no argument) → audit → harden → latency → deploy → test → monitor → cost**; re-run `audit` whenever the stack or packs change.
+
+| Just finished | Suggest next |
+|---|---|
+| compile loop | `audit` — score the design before building further |
+| `audit` | re-run the compile loop to clear the punch list, then `harden` |
+| `critique` | `architecture` if the winner is still unclear, else compile to apply it |
+| `architecture` | compile to apply the decision, then `prompts` |
+| `prompts` | `harden` |
+| `harden` | `latency` |
+| `latency` | `ttft` if the turn gap points at the LLM leg, else `deploy` |
+| `ttft` | `deploy` |
+| `noise-cancellation` | `latency` — re-measure the cleaned channel |
+| `security` | `harden`, then back to the main path |
+| `multilingual` | `latency` — per-language turn gap, never one blended number |
+| `deploy` | `test` |
+| `test` | `monitor` — once real callers are live |
+| `monitor` | `cost` — once there is traffic to account for |
+| `cost` | `audit` — periodic re-score of the whole design |
+
 ## Your job (compile loop)
+
+Step 0 — if `callsmith.decisions.md` exists, read it and resume from its **Next step**; do not re-ask questions it already answers.
 
 1. **Converse** — dig deeper on vague intent (domain, surface, language, compliance, tools, handoff stakes).
 2. **Load packs** — for each provider under consideration, read `providers/<kind>/<id>.json` (or `callsmith pack show <id>`). Do not invent sample rates, barge-in mechanics, or potholes. Note each loaded pack's `verification.expires_at`; if past (or near), tell the user the pack is stale and verify against current official docs before relying on it.
@@ -69,6 +95,7 @@ These are agent modes, not generators.
 8. **Self-check before done** — `callsmith check` clean (or pack-backed transforms stated) + `contract validate --file callsmith.recipe.md --answers voice.answers.json` when CLI available. Trust this semantic cross-check; do not hand-roll a receipt comparison script. If no CLI is installed, compare the receipt against `voice.answers.json` by eye using the schema in `reference/contract.md`, and say plainly that the check was manual, not tool-verified.
 9. **Implement** — you write the code. Prefer framework APIs. No `callsmith scaffold` (removed).
 10. **Quality modes** — audit / critique / architecture / prompts / harden / deploy / latency / noise-cancellation / security / multilingual / test / monitor / cost as needed. Use ttft only to isolate the LLM leg. Use noise-cancellation when contaminated input, echo, side speech, or false barge-in requires an audio-processing decision. Use security when payment capture, PII persistence, or caller-driven tool injection is in scope; use multilingual when callers mix or switch languages. Use architecture when S2S-vs-cascaded is unresolved; use deploy before any pilot with real callers; use test after implementation to prove conversation behavior and floors in runtime paths; use monitor when the app is live and the receipt's SLO and floors need watching; use cost when a stack comparison or budget needs per-leg numbers with evidence classes. Follow the capacity branch routed by `reference/deploy.md` before designing a load harness or stating a concurrency ceiling, calls-per-pod number, pod count, or autoscaler threshold.
+11. **Close the loop** — append this session's entry to `callsmith.decisions.md` (template below) and end with the lifecycle suggestion.
 
 Completeness = **intent clear + floors satisfied + pack-informed physics + contract written**.
 Not menu coverage 1.0.
@@ -100,6 +127,22 @@ Write a **non-empty** single markdown file (default `callsmith.recipe.md`). Miss
 The receipt records the policy basis, jurisdiction for regulated domains, installed provider pack IDs, and a percentile `turn_gap_ms` SLO. Its optional deployment block records target, region, and drain owner; managed-runtime and regulated-residency claims must agree with pack physics. Callsmith floors are conservative product defaults, not legal advice.
 
 Optional: keep `voice.answers.json` for `callsmith check` — values must use **canonical ids** above, not free-form prose.
+
+## Project state: `callsmith.decisions.md`
+
+The append-only memory that makes a fresh session stateful. First action of every invocation — compile loop or playbook: if it exists, read it. Last action: append one dated entry per session:
+
+```markdown
+## <date> — /callsmith <command run>
+- Decided: <choice> — <one-line why>
+- Rejected: <option> — <one-line why>
+- Floor rewrites: <field>: before → after (or "none")
+- Mistakes to avoid: <anti-pattern caught or gate failed this session> (or "none")
+- Open questions: <still needs the user's answer> (or "none")
+- Next step: /callsmith <command> — <why>
+```
+
+Never delete or rewrite old entries — the history **is** the mistake trace. Every answered question, rejected option, and failed gate gets its line. A new session with zero context must be able to continue from this file plus `voice.answers.json` and `callsmith.recipe.md` alone.
 
 ## Progressive disclosure
 
@@ -177,7 +220,9 @@ That difference lives in packs — not in model marketing docs.
 
 ## Asking style
 
-- 2–3 focused questions at a time
+- **Plain words, one idea per question.** Ask "Where will people talk to this agent? (a phone call / WhatsApp voice notes / an app)" — not "What surface class?". Ask "How fast should replies feel? (instant, like a live person / a short pause is fine / no rush)" — not "What's your turn-gap budget?". Ask "Does this touch health, money, or legal matters? (yes / no / not sure)" — not "Is the domain regulated?".
+- If your harness has an interactive question tool (AskUserQuestion / ask / qna), prefer it: 2–4 short concrete options per question, as many rounds as needed. In plain text, 2–3 questions at a time.
+- Record each answer in `callsmith.decisions.md` as it is given — that is the decision tracking.
 - Natural language → map to concrete stack decisions
 - Prefer pack-backed tradeoffs over generic “use LiveKit” vibes
 - After floor rewrites, state before → after

@@ -19,6 +19,9 @@ There is no generated `.callsmith/context/*` empire and no scaffold to patch.
 
 - [ ] Frames reassembled by **byte budget**, not WebSocket message boundary
 - [ ] Every pack-implied transform has a unit/fake-frame test in the *project*
+- [ ] `first_speaker` is explicit. For agent-first calls: wait for confirmed answer/media start, send one idempotent provider-native startup stimulus, and never rely on the base prompt or caller saying hello to start generation
+- [ ] Agent-first input gate preserves queued caller media until first assistant audio starts, then opens immediately; a bounded timeout fails open to listening instead of creating dead air
+- [ ] Startup cannot play before answer, repeat after reconnect/resume, or use fake caller audio to trick VAD
 - [ ] Barge-in: cancel model + stop TTS + clear telephony playback + resume listen
 - [ ] Silence, voicemail, DTMF, hangup, reconnect, 429/5xx, tool timeout are **explicit states**
 - [ ] One state machine for telephony hangup **and** WebSocket close
@@ -36,12 +39,14 @@ There is no generated `.callsmith/context/*` empire and no scaffold to patch.
 ### Safety & floors
 
 - [ ] PII redaction, consent, transcript retention, opt-out/DNC for phone flows
+- [ ] On outbound calls, the first audible turn identifies the agent/organization and purpose before substantive collection or action
 - [ ] Domain floors met per `reference/policy.md` (consent/retention minima and handoff ladder)
 - [ ] Consent/handoff present in **runtime paths**, not only docs
 
 ### Operability
 
 - [ ] Logs isolate: inbound audio, post-transcode, STT final, LLM first token, TTS first audio, outbound, interruption, reconnect, cost
+- [ ] Agent-first traces isolate confirmed pickup, startup stimulus sent, provider first output, first playout, and first audible audio using one monotonic clock
 - [ ] Local PSTN testing has a repeatable tunnel/webhook setup
 
 ## Output

@@ -12,8 +12,9 @@ important safety decisions, and write a build plan that another engineer can fol
 npx skills add https://github.com/Nachi-Kulkarni/Callsmith_skills/tree/main/skills/callsmith
 ```
 
-Start a new agent session, then ask it to use `/callsmith` or simply describe the voice app you want
-to build.
+Start a new agent session and describe the software you want to build. Callsmith should load
+automatically when the task involves software that listens and speaks. Use `/callsmith` to force
+the main compile flow, or a command such as `/callsmith audit` to choose a specific playbook.
 
 The skill works with Codex, Claude Code, Cursor, OpenCode, and other agents supported by the
 [skills installer](https://www.skills.sh/docs/cli). The download is about 270 KB and contains no

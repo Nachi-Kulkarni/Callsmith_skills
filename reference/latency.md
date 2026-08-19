@@ -10,6 +10,21 @@ turn_gap_ms = audio_first_audible_ms - speech_end_ms
 
 TTFT remains useful as the LLM-only submetric `llm_first_token_ms - llm_request_ms`. It cannot stand in for Turn Gap.
 
+## Agent-first startup latency
+
+The opening turn has no caller `speech_end_ms`, so measure it separately:
+
+```text
+pickup_to_trigger_ms     = startup_stimulus_sent_ms - pickup_confirmed_ms
+pickup_to_first_audio_ms = audio_first_audible_ms - pickup_confirmed_ms
+```
+
+`pickup_confirmed_ms` is the carrier answer/media-start or client-ready event—not REST dial
+acceptance. Also capture provider first output and first playout so startup delay can be attributed.
+Use one monotonic clock, retain raw samples, and report p50/p95 with the deployment path and model.
+A server audio packet is not proof that the caller heard the greeting; use caller-boundary capture
+or label the value as an estimate. Never reduce this metric by triggering before answer.
+
 ## Clock rules
 
 - Record all timestamps for a trace with one monotonic clock in milliseconds. Wall clocks can jump and are forbidden for duration math.

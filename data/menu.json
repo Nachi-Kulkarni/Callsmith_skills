@@ -119,10 +119,12 @@
     {
       "id": "language",
       "title": "Which language(s)?",
-      "default": "hinglish",
+      "help": "Choose a common preset or provide any valid BCP 47 language tag. Presets are conveniences, not the supported-language boundary.",
+      "accepts_bcp47": true,
       "options": [
         { "id": "english",      "label": "English",        "maps": { "language": "en" } },
         { "id": "hindi",        "label": "Hindi",          "maps": { "language": "hi" } },
+        { "id": "gujarati",     "label": "Gujarati",       "maps": { "language": "gu" } },
         { "id": "hinglish",     "label": "Hinglish (code-mixed)", "maps": { "language": "hi-en" } },
         { "id": "tamil",        "label": "Tamil",          "maps": { "language": "ta" } },
         { "id": "kannada",      "label": "Kannada",        "maps": { "language": "kn" } },

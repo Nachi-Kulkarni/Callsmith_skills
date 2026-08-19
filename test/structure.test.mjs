@@ -28,6 +28,17 @@ function run(...args) {
 }
 
 describe('skill / constitution structure', () => {
+  it('skill description is a compact auto-trigger, not a capability list', () => {
+    const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
+    const description = skill.match(/^description:\s*"([^"]+)"/m)?.[1];
+    assert.ok(description, 'SKILL.md needs a single-line description');
+    assert.match(description, /^Use when a user /);
+    assert.match(description, /phone agents|WebRTC|voice notes/);
+    assert.match(description, /waits for the caller to speak before greeting/);
+    assert.match(description, /slow first audio|broken interruption|audio-format mismatches|unsafe consent/);
+    assert.ok(description.split(/\s+/).length <= 100, 'always-loaded trigger should stay under 100 words');
+  });
+
   it('SKILL.md routing references only playbooks that exist', () => {
     const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
     const mentioned = [...skill.matchAll(/reference\/([a-z0-9-]+\.md)/g)].map((m) => m[1]);
@@ -42,6 +53,29 @@ describe('skill / constitution structure', () => {
       deployDocs,
       /SocketCluster|ResourceLease|SessionControl|MediaTransport|CallerAgent|SutProbe/,
     );
+  });
+
+  it('accepts international BCP 47 primary languages beyond the convenience presets', () => {
+    const language = loadMenu().groups.find(({ id }) => id === 'language');
+    const { flags } = expandAnswers({ language: 'es-MX' }, { groups: [language] });
+    assert.equal(flags.language, 'es-MX');
+    assert.throws(() => expandAnswers({ language: 'not a language' }, { groups: [language] }), /BCP 47/);
+  });
+
+  it('lifecycle table suggests a next step for every invocable command', () => {
+    const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
+    const hint = skill.match(/argument-hint:\s*"([^"]*)"/)[1];
+    const commands = [...hint.matchAll(/[a-z][a-z-]*/g)]
+      .map((m) => m[0])
+      .filter((c) => !['check', 'packs', 'target'].includes(c)); // CLI-only modes + the placeholder
+    assert.ok(commands.length >= 10, 'argument-hint parse sanity');
+    const lifecycle = skill.slice(skill.indexOf('## Lifecycle'));
+    for (const c of commands) {
+      assert.ok(
+        lifecycle.includes(`\`${c}\``),
+        `lifecycle section has no suggestion involving \`${c}\` — update the after→next table`,
+      );
+    }
   });
 
   it('shipped skill copy is byte-identical to the repo source (npm run sync:skill)', () => {
